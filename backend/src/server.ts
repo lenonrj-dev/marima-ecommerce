@@ -2,7 +2,8 @@ import type { Server } from "http";
 import { app } from "./app";
 import { connectDb, disconnectDb } from "./config/db";
 import { env, isProd } from "./config/env";
-import { assertHttpsInProduction, normalizeBaseUrl } from "./utils/url";
+import { buildStoreRedirectUrls, normalizeBaseUrl, requireHttpsInProd } from "./utils/url";
+import { startMercadoPagoPendingExpiryJob } from "./jobs/mercadopagoPendingExpiry";
 
 const MAX_PORT_ATTEMPTS = 10;
 
@@ -69,7 +70,7 @@ async function startServer() {
 
   process.env.RUNTIME_PORT = String(selectedPort);
   const publicApiUrl = env.API_PUBLIC_URL ? normalizeBaseUrl(env.API_PUBLIC_URL, "API_PUBLIC_URL") : null;
-  if (publicApiUrl) assertHttpsInProduction(publicApiUrl, "API_PUBLIC_URL");
+  if (publicApiUrl) requireHttpsInProd(publicApiUrl, "API_PUBLIC_URL");
 
   if (publicApiUrl) {
     console.log(`API online em ${publicApiUrl}/api/v1`);
@@ -79,6 +80,29 @@ async function startServer() {
   } else {
     console.log("API online.");
   }
+
+  console.log(`[URLS] NODE_ENV=${env.NODE_ENV}`);
+  if (env.STORE_URL) {
+    try {
+      const urls = buildStoreRedirectUrls(env.STORE_URL);
+      console.log(`[URLS] STORE_URL=${urls.base}`);
+      console.log(`[URLS] MP back_urls: success=${urls.success} failure=${urls.failure} pending=${urls.pending}`);
+    } catch (error) {
+      const err: any = error;
+      let storeUrlValue = String(env.STORE_URL);
+      try {
+        storeUrlValue = normalizeBaseUrl(env.STORE_URL, "STORE_URL");
+      } catch {
+        // Mantém o valor bruto se a URL estiver inválida.
+      }
+      console.log(`[URLS] STORE_URL=${storeUrlValue}`);
+      console.log(`[URLS] MP back_urls: erro ao gerar (${err?.code ?? "erro"}): ${err?.message ?? String(err)}`);
+    }
+  } else {
+    console.log("[URLS] STORE_URL=(não configurada)");
+  }
+
+  startMercadoPagoPendingExpiryJob();
 
   let shuttingDown = false;
 

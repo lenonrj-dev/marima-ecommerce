@@ -4,13 +4,15 @@ import { asyncHandler } from "../middlewares/notFound";
 import { requireRole } from "../middlewares/rbac";
 import { requireAdminAuth, optionalAuth } from "../middlewares/auth";
 import { GUEST_CART_COOKIE } from "../services/carts.service";
-import { cookieOptions } from "../utils/cookies";
+import { cookieBaseOptions, cookieOptions } from "../utils/cookies";
 import {
   cancelMercadoPagoOrder,
   createMercadoPagoCheckoutPro,
   getMercadoPagoPaymentDebug,
   verifyMercadoPagoPayment,
 } from "../services/mercadopago.service";
+
+const MP_CANCEL_TOKEN_COOKIE = "mp_cancel_token";
 
 function resolveCartIdentity(req: Request, res: Response) {
   if (req.auth?.type === "customer") {
@@ -33,6 +35,7 @@ export const mercadoPagoCheckoutProHandler = [
 
     const data = await createMercadoPagoCheckoutPro({
       identity,
+      orderId: req.body.orderId,
       shippingMethodId: req.body.shippingMethodId || req.body.shippingMethod,
       shippingMethod: req.body.shippingMethod,
       couponCode: req.body.couponCode,
@@ -40,7 +43,16 @@ export const mercadoPagoCheckoutProHandler = [
       address: req.body.address,
     });
 
-    res.status(201).json({ data });
+    if (data.cancelToken) {
+      res.cookie(MP_CANCEL_TOKEN_COOKIE, data.cancelToken, cookieOptions(req, 2 * 60 * 60 * 1000));
+    }
+
+    res.status(201).json({
+      data: {
+        preferenceId: data.preferenceId,
+        orderId: data.orderId,
+      },
+    });
   }),
 ] as const;
 
@@ -57,11 +69,13 @@ export const mercadoPagoVerifyHandler = asyncHandler(async (req: Request, res: R
 });
 
 export const mercadoPagoCancelHandler = asyncHandler(async (req: Request, res: Response) => {
+  const cancelToken = req.cookies?.[MP_CANCEL_TOKEN_COOKIE] ? String(req.cookies[MP_CANCEL_TOKEN_COOKIE]) : "";
   const data = await cancelMercadoPagoOrder({
     orderId: req.body.orderId,
-    cancelToken: req.body.cancelToken,
+    cancelToken,
   });
 
+  res.clearCookie(MP_CANCEL_TOKEN_COOKIE, cookieBaseOptions(req));
   res.json({ data });
 });
 

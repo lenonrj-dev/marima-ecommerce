@@ -18,6 +18,7 @@ const schema = z.object({
   API_PUBLIC_URL: z.string().url().optional(),
   MERCADO_PAGO_ACCESS_TOKEN: z.string().min(1).optional(),
   MERCADO_PAGO_WEBHOOK_SECRET: z.string().min(1).optional(),
+  MP_PENDING_ORDER_TTL_MINUTES: z.coerce.number().int().positive().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

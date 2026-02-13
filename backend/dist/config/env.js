@@ -22,6 +22,7 @@ const schema = zod_1.z.object({
     API_PUBLIC_URL: zod_1.z.string().url().optional(),
     MERCADO_PAGO_ACCESS_TOKEN: zod_1.z.string().min(1).optional(),
     MERCADO_PAGO_WEBHOOK_SECRET: zod_1.z.string().min(1).optional(),
+    MP_PENDING_ORDER_TTL_MINUTES: zod_1.z.coerce.number().int().positive().optional(),
 });
 const parsed = schema.safeParse(process.env);
 if (!parsed.success) {

@@ -14,6 +14,7 @@ router.post(
   "/mercadopago/checkout-pro",
   validate({
     body: z.object({
+      orderId: z.string().optional(),
       shippingMethodId: z.string().optional(),
       shippingMethod: z.string().optional(),
       couponCode: z.string().optional(),
@@ -42,7 +43,6 @@ router.post(
   validate({
     body: z.object({
       orderId: z.string().min(1),
-      cancelToken: z.string().min(1),
     }),
   }),
   mercadoPagoCancelHandler,
@@ -51,4 +51,3 @@ router.post(
 router.get("/mercadopago/payment/:id", ...mercadoPagoPaymentDebugHandler);
 
 export default router;
-

@@ -7,6 +7,7 @@ const mercadopago_controller_1 = require("../controllers/mercadopago.controller"
 const router = (0, express_1.Router)();
 router.post("/mercadopago/checkout-pro", (0, validate_1.validate)({
     body: zod_1.z.object({
+        orderId: zod_1.z.string().optional(),
         shippingMethodId: zod_1.z.string().optional(),
         shippingMethod: zod_1.z.string().optional(),
         couponCode: zod_1.z.string().optional(),
@@ -29,7 +30,6 @@ router.get("/mercadopago/verify", mercadopago_controller_1.mercadoPagoVerifyHand
 router.post("/mercadopago/cancel", (0, validate_1.validate)({
     body: zod_1.z.object({
         orderId: zod_1.z.string().min(1),
-        cancelToken: zod_1.z.string().min(1),
     }),
 }), mercadopago_controller_1.mercadoPagoCancelHandler);
 router.get("/mercadopago/payment/:id", ...mercadopago_controller_1.mercadoPagoPaymentDebugHandler);

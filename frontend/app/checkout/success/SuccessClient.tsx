@@ -60,7 +60,6 @@ export default function SuccessClient({
 
           try {
             sessionStorage.removeItem("mp_pending_order_id");
-            sessionStorage.removeItem("mp_pending_cancel_token");
           } catch {
             // ignore
           }
@@ -125,4 +124,3 @@ export default function SuccessClient({
     </main>
   );
 }
-

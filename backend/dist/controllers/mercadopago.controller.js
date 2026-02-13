@@ -8,6 +8,7 @@ const auth_1 = require("../middlewares/auth");
 const carts_service_1 = require("../services/carts.service");
 const cookies_1 = require("../utils/cookies");
 const mercadopago_service_1 = require("../services/mercadopago.service");
+const MP_CANCEL_TOKEN_COOKIE = "mp_cancel_token";
 function resolveCartIdentity(req, res) {
     if (req.auth?.type === "customer") {
         return { customerId: req.auth.sub };
@@ -25,13 +26,22 @@ exports.mercadoPagoCheckoutProHandler = [
         const identity = resolveCartIdentity(req, res);
         const data = await (0, mercadopago_service_1.createMercadoPagoCheckoutPro)({
             identity,
+            orderId: req.body.orderId,
             shippingMethodId: req.body.shippingMethodId || req.body.shippingMethod,
             shippingMethod: req.body.shippingMethod,
             couponCode: req.body.couponCode,
             cashbackUsedCents: req.body.cashbackUsedCents,
             address: req.body.address,
         });
-        res.status(201).json({ data });
+        if (data.cancelToken) {
+            res.cookie(MP_CANCEL_TOKEN_COOKIE, data.cancelToken, (0, cookies_1.cookieOptions)(req, 2 * 60 * 60 * 1000));
+        }
+        res.status(201).json({
+            data: {
+                preferenceId: data.preferenceId,
+                orderId: data.orderId,
+            },
+        });
     }),
 ];
 exports.mercadoPagoVerifyHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
@@ -44,10 +54,12 @@ exports.mercadoPagoVerifyHandler = (0, notFound_1.asyncHandler)(async (req, res)
     res.json({ data });
 });
 exports.mercadoPagoCancelHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
+    const cancelToken = req.cookies?.[MP_CANCEL_TOKEN_COOKIE] ? String(req.cookies[MP_CANCEL_TOKEN_COOKIE]) : "";
     const data = await (0, mercadopago_service_1.cancelMercadoPagoOrder)({
         orderId: req.body.orderId,
-        cancelToken: req.body.cancelToken,
+        cancelToken,
     });
+    res.clearCookie(MP_CANCEL_TOKEN_COOKIE, (0, cookies_1.cookieBaseOptions)(req));
     res.json({ data });
 });
 exports.mercadoPagoPaymentDebugHandler = [

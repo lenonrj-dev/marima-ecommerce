@@ -11,9 +11,8 @@ export default function CheckoutFailurePage() {
     if (typeof window === "undefined") return;
 
     const orderId = sessionStorage.getItem("mp_pending_order_id") || "";
-    const cancelToken = sessionStorage.getItem("mp_pending_cancel_token") || "";
 
-    if (!orderId || !cancelToken) {
+    if (!orderId) {
       setMessage("Pagamento não concluído. Você pode tentar novamente pelo checkout.");
       return;
     }
@@ -22,9 +21,8 @@ export default function CheckoutFailurePage() {
 
     void (async () => {
       try {
-        await cancelPendingMercadoPagoOrder(orderId, cancelToken);
+        await cancelPendingMercadoPagoOrder(orderId);
         sessionStorage.removeItem("mp_pending_order_id");
-        sessionStorage.removeItem("mp_pending_cancel_token");
         if (!active) return;
         setMessage("Pagamento não concluído. Pedido cancelado com sucesso.");
       } catch {

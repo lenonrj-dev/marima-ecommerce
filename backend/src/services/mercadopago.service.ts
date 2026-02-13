@@ -9,7 +9,7 @@ import { ProductModel } from "../models/Product";
 import { InventoryMovementModel } from "../models/InventoryMovement";
 import { ApiError } from "../utils/apiError";
 import { fromCents } from "../utils/money";
-import { assertHttpsInProduction, normalizeBaseUrl } from "../utils/url";
+import { buildStoreRedirectUrls } from "../utils/url";
 import { createStoreOrder } from "./orders.service";
 import { registerCouponRedemption, validateCoupon } from "./coupons.service";
 import { grantCashbackForOrder } from "./cashback.service";
@@ -18,6 +18,14 @@ import { CouponModel } from "../models/Coupon";
 import { CashbackLedgerModel } from "../models/CashbackLedger";
 
 type CartIdentity = { customerId?: string; guestToken?: string };
+
+type MercadoPagoPreferenceItem = {
+  id: string;
+  title: string;
+  quantity: number;
+  unit_price: number;
+  currency_id: "BRL";
+};
 
 function requireMercadoPagoAccessToken() {
   const token = env.MERCADO_PAGO_ACCESS_TOKEN;
@@ -36,14 +44,100 @@ function requireStoreUrl() {
   if (!storeUrl) {
     throw new ApiError(500, "STORE_URL não configurada no backend.", "STORE_URL_NOT_CONFIGURED");
   }
-
-  const normalized = normalizeBaseUrl(storeUrl, "STORE_URL");
-  assertHttpsInProduction(normalized, "STORE_URL");
-  return normalized;
+  return buildStoreRedirectUrls(storeUrl);
 }
 
 function mpClient() {
   return new MercadoPagoConfig({ accessToken: requireMercadoPagoAccessToken() });
+}
+
+function buildPreferenceItemsFromOrder(order: any): MercadoPagoPreferenceItem[] {
+  const subtotalCents = Math.max(0, Math.floor(Number(order.subtotalCents ?? 0)));
+  const discountCents = Math.max(0, Math.floor(Number(order.discountCents ?? 0)));
+  const shippingCents = Math.max(0, Math.floor(Number(order.shippingCents ?? 0)));
+  const taxCents = Math.max(0, Math.floor(Number(order.taxCents ?? 0)));
+
+  const taxableCents = Math.max(0, subtotalCents - discountCents);
+
+  const baseLines = (order.items || []).map((item: any) => ({
+    item,
+    qty: Math.max(1, Math.floor(Number(item.qty ?? 1))),
+    baseTotalCents: Math.max(0, Math.floor(Number(item.totalCents ?? 0))),
+  }));
+
+  const allocatedTotals: number[] = [];
+
+  if (subtotalCents <= 0 || discountCents <= 0) {
+    for (const line of baseLines) allocatedTotals.push(line.baseTotalCents);
+  } else {
+    let sum = 0;
+    for (const line of baseLines) {
+      const value = Math.floor((line.baseTotalCents * taxableCents) / subtotalCents);
+      allocatedTotals.push(value);
+      sum += value;
+    }
+
+    let remainder = taxableCents - sum;
+    for (let i = 0; i < allocatedTotals.length && remainder > 0; i += 1) {
+      allocatedTotals[i] = allocatedTotals[i]! + 1;
+      remainder -= 1;
+    }
+  }
+
+  const items: MercadoPagoPreferenceItem[] = [];
+
+  for (let index = 0; index < baseLines.length; index += 1) {
+    const line = baseLines[index]!;
+    const lineTotalCents = Math.max(0, Math.floor(Number(allocatedTotals[index] ?? 0)));
+
+    const titleParts = [String(line.item?.name || "Produto").trim()];
+    const sizeLabel = line.item?.sizeLabel ? String(line.item.sizeLabel).trim() : "";
+    if (sizeLabel) titleParts.push(`(${sizeLabel})`);
+
+    const title = titleParts.join(" ").trim();
+    const qty = line.qty;
+
+    const unitBaseCents = Math.floor(lineTotalCents / qty);
+    const remainder = lineTotalCents - unitBaseCents * qty;
+    const baseQty = qty - remainder;
+
+    const productId = line.item?.productId ? String(line.item.productId) : "";
+    const baseId = productId || (line.item?._id ? `item-${String(line.item._id)}` : `item-${index}`);
+
+    if (baseQty > 0 && unitBaseCents > 0) {
+      items.push({
+        id: baseId,
+        title,
+        quantity: baseQty,
+        unit_price: fromCents(unitBaseCents),
+        currency_id: "BRL",
+      });
+    }
+
+    if (remainder > 0) {
+      items.push({
+        id: baseId,
+        title,
+        quantity: remainder,
+        unit_price: fromCents(unitBaseCents + 1),
+        currency_id: "BRL",
+      });
+    }
+  }
+
+  const shippingAndTaxCents = shippingCents + taxCents;
+  if (shippingAndTaxCents > 0) {
+    const method = order.shippingMethod ? String(order.shippingMethod).trim() : "";
+    items.push({
+      id: "shipping",
+      title: method ? `Frete (${method})` : "Frete",
+      quantity: 1,
+      unit_price: fromCents(shippingAndTaxCents),
+      currency_id: "BRL",
+    });
+  }
+
+  return items;
 }
 
 async function getActiveCart(identity: CartIdentity) {
@@ -184,6 +278,7 @@ async function ensureCashbackGrantedForPaidOrder(order: any) {
 
 export async function createMercadoPagoCheckoutPro(input: {
   identity: CartIdentity;
+  orderId?: string;
   shippingMethodId?: string;
   shippingMethod?: string;
   couponCode?: string;
@@ -201,34 +296,61 @@ export async function createMercadoPagoCheckoutPro(input: {
     complement?: string;
   };
 }) {
-  const storeUrl = requireStoreUrl();
-  const cart = await getActiveCart(input.identity);
+  const store = requireStoreUrl();
 
-  const items = cart.items.map((item: any) => ({
-    id: String(item.productId),
-    qty: Number(item.qty || 1),
-    variant: item.variant,
-    sizeLabel: item.sizeLabel,
-  }));
+  const requestedOrderId = String(input.orderId || "").trim();
+  let order = requestedOrderId && Types.ObjectId.isValid(requestedOrderId) ? await OrderModel.findById(requestedOrderId) : null;
 
-  const couponCode = input.couponCode || cart.couponCode || undefined;
+  if (order && input.identity.customerId) {
+    if (!order.customerId || String(order.customerId) !== String(input.identity.customerId)) {
+      order = null;
+    }
+  }
 
-  const orderOutput = await createStoreOrder({
-    customerId: input.identity.customerId,
-    // Não converter o carrinho agora; o usuário pode voltar e tentar novamente.
-    cartId: undefined,
-    channel: "Site",
-    shippingMethod: input.shippingMethodId || input.shippingMethod || "sul-fluminense",
-    paymentMethod: "Mercado Pago",
-    couponCode,
-    cashbackUsedCents: input.cashbackUsedCents,
-    items,
-    address: input.address,
-    finalize: false,
-  });
+  if (order) {
+    if (order.status !== "pendente") {
+      throw new ApiError(400, "Este pedido não está pendente para pagamento.", "VALIDATION_ERROR");
+    }
 
-  const order = await OrderModel.findById(orderOutput.id);
-  if (!order) throw new ApiError(500, "Falha ao criar pedido.");
+    if (order.paymentProvider === "mercadopago" && order.paymentPreferenceId) {
+      const tx = await PaymentTransactionModel.findOne({ provider: "mercadopago", orderId: order._id }).sort({ createdAt: -1 });
+      return {
+        preferenceId: String(order.paymentPreferenceId),
+        orderId: String(order._id),
+        cancelToken: tx?.cancelToken ? String(tx.cancelToken) : undefined,
+      };
+    }
+  } else {
+    const cart = await getActiveCart(input.identity);
+
+    const items = cart.items.map((item: any) => ({
+      id: String(item.productId),
+      qty: Number(item.qty || 1),
+      variant: item.variant,
+      sizeLabel: item.sizeLabel,
+    }));
+
+    const couponCode = input.couponCode || cart.couponCode || undefined;
+
+    const orderOutput = await createStoreOrder({
+      customerId: input.identity.customerId,
+      // Não converter o carrinho agora; o usuário pode voltar e tentar novamente.
+      cartId: undefined,
+      channel: "Site",
+      shippingMethod: input.shippingMethodId || input.shippingMethod || "sul-fluminense",
+      paymentMethod: "Mercado Pago",
+      couponCode,
+      cashbackUsedCents: input.cashbackUsedCents,
+      items,
+      address: input.address,
+      finalize: false,
+    });
+
+    order = await OrderModel.findById(orderOutput.id);
+    if (!order) throw new ApiError(500, "Falha ao criar pedido.");
+  }
+
+  if (!order) throw new ApiError(500, "Falha ao preparar pedido.");
 
   // Valida cupom novamente para garantir consistência de desconto (sem registrar uso ainda).
   if (order.couponCode && order.discountCents > 0) {
@@ -241,25 +363,30 @@ export async function createMercadoPagoCheckoutPro(input: {
 
   let preferenceResult: unknown;
   try {
+    console.log(`[URLS] STORE_URL=${store.base}`);
+    console.log(`[URLS] MP back_urls: success=${store.success} failure=${store.failure} pending=${store.pending}`);
+
+    const mpItems = buildPreferenceItemsFromOrder(order);
+    if (!mpItems.length) {
+      throw new ApiError(400, "Pedido sem valor para pagamento.", "VALIDATION_ERROR");
+    }
+    console.log("[MP] Criando preference", {
+      items: mpItems.map((item) => ({ title: item.title, quantity: item.quantity, unit_price: item.unit_price })),
+      external_reference: String(order._id),
+      payer: { email: order.email },
+    });
+
     preferenceResult = await preference.create({
       body: {
-        items: [
-          {
-            id: `order-${order.code}`,
-            title: `Pedido ${order.code}`,
-            quantity: 1,
-            unit_price: fromCents(order.totalCents),
-            currency_id: "BRL",
-          },
-        ],
+        items: mpItems,
         payer: {
           email: order.email,
         },
         external_reference: String(order._id),
         back_urls: {
-          success: `${storeUrl}/checkout/success`,
-          failure: `${storeUrl}/checkout/failure`,
-          pending: `${storeUrl}/checkout/pending`,
+          success: store.success,
+          failure: store.failure,
+          pending: store.pending,
         },
         auto_return: "approved",
         metadata: {
@@ -268,7 +395,30 @@ export async function createMercadoPagoCheckoutPro(input: {
         },
       },
     });
-  } catch {
+  } catch (error) {
+    const err: any = error;
+    const status = err?.status ?? err?.response?.status;
+    const requestId =
+      err?.requestId ?? err?.response?.headers?.["x-request-id"] ?? err?.response?.headers?.["X-Request-Id"];
+    const data = err?.response?.data ?? err?.cause ?? err?.message ?? err;
+
+    console.error("[MP] Falha ao criar preference", {
+      status,
+      requestId,
+      data,
+      storeUrl: store.base,
+      backUrls: { success: store.success, failure: store.failure, pending: store.pending },
+      payload: {
+        items: buildPreferenceItemsFromOrder(order).map((item) => ({
+          title: item.title,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+        })),
+        external_reference: String(order._id),
+        payer: { email: order.email },
+      },
+    });
+
     order.status = "cancelado";
     order.paymentStatus = "cancelled";
     order.cancelledAt = new Date();
@@ -282,10 +432,9 @@ export async function createMercadoPagoCheckoutPro(input: {
     );
   }
 
-  const initPoint = (preferenceResult as any)?.init_point as string | undefined;
   const preferenceId = (preferenceResult as any)?.id as string | undefined;
 
-  if (!initPoint || !preferenceId) {
+  if (!preferenceId) {
     throw new ApiError(502, "Não foi possível iniciar o Checkout Pro do Mercado Pago.", "MERCADOPAGO_PREFERENCE_FAILED");
   }
 
@@ -303,7 +452,6 @@ export async function createMercadoPagoCheckoutPro(input: {
   await order.save();
 
   return {
-    initPoint,
     preferenceId,
     orderId: String(order._id),
     cancelToken,
@@ -369,6 +517,25 @@ export async function verifyMercadoPagoPayment(input: {
 
     if (order.customerId) {
       await refreshCustomerMetrics(String(order.customerId));
+    }
+  } else if (status === "rejected" || status === "cancelled") {
+    if (order.status === "pendente") {
+      order.status = "cancelado";
+      order.paymentStatus = status;
+      order.cancelledAt = new Date();
+
+      if (tx) {
+        tx.status = status === "rejected" ? "rejected" : "cancelled";
+        await tx.save();
+      }
+
+      await revertOrderStock(order);
+      await revertCouponRedemption(order);
+      await revertCashbackGrant(order);
+
+      if (order.customerId) {
+        await refreshCustomerMetrics(String(order.customerId));
+      }
     }
   }
 

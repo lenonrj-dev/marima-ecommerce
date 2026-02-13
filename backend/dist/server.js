@@ -4,6 +4,7 @@ const app_1 = require("./app");
 const db_1 = require("./config/db");
 const env_1 = require("./config/env");
 const url_1 = require("./utils/url");
+const mercadopagoPendingExpiry_1 = require("./jobs/mercadopagoPendingExpiry");
 const MAX_PORT_ATTEMPTS = 10;
 function isObject(value) {
     return typeof value === "object" && value !== null;
@@ -59,7 +60,7 @@ async function startServer() {
     process.env.RUNTIME_PORT = String(selectedPort);
     const publicApiUrl = env_1.env.API_PUBLIC_URL ? (0, url_1.normalizeBaseUrl)(env_1.env.API_PUBLIC_URL, "API_PUBLIC_URL") : null;
     if (publicApiUrl)
-        (0, url_1.assertHttpsInProduction)(publicApiUrl, "API_PUBLIC_URL");
+        (0, url_1.requireHttpsInProd)(publicApiUrl, "API_PUBLIC_URL");
     if (publicApiUrl) {
         console.log(`API online em ${publicApiUrl}/api/v1`);
     }
@@ -70,6 +71,30 @@ async function startServer() {
     else {
         console.log("API online.");
     }
+    console.log(`[URLS] NODE_ENV=${env_1.env.NODE_ENV}`);
+    if (env_1.env.STORE_URL) {
+        try {
+            const urls = (0, url_1.buildStoreRedirectUrls)(env_1.env.STORE_URL);
+            console.log(`[URLS] STORE_URL=${urls.base}`);
+            console.log(`[URLS] MP back_urls: success=${urls.success} failure=${urls.failure} pending=${urls.pending}`);
+        }
+        catch (error) {
+            const err = error;
+            let storeUrlValue = String(env_1.env.STORE_URL);
+            try {
+                storeUrlValue = (0, url_1.normalizeBaseUrl)(env_1.env.STORE_URL, "STORE_URL");
+            }
+            catch {
+                // Mantém o valor bruto se a URL estiver inválida.
+            }
+            console.log(`[URLS] STORE_URL=${storeUrlValue}`);
+            console.log(`[URLS] MP back_urls: erro ao gerar (${err?.code ?? "erro"}): ${err?.message ?? String(err)}`);
+        }
+    }
+    else {
+        console.log("[URLS] STORE_URL=(não configurada)");
+    }
+    (0, mercadopagoPendingExpiry_1.startMercadoPagoPendingExpiryJob)();
     let shuttingDown = false;
     async function shutdown(signal) {
         if (shuttingDown)

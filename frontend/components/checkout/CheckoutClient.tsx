@@ -8,7 +8,6 @@ import CheckoutSteps from "@/components/checkout/CheckoutSteps";
 import CheckoutForm from "@/components/checkout/CheckoutForm";
 import ShippingMethods from "@/components/checkout/ShippingMethods";
 import OrderSummary from "@/components/checkout/OrderSummary";
-import PaymentStub from "@/components/checkout/PaymentStub";
 import { useCart } from "@/components/cart/CartProvider";
 import {
   DEFAULT_CHECKOUT_VALUES,
@@ -16,37 +15,64 @@ import {
   validateCheckoutForm,
   type CheckoutFormValues,
 } from "@/lib/checkoutData";
-import { cancelPendingMercadoPagoOrder, startMercadoPagoCheckout } from "@/lib/payments/mercadoPago";
+import MercadoPagoWalletBrick from "@/components/checkout/MercadoPagoWalletBrick";
+import { cancelPendingMercadoPagoOrder } from "@/lib/payments/mercadoPago";
 
 export default function CheckoutClient() {
-  const { isHydrated, cartId, coupon, items, totals } = useCart();
+  const { isHydrated, coupon, items } = useCart();
   const [values, setValues] = useState<CheckoutFormValues>(DEFAULT_CHECKOUT_VALUES);
   const [shippingMethod, setShippingMethod] = useState(SHIPPING_METHODS[0]?.id ?? "");
-  const [paymentState, setPaymentState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [paymentInput, setPaymentInput] = useState<{
+    shippingMethodId: string;
+    couponCode?: string;
+    address: {
+      fullName: string;
+      email: string;
+      phone: string;
+      zip: string;
+      state: string;
+      city: string;
+      neighborhood: string;
+      street: string;
+      number: string;
+      complement?: string;
+    };
+  } | null>(null);
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const orderId = sessionStorage.getItem("mp_pending_order_id");
-    const cancelToken = sessionStorage.getItem("mp_pending_cancel_token");
-    if (!orderId || !cancelToken) return;
+    let cancelling = false;
 
-    setPaymentState("loading");
-    setPaymentMessage("Detectamos um pagamento não concluído. Cancelando o pedido pendente...");
+    async function cancelPendingIfNeeded() {
+      if (cancelling) return;
+      const orderId = sessionStorage.getItem("mp_pending_order_id");
+      if (!orderId) return;
+      cancelling = true;
 
-    void (async () => {
       try {
-        await cancelPendingMercadoPagoOrder(orderId, cancelToken);
+        setPaymentMessage("Detectamos um pagamento não concluído. Cancelando o pedido pendente...");
+        await cancelPendingMercadoPagoOrder(orderId);
         sessionStorage.removeItem("mp_pending_order_id");
-        sessionStorage.removeItem("mp_pending_cancel_token");
-        setPaymentState("error");
         setPaymentMessage("Pagamento não concluído. Seu pedido anterior foi cancelado para você tentar novamente.");
       } catch {
-        setPaymentState("error");
         setPaymentMessage("Não foi possível cancelar o pedido pendente automaticamente. Tente finalizar novamente.");
+      } finally {
+        cancelling = false;
       }
-    })();
+    }
+
+    void cancelPendingIfNeeded();
+
+    const onPageShow = () => {
+      void cancelPendingIfNeeded();
+    };
+
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      window.removeEventListener("pageshow", onPageShow);
+    };
   }, []);
 
   const selectedShipping = useMemo(
@@ -60,50 +86,24 @@ export default function CheckoutClient() {
 
   async function handleContinueToPayment() {
     if (items.length === 0) {
-      setPaymentState("error");
       setPaymentMessage("Seu carrinho está vazio. Adicione produtos antes de continuar.");
       return;
     }
 
     const validation = validateCheckoutForm(values);
     if (!validation.ok) {
-      setPaymentState("error");
       setPaymentMessage("Preencha todos os campos obrigatórios de entrega para continuar.");
       return;
     }
 
     if (!selectedShipping) {
-      setPaymentState("error");
       setPaymentMessage("Selecione um método de frete.");
       return;
     }
 
-    setPaymentState("loading");
-    setPaymentMessage("Preparando a finalização da compra...");
-
-    const payload = {
-      source: "marima-web-checkout" as const,
-      createdAtISO: new Date().toISOString(),
+    setPaymentInput({
       shippingMethodId: selectedShipping.id,
-      cartId: cartId || undefined,
       couponCode: coupon || undefined,
-      items: items.map((item) => ({
-        id: item.productId,
-        slug: item.slug,
-        title: item.name,
-        variant: item.variant,
-        sizeLabel: item.sizeLabel,
-        unitPriceCents: item.unitPrice,
-        qty: item.qty,
-        subtotalCents: item.unitPrice * item.qty,
-      })),
-      totals: {
-        subtotalCents: totals.subtotal,
-        discountCents: totals.discount,
-        shippingCents: selectedShipping.priceCents,
-        taxCents: totals.tax,
-        totalCents: Math.max(0, totals.subtotal - totals.discount + totals.tax + selectedShipping.priceCents),
-      },
       address: {
         fullName: `${values.firstName} ${values.lastName}`.trim(),
         email: values.email,
@@ -116,16 +116,8 @@ export default function CheckoutClient() {
         number: values.number,
         complement: values.complement || undefined,
       },
-    };
-
-    try {
-      await startMercadoPagoCheckout(payload);
-      setPaymentState("success");
-      setPaymentMessage("Redirecionando para o Mercado Pago...");
-    } catch {
-      setPaymentState("error");
-      setPaymentMessage("Não foi possível iniciar o fluxo de pagamento no momento.");
-    }
+    });
+    setPaymentMessage(null);
   }
 
   if (!isHydrated) {
@@ -172,19 +164,50 @@ export default function CheckoutClient() {
           <ShippingMethods methods={SHIPPING_METHODS} value={shippingMethod} onChange={setShippingMethod} />
 
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-soft sm:p-6">
-            <button
-              type="button"
-              onClick={handleContinueToPayment}
-              className="inline-flex h-12 w-full items-center justify-center rounded-md bg-zinc-900 px-6 text-sm font-semibold text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
-            >
-              Continuar para pagamento
-            </button>
-            <p className="mt-3 text-xs leading-relaxed text-zinc-500">
-              Esta etapa já cria o pedido no backend e prepara o fluxo de pagamento.
-            </p>
+            {paymentInput ? (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm font-semibold text-zinc-900">Pagamento</p>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                    Escolha uma opção no Mercado Pago para continuar com segurança.
+                  </p>
+                </div>
+
+                <MercadoPagoWalletBrick
+                  shippingMethodId={paymentInput.shippingMethodId}
+                  couponCode={paymentInput.couponCode}
+                  address={paymentInput.address}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setPaymentInput(null)}
+                  className="inline-flex text-xs font-semibold text-zinc-700 underline underline-offset-4 transition hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+                >
+                  Alterar dados de entrega
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={handleContinueToPayment}
+                  className="inline-flex h-12 w-full items-center justify-center rounded-md bg-zinc-900 px-6 text-sm font-semibold text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+                >
+                  Continuar para pagamento
+                </button>
+                <p className="text-xs leading-relaxed text-zinc-500">
+                  Esta etapa cria o pedido no backend e gera a preferência do Mercado Pago.
+                </p>
+              </div>
+            )}
           </div>
 
-          <PaymentStub state={paymentState} message={paymentMessage} />
+          {paymentMessage ? (
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700" role="status" aria-live="polite">
+              {paymentMessage}
+            </div>
+          ) : null}
         </div>
 
         <OrderSummary shippingCents={selectedShipping?.priceCents ?? 0} />
