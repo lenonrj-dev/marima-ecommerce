@@ -1,11 +1,12 @@
 ﻿import bcrypt from "bcryptjs";
 import jwt, { type SignOptions } from "jsonwebtoken";
-import { Response } from "express";
-import { env, isProd } from "../config/env";
+import { Request, Response } from "express";
+import { env } from "../config/env";
 import { AdminUserModel, Role } from "../models/AdminUser";
 import { CustomerModel } from "../models/Customer";
 import { ApiError } from "../utils/apiError";
 import { ACCESS_COOKIE, REFRESH_COOKIE } from "../middlewares/auth";
+import { cookieBaseOptions, cookieOptions } from "../utils/cookies";
 
 const SALT_ROUNDS = 10;
 
@@ -31,23 +32,6 @@ export function verifyRefreshToken(token: string) {
   return jwt.verify(token, env.JWT_REFRESH_SECRET) as TokenPayload;
 }
 
-function baseCookieOptions() {
-  return {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: "lax" as const,
-    domain: env.COOKIE_DOMAIN || undefined,
-    path: "/",
-  };
-}
-
-function cookieOptions(maxAgeMs: number) {
-  return {
-    ...baseCookieOptions(),
-    maxAge: maxAgeMs,
-  };
-}
-
 function parseDurationMs(text: string) {
   const unit = text.slice(-1);
   const value = Number(text.slice(0, -1));
@@ -60,17 +44,18 @@ function parseDurationMs(text: string) {
 export function setAuthCookies(
   res: Response,
   payload: TokenPayload,
+  req?: Request,
 ) {
   const access = signAccessToken(payload);
   const refresh = signRefreshToken(payload);
 
-  res.cookie(ACCESS_COOKIE, access, cookieOptions(parseDurationMs(env.ACCESS_TOKEN_TTL)));
-  res.cookie(REFRESH_COOKIE, refresh, cookieOptions(parseDurationMs(env.REFRESH_TOKEN_TTL)));
+  res.cookie(ACCESS_COOKIE, access, cookieOptions(req, parseDurationMs(env.ACCESS_TOKEN_TTL)));
+  res.cookie(REFRESH_COOKIE, refresh, cookieOptions(req, parseDurationMs(env.REFRESH_TOKEN_TTL)));
 }
 
-export function clearAuthCookies(res: Response) {
-  res.clearCookie(ACCESS_COOKIE, baseCookieOptions());
-  res.clearCookie(REFRESH_COOKIE, baseCookieOptions());
+export function clearAuthCookies(res: Response, req?: Request) {
+  res.clearCookie(ACCESS_COOKIE, cookieBaseOptions(req));
+  res.clearCookie(REFRESH_COOKIE, cookieBaseOptions(req));
 }
 
 export async function registerCustomer(input: {

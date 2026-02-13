@@ -1,10 +1,10 @@
 import { randomUUID } from "crypto";
 import { Request, Response } from "express";
-import { isProd } from "../config/env";
 import { asyncHandler } from "../middlewares/notFound";
 import { requireRole } from "../middlewares/rbac";
 import { requireAdminAuth, optionalAuth } from "../middlewares/auth";
 import { GUEST_CART_COOKIE } from "../services/carts.service";
+import { cookieOptions } from "../utils/cookies";
 import {
   cancelMercadoPagoOrder,
   createMercadoPagoCheckoutPro,
@@ -20,13 +20,7 @@ function resolveCartIdentity(req: Request, res: Response) {
   let guestToken = req.cookies?.[GUEST_CART_COOKIE] as string | undefined;
   if (!guestToken) {
     guestToken = randomUUID();
-    res.cookie(GUEST_CART_COOKIE, guestToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie(GUEST_CART_COOKIE, guestToken, cookieOptions(req, 30 * 24 * 60 * 60 * 1000));
   }
 
   return { guestToken };
@@ -79,4 +73,3 @@ export const mercadoPagoPaymentDebugHandler = [
     res.json({ data });
   }),
 ] as const;
-

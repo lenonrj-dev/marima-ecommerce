@@ -101,7 +101,9 @@ export function buildApiUrl(path: string, query?: ApiFetchOptions["query"]) {
 export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptions = {}): Promise<T> {
   const url = buildApiUrl(path, options.query);
   const hasJsonBody = typeof options.body === "string";
+  const skipNgrokWarning = API_BASE.includes("ngrok");
   const headers = {
+    ...(skipNgrokWarning ? { "ngrok-skip-browser-warning": "true" } : {}),
     ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
     ...(options.headers || {}),
   };

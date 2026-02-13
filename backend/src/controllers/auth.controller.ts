@@ -9,9 +9,9 @@ import {
   setAuthCookies,
   verifyRefreshToken,
 } from "../services/auth.service";
-import { isProd } from "../config/env";
 import { LEGACY_REFRESH_COOKIE, REFRESH_COOKIE } from "../middlewares/auth";
 import { bindGuestCartToCustomer, GUEST_CART_COOKIE } from "../services/carts.service";
+import { cookieBaseOptions } from "../utils/cookies";
 
 export const registerCustomerHandler = asyncHandler(async (req: Request, res: Response) => {
   const user = await registerCustomer(req.body);
@@ -20,12 +20,7 @@ export const registerCustomerHandler = asyncHandler(async (req: Request, res: Re
   if (typeof guestToken === "string" && guestToken) {
     try {
       await bindGuestCartToCustomer(guestToken, String(user._id));
-      res.clearCookie(GUEST_CART_COOKIE, {
-        httpOnly: true,
-        secure: isProd,
-        sameSite: "lax",
-        path: "/",
-      });
+      res.clearCookie(GUEST_CART_COOKIE, cookieBaseOptions(req));
     } catch {
       // Ignore cart merge failures.
     }
@@ -35,7 +30,7 @@ export const registerCustomerHandler = asyncHandler(async (req: Request, res: Re
     sub: String(user._id),
     role: "customer",
     type: "customer",
-  });
+  }, req);
 
   res.status(201).json({
     data: {
@@ -56,12 +51,7 @@ export const loginCustomerHandler = asyncHandler(async (req: Request, res: Respo
   if (typeof guestToken === "string" && guestToken) {
     try {
       await bindGuestCartToCustomer(guestToken, String(user._id));
-      res.clearCookie(GUEST_CART_COOKIE, {
-        httpOnly: true,
-        secure: isProd,
-        sameSite: "lax",
-        path: "/",
-      });
+      res.clearCookie(GUEST_CART_COOKIE, cookieBaseOptions(req));
     } catch {
       // Ignore cart merge failures.
     }
@@ -71,7 +61,7 @@ export const loginCustomerHandler = asyncHandler(async (req: Request, res: Respo
     sub: String(user._id),
     role: "customer",
     type: "customer",
-  });
+  }, req);
 
   res.json({
     data: {
@@ -91,7 +81,7 @@ export const loginAdminHandler = asyncHandler(async (req: Request, res: Response
     sub: String(user._id),
     role: user.role,
     type: "admin",
-  });
+  }, req);
 
   res.json({
     data: {
@@ -104,8 +94,8 @@ export const loginAdminHandler = asyncHandler(async (req: Request, res: Response
   });
 });
 
-export const logoutHandler = asyncHandler(async (_req: Request, res: Response) => {
-  clearAuthCookies(res);
+export const logoutHandler = asyncHandler(async (req: Request, res: Response) => {
+  clearAuthCookies(res, req);
   res.json({ data: { success: true } });
 });
 
@@ -120,12 +110,12 @@ export const refreshHandler = asyncHandler(async (req: Request, res: Response) =
   try {
     payload = verifyRefreshToken(refresh);
   } catch {
-    clearAuthCookies(res);
+    clearAuthCookies(res, req);
     res.status(401).json({ code: "AUTH_EXPIRED", message: "Sessão expirada." });
     return;
   }
 
-  setAuthCookies(res, payload);
+  setAuthCookies(res, payload, req);
   res.json({ data: { success: true } });
 });
 

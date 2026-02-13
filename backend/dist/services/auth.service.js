@@ -20,6 +20,7 @@ const AdminUser_1 = require("../models/AdminUser");
 const Customer_1 = require("../models/Customer");
 const apiError_1 = require("../utils/apiError");
 const auth_1 = require("../middlewares/auth");
+const cookies_1 = require("../utils/cookies");
 const SALT_ROUNDS = 10;
 function signAccessToken(payload) {
     return jsonwebtoken_1.default.sign(payload, env_1.env.JWT_ACCESS_SECRET, {
@@ -34,21 +35,6 @@ function signRefreshToken(payload) {
 function verifyRefreshToken(token) {
     return jsonwebtoken_1.default.verify(token, env_1.env.JWT_REFRESH_SECRET);
 }
-function baseCookieOptions() {
-    return {
-        httpOnly: true,
-        secure: env_1.isProd,
-        sameSite: "lax",
-        domain: env_1.env.COOKIE_DOMAIN || undefined,
-        path: "/",
-    };
-}
-function cookieOptions(maxAgeMs) {
-    return {
-        ...baseCookieOptions(),
-        maxAge: maxAgeMs,
-    };
-}
 function parseDurationMs(text) {
     const unit = text.slice(-1);
     const value = Number(text.slice(0, -1));
@@ -60,15 +46,15 @@ function parseDurationMs(text) {
         return value * 24 * 60 * 60 * 1000;
     return 15 * 60 * 1000;
 }
-function setAuthCookies(res, payload) {
+function setAuthCookies(res, payload, req) {
     const access = signAccessToken(payload);
     const refresh = signRefreshToken(payload);
-    res.cookie(auth_1.ACCESS_COOKIE, access, cookieOptions(parseDurationMs(env_1.env.ACCESS_TOKEN_TTL)));
-    res.cookie(auth_1.REFRESH_COOKIE, refresh, cookieOptions(parseDurationMs(env_1.env.REFRESH_TOKEN_TTL)));
+    res.cookie(auth_1.ACCESS_COOKIE, access, (0, cookies_1.cookieOptions)(req, parseDurationMs(env_1.env.ACCESS_TOKEN_TTL)));
+    res.cookie(auth_1.REFRESH_COOKIE, refresh, (0, cookies_1.cookieOptions)(req, parseDurationMs(env_1.env.REFRESH_TOKEN_TTL)));
 }
-function clearAuthCookies(res) {
-    res.clearCookie(auth_1.ACCESS_COOKIE, baseCookieOptions());
-    res.clearCookie(auth_1.REFRESH_COOKIE, baseCookieOptions());
+function clearAuthCookies(res, req) {
+    res.clearCookie(auth_1.ACCESS_COOKIE, (0, cookies_1.cookieBaseOptions)(req));
+    res.clearCookie(auth_1.REFRESH_COOKIE, (0, cookies_1.cookieBaseOptions)(req));
 }
 async function registerCustomer(input) {
     const email = input.email.trim().toLowerCase();

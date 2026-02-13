@@ -3,21 +3,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.meHandler = exports.refreshHandler = exports.logoutHandler = exports.loginAdminHandler = exports.loginCustomerHandler = exports.registerCustomerHandler = void 0;
 const notFound_1 = require("../middlewares/notFound");
 const auth_service_1 = require("../services/auth.service");
-const env_1 = require("../config/env");
 const auth_1 = require("../middlewares/auth");
 const carts_service_1 = require("../services/carts.service");
+const cookies_1 = require("../utils/cookies");
 exports.registerCustomerHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
     const user = await (0, auth_service_1.registerCustomer)(req.body);
     const guestToken = req.cookies?.[carts_service_1.GUEST_CART_COOKIE];
     if (typeof guestToken === "string" && guestToken) {
         try {
             await (0, carts_service_1.bindGuestCartToCustomer)(guestToken, String(user._id));
-            res.clearCookie(carts_service_1.GUEST_CART_COOKIE, {
-                httpOnly: true,
-                secure: env_1.isProd,
-                sameSite: "lax",
-                path: "/",
-            });
+            res.clearCookie(carts_service_1.GUEST_CART_COOKIE, (0, cookies_1.cookieBaseOptions)(req));
         }
         catch {
             // Ignore cart merge failures.
@@ -27,7 +22,7 @@ exports.registerCustomerHandler = (0, notFound_1.asyncHandler)(async (req, res) 
         sub: String(user._id),
         role: "customer",
         type: "customer",
-    });
+    }, req);
     res.status(201).json({
         data: {
             id: String(user._id),
@@ -45,12 +40,7 @@ exports.loginCustomerHandler = (0, notFound_1.asyncHandler)(async (req, res) => 
     if (typeof guestToken === "string" && guestToken) {
         try {
             await (0, carts_service_1.bindGuestCartToCustomer)(guestToken, String(user._id));
-            res.clearCookie(carts_service_1.GUEST_CART_COOKIE, {
-                httpOnly: true,
-                secure: env_1.isProd,
-                sameSite: "lax",
-                path: "/",
-            });
+            res.clearCookie(carts_service_1.GUEST_CART_COOKIE, (0, cookies_1.cookieBaseOptions)(req));
         }
         catch {
             // Ignore cart merge failures.
@@ -60,7 +50,7 @@ exports.loginCustomerHandler = (0, notFound_1.asyncHandler)(async (req, res) => 
         sub: String(user._id),
         role: "customer",
         type: "customer",
-    });
+    }, req);
     res.json({
         data: {
             id: String(user._id),
@@ -77,7 +67,7 @@ exports.loginAdminHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
         sub: String(user._id),
         role: user.role,
         type: "admin",
-    });
+    }, req);
     res.json({
         data: {
             id: String(user._id),
@@ -88,8 +78,8 @@ exports.loginAdminHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
         },
     });
 });
-exports.logoutHandler = (0, notFound_1.asyncHandler)(async (_req, res) => {
-    (0, auth_service_1.clearAuthCookies)(res);
+exports.logoutHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
+    (0, auth_service_1.clearAuthCookies)(res, req);
     res.json({ data: { success: true } });
 });
 exports.refreshHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
@@ -103,11 +93,11 @@ exports.refreshHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
         payload = (0, auth_service_1.verifyRefreshToken)(refresh);
     }
     catch {
-        (0, auth_service_1.clearAuthCookies)(res);
+        (0, auth_service_1.clearAuthCookies)(res, req);
         res.status(401).json({ code: "AUTH_EXPIRED", message: "Sessão expirada." });
         return;
     }
-    (0, auth_service_1.setAuthCookies)(res, payload);
+    (0, auth_service_1.setAuthCookies)(res, payload, req);
     res.json({ data: { success: true } });
 });
 exports.meHandler = (0, notFound_1.asyncHandler)(async (req, res) => {

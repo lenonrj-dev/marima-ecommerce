@@ -1,6 +1,6 @@
 ﻿import { randomUUID } from "crypto";
 import { Request, Response } from "express";
-import { isProd } from "../config/env";
+import { cookieOptions } from "../utils/cookies";
 import { asyncHandler } from "../middlewares/notFound";
 import {
   applyCouponToCart,
@@ -22,13 +22,7 @@ function resolveIdentity(req: Request, res: Response) {
   let guestToken = req.cookies?.[GUEST_CART_COOKIE] as string | undefined;
   if (!guestToken) {
     guestToken = randomUUID();
-    res.cookie(GUEST_CART_COOKIE, guestToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie(GUEST_CART_COOKIE, guestToken, cookieOptions(req, 30 * 24 * 60 * 60 * 1000));
   }
 
   return { guestToken };

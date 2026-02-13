@@ -4,29 +4,32 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import morgan from "morgan";
 import routes from "./routes";
-import { corsOrigins } from "./config/env";
+import { corsOrigins, isProd } from "./config/env";
 import { errorHandler } from "./middlewares/errorHandler";
 import { notFound } from "./middlewares/notFound";
 
 export const app = express();
+app.set("trust proxy", 1);
+
+const corsOriginsSet = new Set(corsOrigins.map((item) => item.replace(/\/$/, "")));
 
 const corsConfig: cors.CorsOptions = {
   origin(origin, callback) {
-    if (!origin) {
-      callback(null, true);
-      return;
+    if (!origin) return callback(null, false);
+
+    const normalized = origin.replace(/\/$/, "");
+    const allowed = corsOriginsSet.has(normalized);
+
+    if (!isProd) {
+      console.log(`[CORS] ${allowed ? "ALLOW" : "BLOCK"} origin=${normalized}`);
     }
 
-    if (corsOrigins.includes(origin)) {
-      callback(null, true);
-      return;
-    }
-
-    callback(null, false);
+    callback(null, allowed ? normalized : false);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning"],
+  optionsSuccessStatus: 204,
 };
 
 app.use(helmet());

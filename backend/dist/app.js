@@ -14,21 +14,23 @@ const env_1 = require("./config/env");
 const errorHandler_1 = require("./middlewares/errorHandler");
 const notFound_1 = require("./middlewares/notFound");
 exports.app = (0, express_1.default)();
+exports.app.set("trust proxy", 1);
+const corsOriginsSet = new Set(env_1.corsOrigins.map((item) => item.replace(/\/$/, "")));
 const corsConfig = {
     origin(origin, callback) {
-        if (!origin) {
-            callback(null, true);
-            return;
+        if (!origin)
+            return callback(null, false);
+        const normalized = origin.replace(/\/$/, "");
+        const allowed = corsOriginsSet.has(normalized);
+        if (!env_1.isProd) {
+            console.log(`[CORS] ${allowed ? "ALLOW" : "BLOCK"} origin=${normalized}`);
         }
-        if (env_1.corsOrigins.includes(origin)) {
-            callback(null, true);
-            return;
-        }
-        callback(null, false);
+        callback(null, allowed ? normalized : false);
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning"],
+    optionsSuccessStatus: 204,
 };
 exports.app.use((0, helmet_1.default)());
 exports.app.use((0, morgan_1.default)("dev"));

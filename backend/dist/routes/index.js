@@ -9,9 +9,19 @@ const store_routes_1 = __importDefault(require("./store.routes"));
 const me_routes_1 = __importDefault(require("./me.routes"));
 const admin_routes_1 = __importDefault(require("./admin.routes"));
 const payments_routes_1 = __importDefault(require("./payments.routes"));
+const env_1 = require("../config/env");
 const router = (0, express_1.Router)();
 router.get("/health", (_req, res) => {
-    res.json({ data: { ok: true, service: "backend", timestamp: new Date().toISOString() } });
+    res.json({
+        data: {
+            ok: true,
+            service: "backend",
+            env: env_1.env.NODE_ENV,
+            uptime: process.uptime(),
+            port: Number(process.env.RUNTIME_PORT || env_1.env.PORT),
+            timestamp: new Date().toISOString(),
+        },
+    });
 });
 router.use("/auth", auth_routes_1.default);
 router.use("/payments", payments_routes_1.default);

@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.convertAbandonedCartHandler = exports.recoverAbandonedCartHandler = exports.listAbandonedCartsHandler = exports.applyMeCartCouponHandler = exports.deleteMeCartItemHandler = exports.patchMeCartItemHandler = exports.putMeCartItemHandler = exports.getMeCartHandler = void 0;
 const crypto_1 = require("crypto");
-const env_1 = require("../config/env");
+const cookies_1 = require("../utils/cookies");
 const notFound_1 = require("../middlewares/notFound");
 const carts_service_1 = require("../services/carts.service");
 const orders_service_1 = require("../services/orders.service");
@@ -13,13 +13,7 @@ function resolveIdentity(req, res) {
     let guestToken = req.cookies?.[carts_service_1.GUEST_CART_COOKIE];
     if (!guestToken) {
         guestToken = (0, crypto_1.randomUUID)();
-        res.cookie(carts_service_1.GUEST_CART_COOKIE, guestToken, {
-            httpOnly: true,
-            secure: env_1.isProd,
-            sameSite: "lax",
-            path: "/",
-            maxAge: 30 * 24 * 60 * 60 * 1000,
-        });
+        res.cookie(carts_service_1.GUEST_CART_COOKIE, guestToken, (0, cookies_1.cookieOptions)(req, 30 * 24 * 60 * 60 * 1000));
     }
     return { guestToken };
 }
