@@ -9,6 +9,7 @@ import { ProductModel } from "../models/Product";
 import { InventoryMovementModel } from "../models/InventoryMovement";
 import { ApiError } from "../utils/apiError";
 import { fromCents } from "../utils/money";
+import { assertHttpsInProduction, normalizeBaseUrl } from "../utils/url";
 import { createStoreOrder } from "./orders.service";
 import { registerCouponRedemption, validateCoupon } from "./coupons.service";
 import { grantCashbackForOrder } from "./cashback.service";
@@ -35,7 +36,10 @@ function requireStoreUrl() {
   if (!storeUrl) {
     throw new ApiError(500, "STORE_URL não configurada no backend.", "STORE_URL_NOT_CONFIGURED");
   }
-  return storeUrl.replace(/\/$/, "");
+
+  const normalized = normalizeBaseUrl(storeUrl, "STORE_URL");
+  assertHttpsInProduction(normalized, "STORE_URL");
+  return normalized;
 }
 
 function mpClient() {

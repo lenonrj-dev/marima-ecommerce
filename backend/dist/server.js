@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const app_1 = require("./app");
 const db_1 = require("./config/db");
 const env_1 = require("./config/env");
+const url_1 = require("./utils/url");
 const MAX_PORT_ATTEMPTS = 10;
 function isObject(value) {
     return typeof value === "object" && value !== null;
@@ -56,9 +57,19 @@ async function startServer() {
         throw lastError || new Error("Não foi possível iniciar o servidor.");
     }
     process.env.RUNTIME_PORT = String(selectedPort);
-    const baseUrl = env_1.isProd ? "https://sua-api" : `http://localhost:${selectedPort}`;
-    console.log(`API online em ${baseUrl}/api/v1`);
-    console.log(`Inicie ngrok: ngrok http ${selectedPort}`);
+    const publicApiUrl = env_1.env.API_PUBLIC_URL ? (0, url_1.normalizeBaseUrl)(env_1.env.API_PUBLIC_URL, "API_PUBLIC_URL") : null;
+    if (publicApiUrl)
+        (0, url_1.assertHttpsInProduction)(publicApiUrl, "API_PUBLIC_URL");
+    if (publicApiUrl) {
+        console.log(`API online em ${publicApiUrl}/api/v1`);
+    }
+    else if (!env_1.isProd) {
+        console.log(`API online em http://localhost:${selectedPort}/api/v1`);
+        console.log(`Inicie ngrok: ngrok http ${selectedPort}`);
+    }
+    else {
+        console.log("API online.");
+    }
     let shuttingDown = false;
     async function shutdown(signal) {
         if (shuttingDown)

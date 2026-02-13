@@ -15,6 +15,7 @@ const Product_1 = require("../models/Product");
 const InventoryMovement_1 = require("../models/InventoryMovement");
 const apiError_1 = require("../utils/apiError");
 const money_1 = require("../utils/money");
+const url_1 = require("../utils/url");
 const orders_service_1 = require("./orders.service");
 const coupons_service_1 = require("./coupons.service");
 const cashback_service_1 = require("./cashback.service");
@@ -33,7 +34,9 @@ function requireStoreUrl() {
     if (!storeUrl) {
         throw new apiError_1.ApiError(500, "STORE_URL não configurada no backend.", "STORE_URL_NOT_CONFIGURED");
     }
-    return storeUrl.replace(/\/$/, "");
+    const normalized = (0, url_1.normalizeBaseUrl)(storeUrl, "STORE_URL");
+    (0, url_1.assertHttpsInProduction)(normalized, "STORE_URL");
+    return normalized;
 }
 function mpClient() {
     return new mercadopago_1.MercadoPagoConfig({ accessToken: requireMercadoPagoAccessToken() });

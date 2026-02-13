@@ -2,6 +2,7 @@ import type { Server } from "http";
 import { app } from "./app";
 import { connectDb, disconnectDb } from "./config/db";
 import { env, isProd } from "./config/env";
+import { assertHttpsInProduction, normalizeBaseUrl } from "./utils/url";
 
 const MAX_PORT_ATTEMPTS = 10;
 
@@ -67,9 +68,17 @@ async function startServer() {
   }
 
   process.env.RUNTIME_PORT = String(selectedPort);
-  const baseUrl = isProd ? "https://sua-api" : `http://localhost:${selectedPort}`;
-  console.log(`API online em ${baseUrl}/api/v1`);
-  console.log(`Inicie ngrok: ngrok http ${selectedPort}`);
+  const publicApiUrl = env.API_PUBLIC_URL ? normalizeBaseUrl(env.API_PUBLIC_URL, "API_PUBLIC_URL") : null;
+  if (publicApiUrl) assertHttpsInProduction(publicApiUrl, "API_PUBLIC_URL");
+
+  if (publicApiUrl) {
+    console.log(`API online em ${publicApiUrl}/api/v1`);
+  } else if (!isProd) {
+    console.log(`API online em http://localhost:${selectedPort}/api/v1`);
+    console.log(`Inicie ngrok: ngrok http ${selectedPort}`);
+  } else {
+    console.log("API online.");
+  }
 
   let shuttingDown = false;
 

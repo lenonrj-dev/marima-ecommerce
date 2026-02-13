@@ -14,6 +14,8 @@ const schema = z.object({
   REFRESH_TOKEN_TTL: z.string().default("7d"),
   COOKIE_DOMAIN: z.string().optional(),
   STORE_URL: z.string().url().optional(),
+  ADMIN_URL: z.string().url().optional(),
+  API_PUBLIC_URL: z.string().url().optional(),
   MERCADO_PAGO_ACCESS_TOKEN: z.string().min(1).optional(),
   MERCADO_PAGO_WEBHOOK_SECRET: z.string().min(1).optional(),
 });

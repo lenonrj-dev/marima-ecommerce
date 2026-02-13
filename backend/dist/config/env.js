@@ -18,6 +18,8 @@ const schema = zod_1.z.object({
     REFRESH_TOKEN_TTL: zod_1.z.string().default("7d"),
     COOKIE_DOMAIN: zod_1.z.string().optional(),
     STORE_URL: zod_1.z.string().url().optional(),
+    ADMIN_URL: zod_1.z.string().url().optional(),
+    API_PUBLIC_URL: zod_1.z.string().url().optional(),
     MERCADO_PAGO_ACCESS_TOKEN: zod_1.z.string().min(1).optional(),
     MERCADO_PAGO_WEBHOOK_SECRET: zod_1.z.string().min(1).optional(),
 });

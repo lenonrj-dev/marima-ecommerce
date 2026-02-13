@@ -7,7 +7,6 @@ export const metadata: Metadata = {
     template: "%s • Admin",
   },
   description: "Dashboard e CRM premium para operação de e-commerce.",
-  metadataBase: new URL("http://localhost:3000"),
   robots: {
     index: false,
     follow: false,

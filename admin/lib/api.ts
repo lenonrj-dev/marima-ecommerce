@@ -1,4 +1,24 @@
-﻿const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL;
+
+export const API_BASE = typeof RAW_API_BASE === "string" ? RAW_API_BASE.trim().replace(/\/$/, "") : "";
+
+let warnedMissingApiBase = false;
+
+function getApiBase() {
+  if (!API_BASE) {
+    if (typeof window !== "undefined" && !warnedMissingApiBase) {
+      warnedMissingApiBase = true;
+      console.error("NEXT_PUBLIC_API_URL não configurado.");
+    }
+    throw new Error("NEXT_PUBLIC_API_URL não configurado.");
+  }
+
+  if (process.env.NODE_ENV === "production" && API_BASE.startsWith("http://")) {
+    throw new Error("Config inválida: NEXT_PUBLIC_API_URL deve ser HTTPS em produção.");
+  }
+
+  return API_BASE;
+}
 
 export type ApiListResponse<T> = {
   data: T[];
@@ -95,13 +115,14 @@ function getPayloadCode(payload: unknown) {
 }
 
 export function buildApiUrl(path: string, query?: ApiFetchOptions["query"]) {
-  return `${API_BASE.replace(/\/$/, "")}${withQuery(path, query)}`;
+  return `${getApiBase()}${withQuery(path, query)}`;
 }
 
 export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptions = {}): Promise<T> {
-  const url = buildApiUrl(path, options.query);
+  const base = getApiBase();
+  const url = `${base}${withQuery(path, options.query)}`;
   const hasJsonBody = typeof options.body === "string";
-  const skipNgrokWarning = API_BASE.includes("ngrok");
+  const skipNgrokWarning = base.includes("ngrok");
   const headers = {
     ...(skipNgrokWarning ? { "ngrok-skip-browser-warning": "true" } : {}),
     ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
@@ -142,4 +163,3 @@ export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptio
   return payload as T;
 }
 
-export { API_BASE };
