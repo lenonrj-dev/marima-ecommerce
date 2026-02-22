@@ -1,4 +1,5 @@
 ﻿import type { Metadata } from "next";
+import SavedCartsPanel from "@/components/dashboard/carts/SavedCartsPanel";
 import FavoritesGrid from "@/components/dashboard/favorites/FavoritesGrid";
 import AddressBook from "@/components/dashboard/forms/AddressBook";
 import OrdersTable from "@/components/dashboard/orders/OrdersTable";
@@ -23,6 +24,7 @@ export default function DashboardHomePage() {
         <FavoritesGrid compact />
         <AddressBook compact />
       </div>
+      <SavedCartsPanel compact />
     </div>
   );
 }

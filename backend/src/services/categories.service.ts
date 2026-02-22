@@ -1,4 +1,4 @@
-Ôªøimport { FilterQuery } from "mongoose";
+import { FilterQuery } from "../lib/dbCompat";
 import { CategoryModel } from "../models/Category";
 import { ProductModel } from "../models/Product";
 import { ApiError } from "../utils/apiError";
@@ -7,7 +7,7 @@ import { buildMeta } from "../utils/pagination";
 
 function canonicalCategorySlug(value: string) {
   const key = String(value || "").trim().toLocaleLowerCase("pt-BR");
-  if (key === "acessorios" || key === "acess√≥rios") return "casual";
+  if (key === "acessorios" || key === "acessÛrios") return "casual";
   return key;
 }
 
@@ -58,7 +58,7 @@ export async function createCategory(input: { name: string; slug?: string; activ
   const slug = slugify(input.slug || input.name);
 
   const exists = await CategoryModel.findOne({ $or: [{ name: input.name.trim() }, { slug }] });
-  if (exists) throw new ApiError(409, "Categoria j√° cadastrada.");
+  if (exists) throw new ApiError(409, "Categoria j· cadastrada.");
 
   const created = await CategoryModel.create({
     name: input.name.trim(),
@@ -72,7 +72,7 @@ export async function createCategory(input: { name: string; slug?: string; activ
 
 export async function updateCategory(id: string, input: { name?: string; slug?: string; active?: boolean; sortOrder?: number }) {
   const category = await CategoryModel.findById(id);
-  if (!category) throw new ApiError(404, "Categoria n√£o encontrada.");
+  if (!category) throw new ApiError(404, "Categoria n„o encontrada.");
 
   if (input.name !== undefined) category.name = input.name.trim();
   if (input.slug !== undefined) category.slug = slugify(input.slug);
@@ -85,8 +85,9 @@ export async function updateCategory(id: string, input: { name?: string; slug?: 
 
 export async function listStoreCategories() {
   const rows = await CategoryModel.find({ active: true }).sort({ sortOrder: 1, name: 1 });
-  const counts = await ProductModel.aggregate<{ _id: string; count: number }>([
-    { $match: { active: true } },
+  const counts = await ProductModel.aggregate([
+    // Store catalog only shows active products with stock available.
+    { $match: { active: true, stock: { $gt: 0 } } },
     { $group: { _id: "$category", count: { $sum: 1 } } },
   ]);
   const countMap = new Map<string, number>();
@@ -114,3 +115,5 @@ export async function listStoreCategories() {
 
   return output;
 }
+
+

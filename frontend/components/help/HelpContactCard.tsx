@@ -23,7 +23,7 @@ export default function HelpContactCard() {
 
       <div className="mt-4 grid gap-2">
         <Link
-          href={HELP_CONTACT_CARD.primaryHref}
+          href="https://wa.me/5524981467489?text=Ola!%20Vim%20pelo%20site%20da%20Marima%20e%20quero%20saber%20das%20promocoes."
           className="inline-flex h-11 items-center justify-center rounded-md bg-zinc-900 text-sm font-semibold text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
         >
           {HELP_CONTACT_CARD.primaryCta}

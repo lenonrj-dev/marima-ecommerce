@@ -1,4 +1,4 @@
-﻿import { Request, Response } from "express";
+import { Request, Response } from "express";
 import { asyncHandler } from "../middlewares/notFound";
 import {
   createStoreOrder,
@@ -47,7 +47,7 @@ export const createStoreOrderHandler = asyncHandler(async (req: Request, res: Re
     customerId: req.auth?.type === "customer" ? req.auth.sub : undefined,
     cartId: payload.cartId,
     channel: payload.channel || "Site",
-    shippingMethod: payload.shippingMethod || payload.shippingMethodId || "Padrão",
+    shippingMethod: payload.shippingMethod || payload.shippingMethodId || "Padr�o",
     paymentMethod: payload.paymentMethod || "Pix",
     couponCode: payload.couponCode,
     cashbackUsedCents: payload.cashbackUsedCents,

@@ -1,4 +1,4 @@
-Ôªøimport { FilterQuery } from "mongoose";
+import { FilterQuery } from "../lib/dbCompat";
 import { SupportTicketModel } from "../models/SupportTicket";
 import { ApiError } from "../utils/apiError";
 import { buildMeta } from "../utils/pagination";
@@ -63,7 +63,7 @@ export async function listTickets(input: { page: number; limit: number; q?: stri
 
 export async function getTicketById(id: string) {
   const ticket = await SupportTicketModel.findById(id);
-  if (!ticket) throw new ApiError(404, "Ticket n√£o encontrado.");
+  if (!ticket) throw new ApiError(404, "Ticket n„o encontrado.");
 
   return {
     ...toTicket(ticket),
@@ -73,7 +73,7 @@ export async function getTicketById(id: string) {
 
 export async function updateTicketStatus(id: string, status: "aberto" | "em_andamento" | "resolvido") {
   const ticket = await SupportTicketModel.findById(id);
-  if (!ticket) throw new ApiError(404, "Ticket n√£o encontrado.");
+  if (!ticket) throw new ApiError(404, "Ticket n„o encontrado.");
 
   ticket.status = status;
   await ticket.save();
@@ -86,7 +86,7 @@ export async function addTicketMessage(
   input: { authorType: "customer" | "agent"; authorName?: string; message: string; authorId?: string },
 ) {
   const ticket = await SupportTicketModel.findById(id);
-  if (!ticket) throw new ApiError(404, "Ticket n√£o encontrado.");
+  if (!ticket) throw new ApiError(404, "Ticket n„o encontrado.");
 
   ticket.messages.push({
     authorType: input.authorType,
@@ -105,7 +105,7 @@ export async function addTicketMessage(
 
 export async function listTicketMessages(id: string) {
   const ticket = await SupportTicketModel.findById(id);
-  if (!ticket) throw new ApiError(404, "Ticket n√£o encontrado.");
+  if (!ticket) throw new ApiError(404, "Ticket n„o encontrado.");
 
   return (ticket.messages || []).map(toMessage);
 }
@@ -143,3 +143,4 @@ export async function createStoreTicket(input: {
 }
 
 export { toTicket, toMessage };
+

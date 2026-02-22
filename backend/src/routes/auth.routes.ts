@@ -1,4 +1,4 @@
-﻿import { Router } from "express";
+import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import {
@@ -9,7 +9,9 @@ import {
   refreshHandler,
   registerCustomerHandler,
 } from "../controllers/auth.controller";
-import { requireAuth } from "../middlewares/auth";
+import { optionalAuth, requireAuth } from "../middlewares/auth";
+import { env } from "../config/env";
+import { getToken } from "../lib/auth";
 import { validate } from "../middlewares/validate";
 
 const router = Router();
@@ -63,5 +65,23 @@ router.post(
 router.post("/logout", logoutHandler);
 router.post("/refresh", refreshHandler);
 router.get("/me", requireAuth, meHandler);
+router.get("/debug", optionalAuth, (req, res) => {
+  if (env.NODE_ENV === "production") {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+
+  const token = getToken(req);
+  const cookieNames = Object.keys(req.cookies || {});
+  res.json({
+    data: {
+      hasToken: Boolean(token),
+      authType: req.auth?.type || null,
+      authRole: req.auth?.role || null,
+      hasAccessCookie: cookieNames.includes("access_token") || cookieNames.includes("marima_access"),
+      cookies: cookieNames,
+    },
+  });
+});
 
 export default router;

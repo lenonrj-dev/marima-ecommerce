@@ -1,7 +1,7 @@
-﻿import { NextFunction, Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 
 export function notFound(_req: Request, res: Response) {
-  res.status(404).json({ message: "Rota não encontrada." });
+  res.status(404).json({ message: "Rota n�o encontrada." });
 }
 
 export function asyncHandler<T extends (...args: any[]) => any>(fn: T) {

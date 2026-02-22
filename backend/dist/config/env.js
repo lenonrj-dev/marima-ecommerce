@@ -10,7 +10,8 @@ dotenv_1.default.config();
 const schema = zod_1.z.object({
     NODE_ENV: zod_1.z.enum(["development", "test", "production"]).default("development"),
     PORT: zod_1.z.coerce.number().default(4000),
-    MONGODB_URI: zod_1.z.string().min(1),
+    DATABASE_URL: zod_1.z.string().min(1),
+    SHADOW_DATABASE_URL: zod_1.z.string().optional(),
     JWT_ACCESS_SECRET: zod_1.z.string().min(10),
     JWT_REFRESH_SECRET: zod_1.z.string().min(10),
     CORS_ORIGINS: zod_1.z.string().default("http://localhost:3000,http://localhost:3001"),
@@ -20,6 +21,14 @@ const schema = zod_1.z.object({
     STORE_URL: zod_1.z.string().url().optional(),
     ADMIN_URL: zod_1.z.string().url().optional(),
     API_PUBLIC_URL: zod_1.z.string().url().optional(),
+    REDIS_URL: zod_1.z.string().url().optional(),
+    CACHE_DEBUG: zod_1.z
+        .string()
+        .optional()
+        .transform((value) => value === "true"),
+    GMAIL_USER: zod_1.z.string().email().optional(),
+    GMAIL_APP_PASSWORD: zod_1.z.string().min(1).optional(),
+    NEWSLETTER_TO: zod_1.z.string().min(1).optional(),
     MERCADO_PAGO_ACCESS_TOKEN: zod_1.z.string().min(1).optional(),
     MERCADO_PAGO_WEBHOOK_SECRET: zod_1.z.string().min(1).optional(),
     MP_PENDING_ORDER_TTL_MINUTES: zod_1.z.coerce.number().int().positive().optional(),

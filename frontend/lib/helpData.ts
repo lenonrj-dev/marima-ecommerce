@@ -109,4 +109,25 @@ export const HELP_FAQ = { title : "Perguntas frequentes",
     },
   ],
 };
+
+const HELP_TOPIC_ALIASES: Record<string, HelpTopicSlug> = {
+  "troca-e-devolucao": "trocas-e-devolucoes",
+  "trocas-e-devolucao": "trocas-e-devolucoes",
+};
+
+const HELP_TOPIC_MAP = new Map<HelpTopicSlug, HelpTopic>(
+  HELP_TOPICS.map((topic) => [topic.slug, topic] as const),
+);
+
+export function resolveHelpTopicSlug(rawSlug: string) {
+  const slug = rawSlug.trim().toLowerCase();
+  const canonical = HELP_TOPIC_ALIASES[slug] ?? slug;
+  if (!HELP_TOPIC_MAP.has(canonical as HelpTopicSlug)) return undefined;
+  return canonical as HelpTopicSlug;
+}
+
+export function resolveHelpTopic(rawSlug: string) {
+  const slug = resolveHelpTopicSlug(rawSlug);
+  return slug ? HELP_TOPIC_MAP.get(slug) : undefined;
+}
 

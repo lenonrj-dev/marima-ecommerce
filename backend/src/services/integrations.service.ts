@@ -1,4 +1,4 @@
-Ôªøimport { FilterQuery } from "mongoose";
+import { FilterQuery } from "../lib/dbCompat";
 import { IntegrationConfigModel } from "../models/IntegrationConfig";
 import { buildMeta } from "../utils/pagination";
 import { ApiError } from "../utils/apiError";
@@ -39,7 +39,7 @@ export async function listIntegrations(input: { page: number; limit: number; q?:
 
 export async function updateIntegration(id: string, input: Partial<{ connected: boolean; config: Record<string, unknown>; description: string; name: string }>) {
   const item = await IntegrationConfigModel.findById(id);
-  if (!item) throw new ApiError(404, "Integra√ß√£o n√£o encontrada.");
+  if (!item) throw new ApiError(404, "IntegraÁ„o n„o encontrada.");
 
   if (input.connected !== undefined) item.connected = input.connected;
   if (input.config !== undefined) item.config = input.config;
@@ -52,7 +52,7 @@ export async function updateIntegration(id: string, input: Partial<{ connected: 
 
 export async function testIntegrationWebhook(id: string) {
   const item = await IntegrationConfigModel.findById(id);
-  if (!item) throw new ApiError(404, "Integra√ß√£o n√£o encontrada.");
+  if (!item) throw new ApiError(404, "IntegraÁ„o n„o encontrada.");
 
   return {
     id,
@@ -63,3 +63,4 @@ export async function testIntegrationWebhook(id: string) {
 }
 
 export { toIntegration };
+

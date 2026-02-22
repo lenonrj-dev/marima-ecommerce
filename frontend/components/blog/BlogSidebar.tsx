@@ -1,7 +1,7 @@
-import Link from "next/link";
 import Image from "next/image";
-import { Mail, MapPin, ExternalLink, Sparkles } from "lucide-react";
-import { BLOG_AUTHOR, BLOG_POSTS, formatBlogDate } from "@/lib/blogData";
+import Link from "next/link";
+import { ExternalLink, Mail, MapPin, Sparkles } from "lucide-react";
+import { BLOG_AUTHOR, BLOG_POSTS, formatBlogDate, type BlogPostItem } from "@/lib/blogData";
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -12,8 +12,8 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   );
 }
 
-export default function BlogSidebar() {
-  const featured = BLOG_POSTS.filter((p) => p.featured).slice(0, 3);
+export default function BlogSidebar({ posts = BLOG_POSTS }: { posts?: BlogPostItem[] }) {
+  const featured = posts.filter((post) => post.featured).slice(0, 3);
 
   return (
     <div className="sticky top-[96px] space-y-4">
@@ -39,8 +39,7 @@ export default function BlogSidebar() {
         </div>
 
         <p className="mt-3 text-sm leading-relaxed text-zinc-600">
-          Conteúdos com foco em moda fitness, conforto, tecnologia têxtil e experiência de compra
-          transparente.
+          Conteudos com foco em moda fitness, conforto, tecnologia textil e experiencia de compra transparente.
         </p>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -67,21 +66,19 @@ export default function BlogSidebar() {
       <Card title="Posts em destaque">
         <div className="space-y-3">
           {featured.length ? (
-            featured.map((p) => (
+            featured.map((post) => (
               <Link
-                key={p.slug}
-                href={`/blog/${p.slug}`}
+                key={post.slug}
+                href={`/blog/${post.slug}`}
                 className="group flex items-center gap-3 rounded-xl p-2 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
               >
                 <div className="relative h-12 w-12 overflow-hidden rounded-xl bg-zinc-100 ring-1 ring-black/5">
-                  <Image src={p.cover} alt={p.title} fill className="object-cover" sizes="48px" />
+                  <Image src={post.cover} alt={post.title} fill className="object-cover" sizes="48px" />
                 </div>
 
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-zinc-900 group-hover:underline">
-                    {p.title}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-zinc-500">{formatBlogDate(p.dateISO)}</p>
+                  <p className="truncate text-xs font-semibold text-zinc-900 group-hover:underline">{post.title}</p>
+                  <p className="mt-0.5 text-[11px] text-zinc-500">{formatBlogDate(post.dateISO)}</p>
                 </div>
               </Link>
             ))
@@ -95,20 +92,18 @@ export default function BlogSidebar() {
         <ul className="space-y-2 text-sm text-zinc-700">
           <li className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-zinc-500" />
-            Tecido tecnológico e respirabilidade
+            Tecido tecnologico e respirabilidade
           </li>
           <li className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-zinc-500" />
-            Compressão com conforto real
+            Compressao com conforto real
           </li>
           <li className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-zinc-500" />
-            Transparência do pedido ao rastreio
+            Transparencia do pedido ao rastreio
           </li>
         </ul>
       </Card>
     </div>
   );
 }
-
-

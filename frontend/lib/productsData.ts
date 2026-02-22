@@ -36,16 +36,52 @@ export type ProductColorVariantsResponse = {
   variants: ProductColorVariant[];
 };
 
+export type ProductAdditionalInfoItem = {
+  label: string;
+  value: string;
+};
+
 export type ProductReview = {
   id: string;
-  name: string;
-  verified?: boolean;
-  timeAgo: string;
-  title: string;
+  productId: string;
+  customerName: string;
   rating: number;
-  text: string;
-  avatar: string;
-  media: string[];
+  comment: string;
+  verifiedPurchase: boolean;
+  createdAt: string;
+};
+
+export type ProductReviewSummary = {
+  avgRating: number;
+  total: number;
+  distribution: {
+    1: number;
+    2: number;
+    3: number;
+    4: number;
+    5: number;
+  };
+};
+
+export type ProductReviewSort = "recent" | "oldest" | "rating_desc" | "rating_asc";
+
+export type ProductReviewCreateInput = {
+  productId: string;
+  rating: number;
+  comment: string;
+};
+
+export type MeProductReview = {
+  id: string;
+  productId: string;
+  productSlug: string;
+  productTitle: string;
+  rating: number;
+  comment: string;
+  status: "published" | "pending" | "hidden";
+  verifiedPurchase: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type Product = {
@@ -66,6 +102,7 @@ export type Product = {
   badge?: "Novo" | "Oferta" | "Destaque";
   description: string;
   longDescription: string;
+  additionalInfo: ProductAdditionalInfoItem[];
   rating: number;
   reviewCount: number;
   colors: Array<{ name: string; hex: string }>;
@@ -187,6 +224,14 @@ export function normalizeProductFromApi(product: Partial<Product>): Product {
     : Array.isArray(product.sizes) && product.sizes.length
       ? product.sizes
       : [];
+  const additionalInfo = Array.isArray(product.additionalInfo)
+    ? product.additionalInfo
+        .map((item) => ({
+          label: String((item as Partial<ProductAdditionalInfoItem>)?.label || "").trim(),
+          value: String((item as Partial<ProductAdditionalInfoItem>)?.value || "").trim(),
+        }))
+        .filter((item) => item.label && item.value)
+    : [];
 
   return {
     id: String(product.id || ""),
@@ -204,9 +249,10 @@ export function normalizeProductFromApi(product: Partial<Product>): Product {
     stock: Number.isFinite(Number(product.stock)) ? Number(product.stock) : 0,
     variants: Array.isArray(product.variants) ? product.variants : [],
     badge: product.badge,
+    additionalInfo,
     description: String(product.description || product.longDescription || "Sem descrição."),
     longDescription: String(product.longDescription || product.description || "Sem descrição."),
-    rating: Number.isFinite(Number(product.rating)) ? Number(product.rating) : 4.7,
+    rating: Number.isFinite(Number(product.rating)) ? Number(product.rating) : 0,
     reviewCount: Number.isFinite(Number(product.reviewCount)) ? Number(product.reviewCount) : 0,
     colors: Array.isArray(product.colors) && product.colors.length ? product.colors : [...BASE_COLORS],
     sizes,
@@ -322,4 +368,61 @@ export async function fetchStoreCategories(): Promise<StoreCategory[]> {
   } catch {
     return [];
   }
+}
+
+export async function fetchProductReviews(
+  productId: string,
+  query?: Partial<{ page: number; limit: number; sort: ProductReviewSort }>,
+) {
+  const response = await apiFetch<ApiListResponse<ProductReview>>(
+    `/api/v1/store/products/${encodeURIComponent(productId)}/reviews`,
+    {
+      query: {
+        page: query?.page,
+        limit: query?.limit,
+        sort: query?.sort,
+      },
+    },
+  );
+
+  return {
+    data: response.data || [],
+    meta: response.meta,
+  };
+}
+
+export async function fetchProductReviewsSummary(productId: string): Promise<ProductReviewSummary> {
+  const response = await apiFetch<{ data: ProductReviewSummary }>(
+    `/api/v1/store/products/${encodeURIComponent(productId)}/reviews/summary`,
+  );
+
+  return response.data;
+}
+
+export async function createProductReview(input: ProductReviewCreateInput): Promise<ProductReview> {
+  const response = await apiFetch<{ data: ProductReview }>("/api/v1/me/reviews", {
+    method: "POST",
+    body: JSON.stringify({
+      productId: input.productId,
+      rating: input.rating,
+      comment: input.comment.trim(),
+    }),
+  });
+
+  return response.data;
+}
+
+export async function fetchMeProductReviews(query?: Partial<{ page: number; limit: number }>) {
+  const response = await apiFetch<ApiListResponse<MeProductReview>>("/api/v1/me/reviews", {
+    query: {
+      page: query?.page,
+      limit: query?.limit,
+    },
+    skipAuthRedirect: true,
+  });
+
+  return {
+    data: response.data || [],
+    meta: response.meta,
+  };
 }

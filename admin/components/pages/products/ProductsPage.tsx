@@ -42,6 +42,7 @@ const EMPTY_DRAFT: DraftProduct = {
   compareAtPrice: 0,
   shortDescription: "",
   description: "",
+  additionalInfo: [],
   tags: "",
   status: "padrao",
   active: true,
@@ -76,6 +77,12 @@ function toPayload(draft: DraftProduct) {
     compareAtPrice: Number(draft.compareAtPrice || 0) || undefined,
     shortDescription: draft.shortDescription.trim(),
     description: draft.description.trim(),
+    additionalInfo: (draft.additionalInfo || [])
+      .map((item) => ({
+        label: String(item.label || "").trim(),
+        value: String(item.value || "").trim(),
+      }))
+      .filter((item) => item.label && item.value),
     tags: draft.tags
       .split(",")
       .map((tag) => tag.trim())

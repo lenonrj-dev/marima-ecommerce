@@ -1,4 +1,4 @@
-﻿import express from "express";
+import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
@@ -7,6 +7,7 @@ import routes from "./routes";
 import { corsOrigins, isProd } from "./config/env";
 import { errorHandler } from "./middlewares/errorHandler";
 import { notFound } from "./middlewares/notFound";
+import { runHealthChecks } from "./lib/health";
 
 export const app = express();
 app.set("trust proxy", 1);
@@ -39,6 +40,14 @@ app.options("*", cors(corsConfig));
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+app.get("/health", async (_req, res) => {
+  const health = await runHealthChecks();
+  res.status(health.ok ? 200 : 503).json({
+    status: health.ok ? "ok" : "degraded",
+    checks: health.checks,
+  });
+});
 
 app.use("/api/v1", routes);
 

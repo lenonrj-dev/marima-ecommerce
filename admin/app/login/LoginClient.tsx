@@ -19,9 +19,13 @@ export default function LoginClient({ reason }: { reason?: string }) {
 
     async function checkSession() {
       try {
-        await apiFetch("/api/v1/auth/me");
-        if (active) {
+        const response = await apiFetch<{ data?: { type?: string } }>("/api/v1/auth/me");
+        if (active && response?.data?.type === "admin") {
           router.replace("/");
+          return;
+        }
+        if (active) {
+          setChecking(false);
         }
       } catch {
         if (active) {

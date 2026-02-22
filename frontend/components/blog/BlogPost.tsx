@@ -1,36 +1,69 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import Container from "@/components/ui/Container";
-import { cn } from "@/lib/utils";
-import {
-  BLOG_TOPICS,
-  formatBlogDate,
-  getBlogArticle,
-  getRelatedPosts,
-  topicLabel,
-} from "@/lib/blogData";
+import Link from "next/link";
 import { ChevronLeft, Search, Share2 } from "lucide-react";
-import BlogReadingShell from "@/components/blog/BlogReadingShell";
-import BlogLeftNav from "@/components/blog/BlogLeftNav";
-import BlogRightRail from "@/components/blog/BlogRightRail";
 import BlogArticleContent from "@/components/blog/BlogArticleContent";
+import BlogLeftNav from "@/components/blog/BlogLeftNav";
+import BlogReadingShell from "@/components/blog/BlogReadingShell";
+import BlogRightRail from "@/components/blog/BlogRightRail";
+import Container from "@/components/ui/Container";
+import { copyLink, getCurrentUrl, shareLink } from "@/lib/share";
+import { BLOG_TOPICS, formatBlogDate, topicLabel, type BlogArticle, type BlogPostItem } from "@/lib/blogData";
+import { cn } from "@/lib/utils";
 
-export default function BlogPost({ slug }: { slug: string }) {
+export default function BlogPost({ article, related }: { article: BlogArticle; related: BlogPostItem[] }) {
   const [query, setQuery] = useState("");
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const feedbackTimeoutRef = useRef<number | null>(null);
 
-  const article = useMemo(() => getBlogArticle(slug), [slug]);
-  const related = useMemo(() => getRelatedPosts(slug), [slug]);
-
-  const activeTopic = article?.topic ?? "novidades";
+  const activeTopic = article.topic || "novidades";
 
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.title = `${article.title} | Blog Marima`;
     }
   }, [article.title]);
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimeoutRef.current !== null) {
+        window.clearTimeout(feedbackTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  function showShareFeedback(message: string) {
+    setShareMessage(message);
+    if (feedbackTimeoutRef.current !== null) {
+      window.clearTimeout(feedbackTimeoutRef.current);
+    }
+    feedbackTimeoutRef.current = window.setTimeout(() => {
+      setShareMessage(null);
+      feedbackTimeoutRef.current = null;
+    }, 2000);
+  }
+
+  async function handleCopyLink() {
+    const result = await copyLink(getCurrentUrl());
+    showShareFeedback(result.ok ? "Copiado!" : "Não foi possível copiar o link.");
+  }
+
+  async function handleShareLink() {
+    const result = await shareLink({
+      title: article.title,
+      text: article.excerpt,
+      url: getCurrentUrl(),
+    });
+
+    if (!result.ok) {
+      showShareFeedback("Não foi possível compartilhar o link.");
+      return;
+    }
+
+    showShareFeedback(result.mode === "copy" ? "Copiado!" : "Compartilhado!");
+  }
 
   return (
     <section className="bg-zinc-50/60">
@@ -51,11 +84,11 @@ export default function BlogPost({ slug }: { slug: string }) {
               <div className="flex w-full max-w-md items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-700 sm:justify-self-end">
                 <Search className="h-4 w-4 text-zinc-500" />
                 <label className="w-full">
-                  <span className="sr-only">Buscar conteúdo</span>
+                  <span className="sr-only">Buscar conteudo</span>
                   <input
                     value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Buscar conteúdo..."
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Buscar conteudo..."
                     className="w-full bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-400"
                   />
                 </label>
@@ -68,9 +101,9 @@ export default function BlogPost({ slug }: { slug: string }) {
                   <span className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1 text-[11px] font-semibold text-zinc-700">
                     {topicLabel(article.topic)}
                   </span>
-                  <span aria-hidden>⬢</span>
+                  <span aria-hidden>&bull;</span>
                   <span>{formatBlogDate(article.dateISO)}</span>
-                  <span aria-hidden>⬢</span>
+                  <span aria-hidden>&bull;</span>
                   <span>{article.readingMinutes} min de leitura</span>
                 </div>
 
@@ -90,17 +123,20 @@ export default function BlogPost({ slug }: { slug: string }) {
                   <button
                     type="button"
                     className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
-                    aria-label="Compartilhar artigo"
-                    onClick={() => {
-                      if (typeof navigator !== "undefined" && "clipboard" in navigator) {
-                        navigator.clipboard.writeText(window.location.href).catch(() => {});
-                      }
-                    }}
+                    aria-label="Compartilhar link desta postagem"
+                    title="Compartilhar artigo"
+                    onClick={() => void handleShareLink()}
                   >
                     <Share2 className="h-4 w-4" />
                     Compartilhar
                   </button>
                 </div>
+
+                {shareMessage ? (
+                  <p className="mt-3 text-xs font-semibold text-zinc-700" role="status" aria-live="polite">
+                    {shareMessage}
+                  </p>
+                ) : null}
               </div>
 
               <div className="relative aspect-[16/7] w-full bg-zinc-100">
@@ -119,12 +155,12 @@ export default function BlogPost({ slug }: { slug: string }) {
 
                 {article.tags?.length ? (
                   <div className="mt-7 flex flex-wrap items-center gap-2">
-                    {article.tags.map((t) => (
+                    {article.tags.map((tag) => (
                       <span
-                        key={t}
+                        key={tag}
                         className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1 text-[11px] font-semibold text-zinc-700"
                       >
-                        #{t}
+                        #{tag}
                       </span>
                     ))}
                   </div>
@@ -133,13 +169,18 @@ export default function BlogPost({ slug }: { slug: string }) {
 
               <div className={cn("border-t border-zinc-200 bg-white p-5", query && "opacity-90")}>
                 <p className="text-xs text-zinc-500">
-                  Placeholder técnico: integração futura com busca avançada, comentários e métricas.
+                  Placeholder tecnico: integracao futura com busca avancada, comentarios e metricas.
                 </p>
               </div>
             </article>
           </div>
 
-          <BlogRightRail related={related} />
+          <BlogRightRail
+            related={related}
+            onCopyLink={() => void handleCopyLink()}
+            onShareLink={() => void handleShareLink()}
+            shareMessage={shareMessage}
+          />
         </BlogReadingShell>
       </Container>
     </section>

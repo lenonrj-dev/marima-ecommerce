@@ -1,29 +1,23 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mercadoPagoPaymentDebugHandler = exports.mercadoPagoCancelHandler = exports.mercadoPagoVerifyHandler = exports.mercadoPagoCheckoutProHandler = void 0;
-const crypto_1 = require("crypto");
 const notFound_1 = require("../middlewares/notFound");
 const rbac_1 = require("../middlewares/rbac");
 const auth_1 = require("../middlewares/auth");
-const carts_service_1 = require("../services/carts.service");
 const cookies_1 = require("../utils/cookies");
+const apiError_1 = require("../utils/apiError");
 const mercadopago_service_1 = require("../services/mercadopago.service");
 const MP_CANCEL_TOKEN_COOKIE = "mp_cancel_token";
-function resolveCartIdentity(req, res) {
+function resolveCartIdentity(req) {
     if (req.auth?.type === "customer") {
         return { customerId: req.auth.sub };
     }
-    let guestToken = req.cookies?.[carts_service_1.GUEST_CART_COOKIE];
-    if (!guestToken) {
-        guestToken = (0, crypto_1.randomUUID)();
-        res.cookie(carts_service_1.GUEST_CART_COOKIE, guestToken, (0, cookies_1.cookieOptions)(req, 30 * 24 * 60 * 60 * 1000));
-    }
-    return { guestToken };
+    throw new apiError_1.ApiError(401, "Acesso do cliente não autenticado.", "AUTH_REQUIRED");
 }
 exports.mercadoPagoCheckoutProHandler = [
-    auth_1.optionalAuth,
+    auth_1.requireCustomerAuth,
     (0, notFound_1.asyncHandler)(async (req, res) => {
-        const identity = resolveCartIdentity(req, res);
+        const identity = resolveCartIdentity(req);
         const data = await (0, mercadopago_service_1.createMercadoPagoCheckoutPro)({
             identity,
             orderId: req.body.orderId,

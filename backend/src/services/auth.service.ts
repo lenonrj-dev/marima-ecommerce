@@ -1,7 +1,8 @@
-Ôªøimport bcrypt from "bcryptjs";
+import bcrypt from "bcryptjs";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { Request, Response } from "express";
 import { env } from "../config/env";
+import { delCache, getOrSetCache } from "../lib/cache";
 import { AdminUserModel, Role } from "../models/AdminUser";
 import { CustomerModel } from "../models/Customer";
 import { ApiError } from "../utils/apiError";
@@ -9,12 +10,24 @@ import { ACCESS_COOKIE, REFRESH_COOKIE } from "../middlewares/auth";
 import { cookieBaseOptions, cookieOptions } from "../utils/cookies";
 
 const SALT_ROUNDS = 10;
+const ME_CACHE_TTL_SECONDS = 60;
 
 type TokenPayload = {
   sub: string;
   role: Role | "customer";
   type: "admin" | "customer";
 };
+
+function meCacheKey(payload: TokenPayload) {
+  return `cache:v1:user:me:${payload.type}:${payload.sub}`;
+}
+
+export async function invalidateMeCacheForUser(userId: string) {
+  await Promise.all([
+    delCache(`cache:v1:user:me:admin:${userId}`),
+    delCache(`cache:v1:user:me:customer:${userId}`),
+  ]);
+}
 
 export function signAccessToken(payload: TokenPayload) {
   return jwt.sign(payload, env.JWT_ACCESS_SECRET, {
@@ -66,7 +79,7 @@ export async function registerCustomer(input: {
 }) {
   const email = input.email.trim().toLowerCase();
   const exists = await CustomerModel.findOne({ email });
-  if (exists) throw new ApiError(409, "E-mail j√° cadastrado.");
+  if (exists) throw new ApiError(409, "E-mail j· cadastrado.");
 
   const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
   const created = await CustomerModel.create({
@@ -84,10 +97,10 @@ export async function loginCustomer(input: { email: string; password: string }) 
   const email = input.email.trim().toLowerCase();
   const user = await CustomerModel.findOne({ email });
 
-  if (!user) throw new ApiError(401, "Credenciais inv√°lidas.", "AUTH_INVALID_CREDENTIALS");
-  if (!user.active) throw new ApiError(403, "Usu√°rio inativo.", "FORBIDDEN");
+  if (!user) throw new ApiError(401, "Credenciais inv·lidas.", "AUTH_INVALID_CREDENTIALS");
+  if (!user.active) throw new ApiError(403, "Usu·rio inativo.", "FORBIDDEN");
   const ok = await bcrypt.compare(input.password, user.passwordHash);
-  if (!ok) throw new ApiError(401, "Credenciais inv√°lidas.", "AUTH_INVALID_CREDENTIALS");
+  if (!ok) throw new ApiError(401, "Credenciais inv·lidas.", "AUTH_INVALID_CREDENTIALS");
 
   return user;
 }
@@ -96,10 +109,10 @@ export async function loginAdmin(input: { email: string; password: string }) {
   const email = input.email.trim().toLowerCase();
   const user = await AdminUserModel.findOne({ email });
 
-  if (!user) throw new ApiError(401, "Credenciais inv√°lidas.", "AUTH_INVALID_CREDENTIALS");
-  if (!user.active) throw new ApiError(403, "Usu√°rio inativo.", "FORBIDDEN");
+  if (!user) throw new ApiError(401, "Credenciais inv·lidas.", "AUTH_INVALID_CREDENTIALS");
+  if (!user.active) throw new ApiError(403, "Usu·rio inativo.", "FORBIDDEN");
   const ok = await bcrypt.compare(input.password, user.passwordHash);
-  if (!ok) throw new ApiError(401, "Credenciais inv√°lidas.", "AUTH_INVALID_CREDENTIALS");
+  if (!ok) throw new ApiError(401, "Credenciais inv·lidas.", "AUTH_INVALID_CREDENTIALS");
 
   user.lastLoginAt = new Date();
   await user.save();
@@ -115,7 +128,7 @@ export async function inviteAdminUser(input: {
 }) {
   const email = input.email.trim().toLowerCase();
   const exists = await AdminUserModel.findOne({ email });
-  if (exists) throw new ApiError(409, "J√° existe usu√°rio com este e-mail.");
+  if (exists) throw new ApiError(409, "J· existe usu·rio com este e-mail.");
 
   const passwordHash = await bcrypt.hash(input.temporaryPassword, SALT_ROUNDS);
   return AdminUserModel.create({
@@ -129,32 +142,34 @@ export async function inviteAdminUser(input: {
 }
 
 export async function meFromPayload(payload: TokenPayload) {
-  if (payload.type === "admin") {
-    const admin = await AdminUserModel.findById(payload.sub).select("name email role active createdAt");
-    if (!admin) throw new ApiError(401, "Sess√£o expirada.", "AUTH_EXPIRED");
+  return getOrSetCache(meCacheKey(payload), ME_CACHE_TTL_SECONDS, async () => {
+    if (payload.type === "admin") {
+      const admin = await AdminUserModel.findById(payload.sub).select("name email role active createdAt");
+      if (!admin) throw new ApiError(401, "Sess„o expirada.", "AUTH_EXPIRED");
+
+      return {
+        id: String(admin._id),
+        type: "admin" as const,
+        name: admin.name,
+        email: admin.email,
+        role: admin.role,
+        active: admin.active,
+        createdAt: admin.createdAt?.toISOString(),
+      };
+    }
+
+    const customer = await CustomerModel.findById(payload.sub).select("name email phone segment active createdAt");
+    if (!customer) throw new ApiError(401, "Sess„o expirada.", "AUTH_EXPIRED");
 
     return {
-      id: String(admin._id),
-      type: "admin" as const,
-      name: admin.name,
-      email: admin.email,
-      role: admin.role,
-      active: admin.active,
-      createdAt: admin.createdAt?.toISOString(),
+      id: String(customer._id),
+      type: "customer" as const,
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+      segment: customer.segment,
+      active: customer.active,
+      createdAt: customer.createdAt?.toISOString(),
     };
-  }
-
-  const customer = await CustomerModel.findById(payload.sub).select("name email phone segment active createdAt");
-  if (!customer) throw new ApiError(401, "Sess√£o expirada.", "AUTH_EXPIRED");
-
-  return {
-    id: String(customer._id),
-    type: "customer" as const,
-    name: customer.name,
-    email: customer.email,
-    phone: customer.phone,
-    segment: customer.segment,
-    active: customer.active,
-    createdAt: customer.createdAt?.toISOString(),
-  };
+  });
 }

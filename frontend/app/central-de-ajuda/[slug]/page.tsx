@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import HelpHero from "@/components/help/HelpHero";
 import HelpLayout from "@/components/help/HelpLayout";
 import HelpFAQ from "@/components/help/HelpFAQ";
-import { HELP_TOPICS, type HelpTopicSlug } from "@/lib/helpData";
+import { resolveHelpTopic, type HelpTopicSlug } from "@/lib/helpData";
 import TopicEntrega from "@/components/help/topics/TopicEntrega";
 import TopicPrivacidade from "@/components/help/topics/TopicPrivacidade";
 import TopicTrocasDevolucoes from "@/components/help/topics/TopicTrocasDevolucoes";
@@ -26,16 +27,19 @@ function buildHelpTopicTitle(topicTitle: string) {
   return `${normalizedTopic}${suffix}`;
 }
 
+type Params = Promise<{ slug: string }>;
+
 export async function generateMetadata({
   params,
 }: {
-  params: { slug: HelpTopicSlug };
+  params: Params;
 }): Promise<Metadata> {
-  const topic = HELP_TOPICS.find((item) => item.slug === params.slug) ?? HELP_TOPICS[0];
+  const { slug } = await params;
+  const topic = resolveHelpTopic(slug);
 
   if (!topic) {
     return {
-      title: "Central de Ajuda Marima: políticas, entregas, trocas e privacidade",
+      title: "Central de Ajuda Marima: politicas, entregas, trocas e privacidade",
     };
   }
 
@@ -44,12 +48,18 @@ export async function generateMetadata({
   };
 }
 
-export default function HelpTopicPage({
+export default async function HelpTopicPage({
   params,
 }: {
-  params: { slug: HelpTopicSlug };
+  params: Params;
 }) {
-  const topic = HELP_TOPICS.find((item) => item.slug === params.slug) ?? HELP_TOPICS[0];
+  const { slug } = await params;
+  const topic = resolveHelpTopic(slug);
+
+  if (!topic) {
+    notFound();
+  }
+
   const content = TOPIC_COMPONENTS[topic.slug];
 
   return (

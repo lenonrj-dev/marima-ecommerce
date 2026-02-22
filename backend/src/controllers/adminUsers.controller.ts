@@ -1,8 +1,8 @@
-Ôªøimport { Request, Response } from "express";
+import { Request, Response } from "express";
 import { AdminUserModel } from "../models/AdminUser";
 import { asyncHandler } from "../middlewares/notFound";
 import { buildMeta } from "../utils/pagination";
-import { inviteAdminUser } from "../services/auth.service";
+import { invalidateMeCacheForUser, inviteAdminUser } from "../services/auth.service";
 
 function toAdminUser(row: any) {
   return {
@@ -60,7 +60,7 @@ export const inviteAdminUserHandler = asyncHandler(async (req: Request, res: Res
 export const patchAdminUserHandler = asyncHandler(async (req: Request, res: Response) => {
   const user = await AdminUserModel.findById(String(req.params.id));
   if (!user) {
-    res.status(404).json({ message: "Usu√°rio n√£o encontrado." });
+    res.status(404).json({ message: "Usu·rio n„o encontrado." });
     return;
   }
 
@@ -69,6 +69,7 @@ export const patchAdminUserHandler = asyncHandler(async (req: Request, res: Resp
   if (req.body.active !== undefined) user.active = req.body.active;
 
   await user.save();
+  await invalidateMeCacheForUser(String(user._id));
   res.json({ data: toAdminUser(user) });
 });
 

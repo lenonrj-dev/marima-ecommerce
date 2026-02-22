@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { Types } from "mongoose";
+import { Types } from "../lib/dbCompat";
 import { MercadoPagoConfig, Payment, Preference } from "mercadopago";
 import { env } from "../config/env";
 import { CartModel } from "../models/Cart";
@@ -599,3 +599,4 @@ export async function getMercadoPagoPaymentDebug(paymentId: string) {
   const paymentResult = await paymentClient.get({ id });
   return paymentResult as unknown;
 }
+

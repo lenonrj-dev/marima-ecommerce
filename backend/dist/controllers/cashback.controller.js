@@ -33,7 +33,7 @@ exports.listCashbackLedgerHandler = (0, notFound_1.asyncHandler)(async (req, res
 });
 exports.redeemCashbackStoreHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
     if (!req.auth || req.auth.type !== "customer") {
-        res.status(401).json({ code: "AUTH_REQUIRED", message: "Login necessário para usar cashback." });
+        res.status(401).json({ code: "AUTH_REQUIRED", message: "Login necess�rio para usar cashback." });
         return;
     }
     const data = await (0, cashback_service_1.redeemCashback)({

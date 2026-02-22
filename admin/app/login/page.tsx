@@ -5,12 +5,15 @@ export const metadata: Metadata = {
   title: "Login",
 };
 
-export default function LoginPage({
+type LoginSearchParams = Record<string, string | string[] | undefined>;
+
+export default async function LoginPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<LoginSearchParams>;
 }) {
-  const raw = searchParams?.reason;
+  const resolvedSearchParams = (await searchParams) ?? {};
+  const raw = resolvedSearchParams.reason;
   const reason = typeof raw === "string" ? raw : Array.isArray(raw) ? raw[0] : undefined;
   return <LoginClient reason={reason} />;
 }

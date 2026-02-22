@@ -1,4 +1,4 @@
-import { InferSchemaType, Schema, Types, model, models } from "mongoose";
+import { createDocumentModel } from "../lib/documentModel";
 
 export type PaymentProvider = "mercadopago";
 export type PaymentTransactionStatus =
@@ -8,34 +8,18 @@ export type PaymentTransactionStatus =
   | "rejected"
   | "cancelled";
 
-const paymentTransactionSchema = new Schema(
-  {
-    provider: {
-      type: String,
-      enum: ["mercadopago"],
-      required: true,
-      index: true,
-    },
-    orderId: { type: Types.ObjectId, ref: "Order", required: true, index: true },
-    preferenceId: { type: String, trim: true, index: true },
-    paymentId: { type: String, trim: true, index: true },
-    merchantOrderId: { type: String, trim: true },
-    status: {
-      type: String,
-      enum: ["initiated", "pending", "approved", "rejected", "cancelled"],
-      default: "initiated",
-      index: true,
-    },
-    cancelToken: { type: String, trim: true, index: true },
-    raw: { type: Schema.Types.Mixed },
-  },
-  { timestamps: true },
-);
+export type PaymentTransactionDocument = {
+  _id: string;
+  provider: PaymentProvider;
+  orderId: string;
+  preferenceId?: string;
+  paymentId?: string;
+  merchantOrderId?: string;
+  status: PaymentTransactionStatus;
+  cancelToken?: string;
+  raw?: unknown;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
 
-paymentTransactionSchema.index({ provider: 1, orderId: 1, createdAt: -1 });
-
-export type PaymentTransactionDocument = InferSchemaType<typeof paymentTransactionSchema>;
-
-export const PaymentTransactionModel =
-  models.PaymentTransaction || model("PaymentTransaction", paymentTransactionSchema);
-
+export const PaymentTransactionModel = createDocumentModel("PaymentTransaction");

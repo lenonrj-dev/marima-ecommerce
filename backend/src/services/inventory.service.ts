@@ -1,13 +1,14 @@
-Ôªøimport { FilterQuery } from "mongoose";
+import { FilterQuery } from "../lib/dbCompat";
 import { InventoryMovementModel } from "../models/InventoryMovement";
 import { ProductModel } from "../models/Product";
 import { ApiError } from "../utils/apiError";
 import { buildMeta } from "../utils/pagination";
 import { fromCents } from "../utils/money";
+import { invalidateProductCacheByIdentity } from "./products.service";
 
 function canonicalCategory(value: unknown) {
   const key = String(value || "").trim().toLocaleLowerCase("pt-BR");
-  if (key === "acessorios" || key === "acess√≥rios") return "casual";
+  if (key === "acessorios" || key === "acessÛrios") return "casual";
   return key || "outros";
 }
 
@@ -123,7 +124,7 @@ export async function adjustInventory(input: {
   note?: string;
 }) {
   const product = await ProductModel.findById(input.productId);
-  if (!product) throw new ApiError(404, "Produto n√£o encontrado.");
+  if (!product) throw new ApiError(404, "Produto n„o encontrado.");
 
   const qty = Math.abs(Math.floor(input.quantity));
   let delta = qty;
@@ -140,7 +141,7 @@ export async function adjustInventory(input: {
   const hasSizes = sizeType !== "unico" && Array.isArray(product.sizes) && product.sizes.length > 0;
 
   if (input.sizeLabel && !hasSizes) {
-    throw new ApiError(400, "Este produto n√£o possui estoque por tamanho.");
+    throw new ApiError(400, "Este produto n„o possui estoque por tamanho.");
   }
 
   if (hasSizes) {
@@ -149,7 +150,7 @@ export async function adjustInventory(input: {
 
     const normalized = rawLabel.toLocaleLowerCase("pt-BR");
     const idx = product.sizes.findIndex((row: any) => String(row.label || "").trim().toLocaleLowerCase("pt-BR") === normalized);
-    if (idx === -1) throw new ApiError(400, "Tamanho inv√°lido para este produto.");
+    if (idx === -1) throw new ApiError(400, "Tamanho inv·lido para este produto.");
 
     const current = Math.max(0, Math.floor(Number(product.sizes[idx]?.stock ?? 0)));
     const next = current + delta;
@@ -163,11 +164,15 @@ export async function adjustInventory(input: {
     }, 0);
   } else {
     const nextStock = product.stock + delta;
-    if (nextStock < 0) throw new ApiError(400, "Estoque insuficiente para esta opera√ß√£o.");
+    if (nextStock < 0) throw new ApiError(400, "Estoque insuficiente para esta operaÁ„o.");
     product.stock = nextStock;
   }
 
   await product.save();
+  await invalidateProductCacheByIdentity({
+    id: String(product._id),
+    slug: String(product.slug || ""),
+  });
 
   const movement = await InventoryMovementModel.create({
     productId: product._id,
@@ -206,3 +211,4 @@ export async function listInventoryMovements(input: {
     meta: buildMeta(total, input.page, input.limit),
   };
 }
+

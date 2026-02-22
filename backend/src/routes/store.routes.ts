@@ -1,8 +1,9 @@
-﻿import { Router } from "express";
+import { Router } from "express";
 import { z } from "zod";
 import { listStoreCategoriesHandler } from "../controllers/categories.controller";
 import { createStoreOrderHandler } from "../controllers/orders.controller";
 import { getStoreProductBySlugHandler, getStoreProductVariantsHandler, listStoreProductsHandler } from "../controllers/products.controller";
+import { getStoreProductReviewsSummaryHandler, listStoreProductReviewsHandler } from "../controllers/reviews.controller";
 import { validateCouponHandler } from "../controllers/coupons.controller";
 import { redeemCashbackStoreHandler } from "../controllers/cashback.controller";
 import { createStoreTicketHandler } from "../controllers/support.controller";
@@ -13,12 +14,37 @@ const router = Router();
 
 router.get("/categories", listStoreCategoriesHandler);
 router.get("/products", listStoreProductsHandler);
+router.get(
+  "/products/:productId/reviews",
+  validate({
+    params: z.object({
+      productId: z.string().min(1),
+    }),
+    query: z
+      .object({
+        page: z.string().optional(),
+        limit: z.string().optional(),
+        sort: z.enum(["recent", "oldest", "rating_desc", "rating_asc"]).optional(),
+      })
+      .optional(),
+  }),
+  listStoreProductReviewsHandler,
+);
+router.get(
+  "/products/:productId/reviews/summary",
+  validate({
+    params: z.object({
+      productId: z.string().min(1),
+    }),
+  }),
+  getStoreProductReviewsSummaryHandler,
+);
 router.get("/products/:slug/variants", getStoreProductVariantsHandler);
 router.get("/products/:slug", getStoreProductBySlugHandler);
 
 router.post(
   "/orders",
-  optionalAuth,
+  requireCustomerAuth,
   validate({
     body: z.object({
       cartId: z.string().optional(),

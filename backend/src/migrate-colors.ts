@@ -10,7 +10,7 @@ async function migrateColors() {
   let unchanged = 0;
   let withoutColor = 0;
 
-  const cursor = ProductModel.find({}, { name: 1, category: 1, groupKey: 1, colorName: 1, colorHex: 1 }).cursor();
+  const cursor = ProductModel.find({}).cursor();
 
   for await (const product of cursor) {
     scanned += 1;

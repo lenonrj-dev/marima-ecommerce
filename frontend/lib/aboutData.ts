@@ -38,9 +38,9 @@ export const ABOUT_COPY = {
     kicker: "MARIMA ⬢ MODA FITNESS",
     title: "Coleções pensadas para treino e rotina",
     description:
-      "Leggings, tops, conjuntos, jaquetas, shorts e regatas com foco em conforto, performance, respirabilidade e durabilidade.",
-    chips: ["Leggings", "Tops", "Conjuntos", "Jaquetas", "Shorts", "Regatas", "Casual"],
-    link: "VER COLE??O COMPLETA",
+      "Leggings, tops, conjuntos, macacões, shorts e regatas com foco em conforto, performance, respirabilidade e durabilidade.",
+    chips: ["Leggings", "Tops", "Conjuntos", "macacões", "Shorts", "Regatas", "Casual"],
+    link: "VER COLEÇÃO COMPLETA",
   },
   deal: {
     title: "Benefícios que acompanham você",
@@ -122,7 +122,7 @@ export const ABOUT_COPY = {
     secondary: "Acompanhar pedido",
   },
   featuredPosts: {
-    kicker: "CONTE?DOS MARIMA",
+    kicker: "CONTEÚDOS MARIMA",
     title: "Guias e tendências fitness",
     description:
       "Dicas práticas para treino, estilo e cuidado das suas peças fitness.",

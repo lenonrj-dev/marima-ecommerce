@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Heart, Minus, Plus, Star } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { ProductColorVariant, ProductColorVariantsResponse, ProductListItem } from "@/lib/productsData";
 import { formatCategoryLabel, formatMoneyBRL } from "@/lib/productsData";
 import { SITE_COPY } from "@/lib/siteCopy";
@@ -37,7 +37,10 @@ export default function ProductInfoPanel({
   const favorite = isFavorite(product.id);
 
   const sizeType = product.sizeType ?? (product.sizesDetailed?.length ? "custom" : "unico");
-  const sizesDetailed = Array.isArray(product.sizesDetailed) ? product.sizesDetailed : [];
+  const sizesDetailed = useMemo(
+    () => (Array.isArray(product.sizesDetailed) ? product.sizesDetailed : []),
+    [product.sizesDetailed],
+  );
   const hasSizeStock = sizeType !== "unico" && sizesDetailed.length > 0;
 
   const initialSize = useMemo(() => {
@@ -47,6 +50,12 @@ export default function ProductInfoPanel({
 
   const [size, setSize] = useState(() => initialSize);
   const [qty, setQty] = useState(1);
+
+  const selectedSize = useMemo(() => {
+    if (!hasSizeStock) return "";
+    if (size && sizesDetailed.some((entry) => entry.label === size)) return size;
+    return initialSize;
+  }, [hasSizeStock, initialSize, size, sizesDetailed]);
 
   const colorGroup = variants?.groupKey ? variants : null;
   const currentColorName = (colorGroup?.current?.colorName || product.colorName || "").trim();
@@ -59,9 +68,9 @@ export default function ProductInfoPanel({
 
   const selectedSizeStock = useMemo(() => {
     if (!hasSizeStock) return Math.max(0, Math.floor(Number(product.stock ?? 0)));
-    const row = sizesDetailed.find((entry) => entry.label === size);
+    const row = sizesDetailed.find((entry) => entry.label === selectedSize);
     return Math.max(0, Math.floor(Number(row?.stock ?? 0)));
-  }, [hasSizeStock, product.stock, size, sizesDetailed]);
+  }, [hasSizeStock, product.stock, selectedSize, sizesDetailed]);
 
   const outOfStock = product.stock <= 0 || (hasSizeStock && selectedSizeStock <= 0);
   const maxQty = useMemo(
@@ -73,29 +82,18 @@ export default function ProductInfoPanel({
   const variantLabel = useMemo(() => {
     const parts: string[] = [];
     if (currentColorName) parts.push(currentColorName);
-    if (hasSizeStock && size) parts.push(size);
+    if (hasSizeStock && selectedSize) parts.push(selectedSize);
     return parts.join(" - ");
-  }, [currentColorName, hasSizeStock, size]);
+  }, [currentColorName, hasSizeStock, selectedSize]);
 
-  useEffect(() => {
-    if (!hasSizeStock) return;
-    setQty((value) => Math.min(Math.max(1, value), Math.max(1, selectedSizeStock)));
-  }, [hasSizeStock, selectedSizeStock]);
-
-  useEffect(() => {
-    if (!hasSizeStock) {
-      setSize("");
-      return;
-    }
-    setSize(initialSize);
-  }, [hasSizeStock, initialSize, product.id]);
+  const qtySafe = Math.max(1, Math.min(qty, maxQty));
 
   function addToCart() {
-    addProduct(product, { qty, variant: variantLabel || undefined, sizeLabel: hasSizeStock ? size : undefined });
+    addProduct(product, { qty: qtySafe, variant: variantLabel || undefined, sizeLabel: hasSizeStock ? selectedSize : undefined });
   }
 
   function buyNow() {
-    addProduct(product, { qty, variant: variantLabel || undefined, sizeLabel: hasSizeStock ? size : undefined });
+    addProduct(product, { qty: qtySafe, variant: variantLabel || undefined, sizeLabel: hasSizeStock ? selectedSize : undefined });
     startCheckout();
   }
 
@@ -169,11 +167,11 @@ export default function ProductInfoPanel({
         {hasSizeStock ? (
           <div className="space-y-2">
             <p className="text-sm text-zinc-700">
-              <span className="font-medium">Tamanho</span>: {size || "Selecione"}
+              <span className="font-medium">Tamanho</span>: {selectedSize || "Selecione"}
             </p>
             <div className="grid grid-cols-6 gap-2">
               {sizesDetailed.map((row) => {
-                const active = row.label === size;
+                const active = row.label === selectedSize;
                 const disabled = row.stock <= 0;
                 return (
                   <button
@@ -247,10 +245,10 @@ export default function ProductInfoPanel({
             >
               <Minus className="h-4 w-4" />
             </button>
-            <div className="grid h-full w-12 place-items-center text-sm font-semibold text-zinc-900">{qty}</div>
+            <div className="grid h-full w-12 place-items-center text-sm font-semibold text-zinc-900">{qtySafe}</div>
             <button
               type="button"
-              onClick={() => setQty((value) => Math.min(maxQty, value + 1))}
+              onClick={() => setQty((value) => Math.min(maxQty, Math.max(1, value) + 1))}
               className="inline-flex h-full w-11 items-center justify-center text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
               aria-label="Aumentar quantidade"
             >
@@ -310,4 +308,3 @@ export default function ProductInfoPanel({
     </div>
   );
 }
-

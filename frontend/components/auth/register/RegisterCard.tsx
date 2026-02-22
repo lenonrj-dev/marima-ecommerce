@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { ArrowRight, KeyRound, Mail, User2 } from "lucide-react";
+import { ArrowRight, Facebook, KeyRound, Mail, User2 } from "lucide-react";
 import { LOGIN_COPY } from "@/lib/loginData";
 import { apiFetch, HttpError } from "@/lib/api";
 
@@ -45,21 +45,19 @@ export default function RegisterCard() {
   }
 
   return (
-    <div className="rounded-[28px] bg-white/35 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.18)] ring-1 ring-black/10 backdrop-blur-xl sm:p-7">
+    <div className="rounded-[28px] bg-white/35 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.18)] ring-1 ring-black/10 backdrop-blur-xl sm:p-7 md:min-h-[455px]">
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold tracking-tight text-zinc-700">{LOGIN_COPY.brand}</p>
-
         <Link
           href="/login"
-          className="text-xs font-semibold text-zinc-700 transition hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+          className="text-xs font-semibold text-white/70 transition hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
         >
           Entrar
         </Link>
       </div>
 
-      <div className="mt-8">
+      <div className="mt-8 flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-[28px]">Criar conta</h1>
-        <p className="mt-2 text-sm text-zinc-600">Crie sua conta para salvar favoritos e acompanhar pedidos.</p>
       </div>
 
       <form className="mt-6 space-y-3" onSubmit={handleSubmit}>
@@ -126,7 +124,8 @@ export default function RegisterCard() {
         {error ? <p className="text-xs text-rose-700">{error}</p> : null}
 
         <p className="pt-2 text-[10px] leading-relaxed text-zinc-600">
-          Ao criar sua conta, você concorda com nossos termos e política de privacidade.
+          Crie sua conta para salvar favoritos e acompanhar pedidos. Ao criar sua conta, você concorda com nossos termos e
+          política de privacidade.
         </p>
 
         <div className="mt-2 flex items-center justify-between">

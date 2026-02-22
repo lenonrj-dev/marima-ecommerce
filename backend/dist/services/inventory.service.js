@@ -9,9 +9,10 @@ const Product_1 = require("../models/Product");
 const apiError_1 = require("../utils/apiError");
 const pagination_1 = require("../utils/pagination");
 const money_1 = require("../utils/money");
+const products_service_1 = require("./products.service");
 function canonicalCategory(value) {
     const key = String(value || "").trim().toLocaleLowerCase("pt-BR");
-    if (key === "acessorios" || key === "acessórios")
+    if (key === "acessorios" || key === "acess�rios")
         return "casual";
     return key || "outros";
 }
@@ -101,7 +102,7 @@ async function getInventorySummary() {
 async function adjustInventory(input) {
     const product = await Product_1.ProductModel.findById(input.productId);
     if (!product)
-        throw new apiError_1.ApiError(404, "Produto não encontrado.");
+        throw new apiError_1.ApiError(404, "Produto n�o encontrado.");
     const qty = Math.abs(Math.floor(input.quantity));
     let delta = qty;
     if (input.type === "saida" || input.type === "reserva") {
@@ -113,7 +114,7 @@ async function adjustInventory(input) {
     const sizeType = product.sizeType || (Array.isArray(product.sizes) && product.sizes.length ? "custom" : "unico");
     const hasSizes = sizeType !== "unico" && Array.isArray(product.sizes) && product.sizes.length > 0;
     if (input.sizeLabel && !hasSizes) {
-        throw new apiError_1.ApiError(400, "Este produto não possui estoque por tamanho.");
+        throw new apiError_1.ApiError(400, "Este produto n�o possui estoque por tamanho.");
     }
     if (hasSizes) {
         const rawLabel = String(input.sizeLabel || "").trim();
@@ -122,7 +123,7 @@ async function adjustInventory(input) {
         const normalized = rawLabel.toLocaleLowerCase("pt-BR");
         const idx = product.sizes.findIndex((row) => String(row.label || "").trim().toLocaleLowerCase("pt-BR") === normalized);
         if (idx === -1)
-            throw new apiError_1.ApiError(400, "Tamanho inválido para este produto.");
+            throw new apiError_1.ApiError(400, "Tamanho inv�lido para este produto.");
         const current = Math.max(0, Math.floor(Number(product.sizes[idx]?.stock ?? 0)));
         const next = current + delta;
         if (next < 0)
@@ -137,10 +138,14 @@ async function adjustInventory(input) {
     else {
         const nextStock = product.stock + delta;
         if (nextStock < 0)
-            throw new apiError_1.ApiError(400, "Estoque insuficiente para esta operação.");
+            throw new apiError_1.ApiError(400, "Estoque insuficiente para esta opera��o.");
         product.stock = nextStock;
     }
     await product.save();
+    await (0, products_service_1.invalidateProductCacheByIdentity)({
+        id: String(product._id),
+        slug: String(product.slug || ""),
+    });
     const movement = await InventoryMovement_1.InventoryMovementModel.create({
         productId: product._id,
         type: input.type,

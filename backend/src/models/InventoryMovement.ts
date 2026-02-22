@@ -1,25 +1,17 @@
-﻿import { InferSchemaType, Schema, Types, model, models } from "mongoose";
+import { createDocumentModel } from "../lib/documentModel";
 
-const inventoryMovementSchema = new Schema(
-  {
-    productId: { type: Types.ObjectId, ref: "Product", required: true, index: true },
-    variantId: { type: String, trim: true },
-    sizeLabel: { type: String, trim: true },
-    type: {
-      type: String,
-      enum: ["entrada", "saida", "ajuste", "reserva", "liberacao"],
-      required: true,
-      index: true,
-    },
-    quantity: { type: Number, required: true },
-    reason: { type: String, required: true, trim: true },
-    createdBy: { type: String, trim: true },
-    note: { type: String, trim: true },
-  },
-  { timestamps: true },
-);
+export type InventoryMovementDocument = {
+  _id: string;
+  productId: string;
+  variantId?: string;
+  sizeLabel?: string;
+  type: "entrada" | "saida" | "ajuste" | "reserva" | "liberacao";
+  quantity: number;
+  reason: string;
+  createdBy?: string;
+  note?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
 
-export type InventoryMovementDocument = InferSchemaType<typeof inventoryMovementSchema>;
-
-export const InventoryMovementModel =
-  models.InventoryMovement || model("InventoryMovement", inventoryMovementSchema);
+export const InventoryMovementModel = createDocumentModel("InventoryMovement");

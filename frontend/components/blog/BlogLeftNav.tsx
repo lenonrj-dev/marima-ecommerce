@@ -1,13 +1,48 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { fetchBlogCategoryCounts, type BlogCategoryCountMap } from "@/lib/blogData";
 import { cn } from "@/lib/utils";
 
-export default function BlogLeftNav({
-  topics,
-  activeTopic,
-}: {
-  topics: Array<{ id: string; label: string }>;
-  activeTopic: string;
-}) {
+type BlogTopicInput = {
+  id: string;
+  label: string;
+};
+
+function createFallbackCounts(topics: BlogTopicInput[]) {
+  return topics.reduce((acc, topic) => {
+    acc[topic.id] = 0;
+    return acc;
+  }, {} as BlogCategoryCountMap);
+}
+
+export default function BlogLeftNav({ topics, activeTopic }: { topics: BlogTopicInput[]; activeTopic: string }) {
+  const [counts, setCounts] = useState<BlogCategoryCountMap>(() => createFallbackCounts(topics));
+  const [loadingCounts, setLoadingCounts] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadCounts() {
+      try {
+        const nextCounts = await fetchBlogCategoryCounts();
+        if (!mounted) return;
+        setCounts(nextCounts);
+      } finally {
+        if (mounted) {
+          setLoadingCounts(false);
+        }
+      }
+    }
+
+    void loadCounts();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   return (
     <aside className="hidden lg:block">
       <div className="sticky top-[96px] space-y-4">
@@ -43,6 +78,7 @@ export default function BlogLeftNav({
             <div className="mt-2 space-y-1">
               {topics.map((t) => {
                 const active = t.id === activeTopic;
+                const topicCount = counts[t.id] ?? 0;
                 return (
                   <Link
                     key={t.id}
@@ -53,7 +89,15 @@ export default function BlogLeftNav({
                     )}
                   >
                     {t.label}
-                    <span className={cn("text-[11px]", active ? "text-white/70" : "text-zinc-400")}>?</span>
+                    <span
+                      className={cn("text-[11px]", active ? "text-white/70" : "text-zinc-400")}
+                      aria-label={
+                        loadingCounts ? `Carregando total de postagens em ${t.label}` : `${topicCount} postagens em ${t.label}`
+                      }
+                      title={loadingCounts ? "Carregando contagem" : `${topicCount} postagens`}
+                    >
+                      {loadingCounts ? "..." : topicCount}
+                    </span>
                   </Link>
                 );
               })}
@@ -79,5 +123,3 @@ export default function BlogLeftNav({
     </aside>
   );
 }
-
-

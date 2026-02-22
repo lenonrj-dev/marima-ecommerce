@@ -1,4 +1,4 @@
-﻿export type DashboardNavKey = "overview" | "profile" | "favorites" | "address" | "orders";
+﻿export type DashboardNavKey = "overview" | "profile" | "favorites" | "address" | "orders" | "savedCarts";
 
 export type DashboardNavItem = {
   label: string;
@@ -44,6 +44,7 @@ export const DASHBOARD_NAV: DashboardNavItem[] = [
   { key: "favorites", label: "Favoritos", href: "/dashboard/favoritos" },
   { key: "address", label: "Endereços", href: "/dashboard/endereco" },
   { key: "orders", label: "Pedidos", href: "/dashboard/pedidos" },
+  { key: "savedCarts", label: "Carrinhos salvos", href: "/dashboard/carrinhos-salvos" },
 ];
 
 export function formatMoneyBRL(cents: number) {

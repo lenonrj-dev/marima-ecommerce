@@ -9,7 +9,7 @@ export default function CollectionBanner() {
           <div className="grid items-stretch gap-0 lg:grid-cols-12">
             <div className="relative h-[220px] w-full lg:col-span-7 lg:h-[260px]">
               <Image
-                src={productListBanner.image}
+                src="https://res.cloudinary.com/dhcaw7ipf/image/upload/v1771334040/Bnr_r101cy.png"
                 alt="Banner da coleção Marima"
                 fill
                 priority

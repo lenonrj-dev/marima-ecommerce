@@ -1,18 +1,15 @@
-﻿import mongoose from "mongoose";
-import { env } from "./env";
+import { prisma } from "../lib/prisma";
 
 let connected = false;
 
 export async function connectDb() {
   if (connected) return;
-
-  mongoose.set("strictQuery", true);
-  await mongoose.connect(env.MONGODB_URI);
+  await prisma.$queryRaw`SELECT 1`;
   connected = true;
 }
 
 export async function disconnectDb() {
   if (!connected) return;
-  await mongoose.disconnect();
+  await prisma.$disconnect();
   connected = false;
 }

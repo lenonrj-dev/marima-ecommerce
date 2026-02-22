@@ -26,7 +26,7 @@ async function getStoreSettings() {
             timezone: "America/Sao_Paulo",
             currency: "BRL",
             supportEmail: "suporte@minhaloja.com",
-            policy: "Trocas em até 7 dias. Consulte regras no site.",
+            policy: "Trocas em at� 7 dias. Consulte regras no site.",
         });
     }
     return toSettings(settings);

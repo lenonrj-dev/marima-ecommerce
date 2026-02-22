@@ -1,4 +1,4 @@
-Ôªøimport { Types } from "mongoose";
+import { Types } from "../lib/dbCompat";
 import { CashbackLedgerModel } from "../models/CashbackLedger";
 import { CashbackRuleModel } from "../models/CashbackRule";
 import { ApiError } from "../utils/apiError";
@@ -72,7 +72,7 @@ export async function updateCashbackRule(
   input: Partial<{ name: string; percent: number; validDays: number; minSubtotal: number; maxCashback: number; active: boolean }>,
 ) {
   const rule = await CashbackRuleModel.findById(id);
-  if (!rule) throw new ApiError(404, "Regra de cashback n√£o encontrada.");
+  if (!rule) throw new ApiError(404, "Regra de cashback n„o encontrada.");
 
   if (input.name !== undefined) rule.name = input.name;
   if (input.percent !== undefined) rule.percent = input.percent;
@@ -87,7 +87,7 @@ export async function updateCashbackRule(
 
 export async function toggleCashbackRule(id: string) {
   const rule = await CashbackRuleModel.findById(id);
-  if (!rule) throw new ApiError(404, "Regra de cashback n√£o encontrada.");
+  if (!rule) throw new ApiError(404, "Regra de cashback n„o encontrada.");
   rule.active = !rule.active;
   await rule.save();
   return toRule(rule);
@@ -144,7 +144,7 @@ export async function redeemCashback(input: {
 }) {
   const amountCents = toCents(input.amount);
   const current = await getCurrentBalanceCents(input.customerId);
-  if (amountCents <= 0) throw new ApiError(400, "Valor inv√°lido para resgate.");
+  if (amountCents <= 0) throw new ApiError(400, "Valor inv·lido para resgate.");
   if (current < amountCents) throw new ApiError(400, "Saldo de cashback insuficiente.");
 
   const balanceAfter = current - amountCents;
@@ -171,3 +171,4 @@ export async function getCustomerCashbackBalance(customerId: string) {
 }
 
 export { toRule, toLedger };
+

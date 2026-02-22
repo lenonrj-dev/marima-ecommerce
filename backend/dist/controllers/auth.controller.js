@@ -85,7 +85,7 @@ exports.logoutHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
 exports.refreshHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
     const refresh = req.cookies?.[auth_1.REFRESH_COOKIE] || req.cookies?.[auth_1.LEGACY_REFRESH_COOKIE];
     if (!refresh) {
-        res.status(401).json({ code: "AUTH_REQUIRED", message: "Não autenticado." });
+        res.status(401).json({ code: "AUTH_REQUIRED", message: "N�o autenticado." });
         return;
     }
     let payload;
@@ -94,7 +94,7 @@ exports.refreshHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
     }
     catch {
         (0, auth_service_1.clearAuthCookies)(res, req);
-        res.status(401).json({ code: "AUTH_EXPIRED", message: "Sessão expirada." });
+        res.status(401).json({ code: "AUTH_EXPIRED", message: "Sess�o expirada." });
         return;
     }
     (0, auth_service_1.setAuthCookies)(res, payload, req);
@@ -102,7 +102,7 @@ exports.refreshHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
 });
 exports.meHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
     if (!req.auth) {
-        res.status(401).json({ code: "AUTH_REQUIRED", message: "Não autenticado." });
+        res.status(401).json({ code: "AUTH_REQUIRED", message: "N�o autenticado." });
         return;
     }
     const me = await (0, auth_service_1.meFromPayload)(req.auth);

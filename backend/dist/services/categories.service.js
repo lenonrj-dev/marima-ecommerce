@@ -11,7 +11,7 @@ const slug_1 = require("../utils/slug");
 const pagination_1 = require("../utils/pagination");
 function canonicalCategorySlug(value) {
     const key = String(value || "").trim().toLocaleLowerCase("pt-BR");
-    if (key === "acessorios" || key === "acessórios")
+    if (key === "acessorios" || key === "acess�rios")
         return "casual";
     return key;
 }
@@ -52,7 +52,7 @@ async function createCategory(input) {
     const slug = (0, slug_1.slugify)(input.slug || input.name);
     const exists = await Category_1.CategoryModel.findOne({ $or: [{ name: input.name.trim() }, { slug }] });
     if (exists)
-        throw new apiError_1.ApiError(409, "Categoria já cadastrada.");
+        throw new apiError_1.ApiError(409, "Categoria j� cadastrada.");
     const created = await Category_1.CategoryModel.create({
         name: input.name.trim(),
         slug,
@@ -64,7 +64,7 @@ async function createCategory(input) {
 async function updateCategory(id, input) {
     const category = await Category_1.CategoryModel.findById(id);
     if (!category)
-        throw new apiError_1.ApiError(404, "Categoria não encontrada.");
+        throw new apiError_1.ApiError(404, "Categoria n�o encontrada.");
     if (input.name !== undefined)
         category.name = input.name.trim();
     if (input.slug !== undefined)
@@ -79,7 +79,8 @@ async function updateCategory(id, input) {
 async function listStoreCategories() {
     const rows = await Category_1.CategoryModel.find({ active: true }).sort({ sortOrder: 1, name: 1 });
     const counts = await Product_1.ProductModel.aggregate([
-        { $match: { active: true } },
+        // Store catalog only shows active products with stock available.
+        { $match: { active: true, stock: { $gt: 0 } } },
         { $group: { _id: "$category", count: { $sum: 1 } } },
     ]);
     const countMap = new Map();

@@ -1,4 +1,4 @@
-﻿import { Request, Response } from "express";
+import { Request, Response } from "express";
 import { asyncHandler } from "../middlewares/notFound";
 import {
   createCashbackRule,
@@ -46,7 +46,7 @@ export const listCashbackLedgerHandler = asyncHandler(async (req: Request, res: 
 
 export const redeemCashbackStoreHandler = asyncHandler(async (req: Request, res: Response) => {
   if (!req.auth || req.auth.type !== "customer") {
-    res.status(401).json({ code: "AUTH_REQUIRED", message: "Login necessário para usar cashback." });
+    res.status(401).json({ code: "AUTH_REQUIRED", message: "Login necess�rio para usar cashback." });
     return;
   }
 

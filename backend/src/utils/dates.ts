@@ -1,4 +1,4 @@
-﻿export function toIso(value: Date | string) {
+export function toIso(value: Date | string) {
   return new Date(value).toISOString();
 }
 

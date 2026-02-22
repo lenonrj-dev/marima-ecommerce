@@ -28,36 +28,6 @@ export default function HomePage() {
       <TopCategories />
       <FeaturesBar />
       <BestSelling />
-
-      <div className="mt-10 bg-white">
-        <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
-          <div className="border-t border-zinc-100" />
-        </div>
-      </div>
-
-      <section className="bg-white py-8">
-        <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
-          <div className="overflow-hidden rounded-2xl bg-zinc-50 shadow-soft">
-            <div className="flex w-[200%] items-center gap-10 px-8 py-5 text-sm text-zinc-600">
-              <div className="flex w-1/2 justify-around animate-marquee">
-                <span>Bem-vinda à Marima</span>
-                <span>Moda fitness com performance</span>
-                <span>Conforto e qualidade premium</span>
-                <span>Transparência do carrinho à entrega</span>
-                <span>Explore nossas novidades</span>
-              </div>
-              <div className="flex w-1/2 justify-around animate-marquee">
-                <span>Bem-vinda à Marima</span>
-                <span>Moda fitness com performance</span>
-                <span>Conforto e qualidade premium</span>
-                <span>Transparência do carrinho à entrega</span>
-                <span>Explore nossas novidades</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <DealOfDay />
       <Reviews />
       <Lookbook />

@@ -5,7 +5,7 @@ exports.verifyMercadoPagoPayment = verifyMercadoPagoPayment;
 exports.cancelMercadoPagoOrder = cancelMercadoPagoOrder;
 exports.getMercadoPagoPaymentDebug = getMercadoPagoPaymentDebug;
 const crypto_1 = require("crypto");
-const mongoose_1 = require("mongoose");
+const dbCompat_1 = require("../lib/dbCompat");
 const mercadopago_1 = require("mercadopago");
 const env_1 = require("../config/env");
 const Cart_1 = require("../models/Cart");
@@ -118,7 +118,7 @@ function buildPreferenceItemsFromOrder(order) {
 async function getActiveCart(identity) {
     const query = { status: "active" };
     if (identity.customerId)
-        query.customerId = new mongoose_1.Types.ObjectId(identity.customerId);
+        query.customerId = new dbCompat_1.Types.ObjectId(identity.customerId);
     else if (identity.guestToken)
         query.guestToken = identity.guestToken;
     else
@@ -131,7 +131,7 @@ async function getActiveCart(identity) {
 async function revertOrderStock(order) {
     for (const item of order.items || []) {
         const productId = String(item.productId || "");
-        if (!mongoose_1.Types.ObjectId.isValid(productId))
+        if (!dbCompat_1.Types.ObjectId.isValid(productId))
             continue;
         const product = await Product_1.ProductModel.findById(productId);
         if (!product)
@@ -193,7 +193,7 @@ async function revertCashbackGrant(order) {
     const current = last?.balanceAfterCents || 0;
     const balanceAfter = Math.max(0, current - granted);
     await CashbackLedger_1.CashbackLedgerModel.create({
-        customerId: new mongoose_1.Types.ObjectId(customerId),
+        customerId: new dbCompat_1.Types.ObjectId(customerId),
         orderId: order._id,
         type: "debit",
         amountCents: -granted,
@@ -241,7 +241,7 @@ async function ensureCashbackGrantedForPaidOrder(order) {
 async function createMercadoPagoCheckoutPro(input) {
     const store = requireStoreUrl();
     const requestedOrderId = String(input.orderId || "").trim();
-    let order = requestedOrderId && mongoose_1.Types.ObjectId.isValid(requestedOrderId) ? await Order_1.OrderModel.findById(requestedOrderId) : null;
+    let order = requestedOrderId && dbCompat_1.Types.ObjectId.isValid(requestedOrderId) ? await Order_1.OrderModel.findById(requestedOrderId) : null;
     if (order && input.identity.customerId) {
         if (!order.customerId || String(order.customerId) !== String(input.identity.customerId)) {
             order = null;
@@ -385,7 +385,7 @@ async function verifyMercadoPagoPayment(input) {
     const payment = paymentResult || {};
     const status = String(payment.status || "").trim() || "unknown";
     const externalReference = String(payment.external_reference || input.externalReference || "").trim();
-    if (!externalReference || !mongoose_1.Types.ObjectId.isValid(externalReference)) {
+    if (!externalReference || !dbCompat_1.Types.ObjectId.isValid(externalReference)) {
         throw new apiError_1.ApiError(400, "external_reference inválido.", "VALIDATION_ERROR");
     }
     const order = await Order_1.OrderModel.findById(externalReference);
@@ -454,13 +454,13 @@ async function verifyMercadoPagoPayment(input) {
 async function cancelMercadoPagoOrder(input) {
     const orderId = String(input.orderId || "").trim();
     const cancelToken = String(input.cancelToken || "").trim();
-    if (!mongoose_1.Types.ObjectId.isValid(orderId))
+    if (!dbCompat_1.Types.ObjectId.isValid(orderId))
         throw new apiError_1.ApiError(400, "orderId inválido.", "VALIDATION_ERROR");
     if (!cancelToken)
         throw new apiError_1.ApiError(400, "cancelToken inválido.", "VALIDATION_ERROR");
     const tx = await PaymentTransaction_1.PaymentTransactionModel.findOne({
         provider: "mercadopago",
-        orderId: new mongoose_1.Types.ObjectId(orderId),
+        orderId: new dbCompat_1.Types.ObjectId(orderId),
         cancelToken,
     }).sort({ createdAt: -1 });
     if (!tx)

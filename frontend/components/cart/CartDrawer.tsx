@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef } from "react";
 import { useCart } from "./CartProvider";
@@ -6,12 +6,6 @@ import CartDrawerHeader from "./drawer/CartDrawerHeader";
 import CartDrawerFooter from "./drawer/CartDrawerFooter";
 import CartDrawerContent from "./drawer/CartDrawerContent";
 
-/**
- * Drawer de carrinho (off-canvas).
- * - ARIA + foco (trap)
- * - fecha com backdrop, ESC e boto
- * - animao 300ms ease
- */
 export default function CartDrawer() {
   const { isOpen, close, triggerRef } = useCart();
 
@@ -19,35 +13,39 @@ export default function CartDrawer() {
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const lastFocusedRef = useRef<HTMLElement | null>(null);
 
-  // ESC + focus trap
-  useEffect(() => { function onKeyDown(e : KeyboardEvent) {
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
       if (!isOpen) return;
 
-      if (e.key === "Escape") {
-        e.preventDefault();
+      if (event.key === "Escape") {
+        event.preventDefault();
         close();
+        return;
       }
 
-      if (e.key === "Tab") {
-        const panel = panelRef.current;
-        if (!panel) return;
+      if (event.key !== "Tab") return;
 
-        const focusables = panel.querySelectorAll<HTMLElement>('a[href], button :not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
-        );
-        if (!focusables.length) return;
+      const panel = panelRef.current;
+      if (!panel) return;
 
-        const first = focusables[0];
-        const last = focusables[focusables.length - 1];
-        const active = document.activeElement as HTMLElement | null;
+      const focusables = panel.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
 
-        if (!e.shiftKey && active === last) {
-          e.preventDefault();
-          first.focus();
-        }
-        if (e.shiftKey && active === first) {
-          e.preventDefault();
-          last.focus();
-        }
+      if (!focusables.length) return;
+
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+
+      if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
       }
     }
 
@@ -55,7 +53,6 @@ export default function CartDrawer() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [isOpen, close]);
 
-  // store/restore focus
   useEffect(() => {
     if (isOpen) {
       lastFocusedRef.current = document.activeElement as HTMLElement | null;
@@ -63,29 +60,28 @@ export default function CartDrawer() {
       return;
     }
 
-    const el = lastFocusedRef.current ?? triggerRef.current;
-    requestAnimationFrame(() => el?.focus?.());
+    const target = lastFocusedRef.current ?? triggerRef.current;
+    requestAnimationFrame(() => target?.focus?.());
   }, [isOpen, triggerRef]);
 
   return (
     <>
-      {/* Backdrop */}
       <button
         type="button"
         aria-label="Fechar carrinho"
         onClick={close}
         className={[
-          "fixed inset-0 z-[60] cursor-default bg-black/40 transition-opacity duration-300",
+          "fixed inset-0 z-[60] bg-black/45 transition-opacity duration-300",
           isOpen ? "opacity-100" : "pointer-events-none opacity-0",
         ].join(" ")}
       />
 
-      {/* Panel */}
       <aside
         aria-hidden={!isOpen}
         className={[
-          "fixed right-0 top-0 z-[70] h-full w-full max-w-[520px] transform transition-transform duration-300 ease-in-out",
-          isOpen ? "translate-x-0" : "translate-x-full",
+          "fixed right-0 top-0 z-[70] h-full w-[440px] transform transition-transform duration-300 ease-in-out",
+          "lg:w-[440px] lg:max-w-[440px]",
+          isOpen ? "translate-x-0 pointer-events-auto" : "translate-x-full pointer-events-none",
         ].join(" ")}
       >
         <div
@@ -93,7 +89,7 @@ export default function CartDrawer() {
           role="dialog"
           aria-modal="true"
           aria-label="Carrinho de compras"
-          className="flex h-full flex-col bg-white shadow-[0_40px_120px_rgba(0,0,0,0.25)]"
+          className="flex h-full flex-col bg-white shadow-[0_36px_100px_rgba(0,0,0,0.28)]"
         >
           <CartDrawerHeader closeBtnRef={closeBtnRef} />
           <CartDrawerContent />

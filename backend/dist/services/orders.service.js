@@ -8,7 +8,7 @@ exports.getMeOrderById = getMeOrderById;
 exports.createStoreOrder = createStoreOrder;
 exports.createOrderFromCart = createOrderFromCart;
 exports.toOrder = toOrder;
-const mongoose_1 = require("mongoose");
+const dbCompat_1 = require("../lib/dbCompat");
 const Cart_1 = require("../models/Cart");
 const InventoryMovement_1 = require("../models/InventoryMovement");
 const Order_1 = require("../models/Order");
@@ -20,6 +20,7 @@ const coupons_service_1 = require("./coupons.service");
 const cashback_service_1 = require("./cashback.service");
 const customers_service_1 = require("./customers.service");
 const carts_service_1 = require("./carts.service");
+const products_service_1 = require("./products.service");
 function toOrder(order) {
     return {
         id: String(order._id),
@@ -76,12 +77,12 @@ const FREE_SHIPPING_THRESHOLD_CENTS = 29900;
 const SHIPPING_METHODS = {
     "sul-fluminense": {
         id: "sul-fluminense",
-        label: "Envio rápido Sul Fluminense",
+        label: "Envio r�pido Sul Fluminense",
         priceCents: 1290,
     },
     "padrao-br": {
         id: "padrao-br",
-        label: "Envio padrão nacional",
+        label: "Envio padr�o nacional",
         priceCents: 1990,
     },
     expresso: {
@@ -127,13 +128,13 @@ async function listAdminOrders(input) {
 async function getAdminOrderById(id) {
     const order = await Order_1.OrderModel.findById(id);
     if (!order)
-        throw new apiError_1.ApiError(404, "Pedido não encontrado.");
+        throw new apiError_1.ApiError(404, "Pedido n�o encontrado.");
     return toOrder(order);
 }
 async function updateOrderStatus(id, status) {
     const order = await Order_1.OrderModel.findById(id);
     if (!order)
-        throw new apiError_1.ApiError(404, "Pedido não encontrado.");
+        throw new apiError_1.ApiError(404, "Pedido n�o encontrado.");
     order.status = status;
     await order.save();
     return toOrder(order);
@@ -154,7 +155,7 @@ async function listMeOrders(customerId, input) {
 async function getMeOrderById(customerId, orderId) {
     const order = await Order_1.OrderModel.findOne({ _id: orderId, customerId });
     if (!order)
-        throw new apiError_1.ApiError(404, "Pedido não encontrado.");
+        throw new apiError_1.ApiError(404, "Pedido n�o encontrado.");
     return toOrder(order);
 }
 async function createStoreOrder(input) {
@@ -164,13 +165,13 @@ async function createStoreOrder(input) {
     const productIds = input.items.map((item) => item.id);
     const products = await Product_1.ProductModel.find({ _id: { $in: productIds }, active: true });
     if (products.length !== input.items.length) {
-        throw new apiError_1.ApiError(400, "Um ou mais produtos do pedido não foram encontrados.");
+        throw new apiError_1.ApiError(400, "Um ou mais produtos do pedido n�o foram encontrados.");
     }
     const itemRows = [];
     for (const requested of input.items) {
         const product = products.find((row) => String(row._id) === requested.id);
         if (!product)
-            throw new apiError_1.ApiError(400, "Produto inválido no pedido.");
+            throw new apiError_1.ApiError(400, "Produto inv�lido no pedido.");
         const qty = Math.max(1, Math.floor(requested.qty));
         const sizeType = product.sizeType || (Array.isArray(product.sizes) && product.sizes.length ? "custom" : "unico");
         const hasSizes = sizeType !== "unico" && Array.isArray(product.sizes) && product.sizes.length > 0;
@@ -188,7 +189,7 @@ async function createStoreOrder(input) {
                 return active && label.toLocaleLowerCase("pt-BR") === normalized;
             });
             if (!row)
-                throw new apiError_1.ApiError(400, `Tamanho inválido para ${product.name}.`);
+                throw new apiError_1.ApiError(400, `Tamanho inv�lido para ${product.name}.`);
             sizeLabel = String(row.label || rawLabel).trim();
             availableStock = Math.max(0, Math.floor(Number(row.stock ?? 0)));
         }
@@ -227,12 +228,12 @@ async function createStoreOrder(input) {
     const code = await nextOrderCode();
     const created = await Order_1.OrderModel.create({
         code,
-        customerId: input.customerId ? new mongoose_1.Types.ObjectId(input.customerId) : undefined,
+        customerId: input.customerId ? new dbCompat_1.Types.ObjectId(input.customerId) : undefined,
         customerName: input.address.fullName,
         email: input.address.email.toLowerCase(),
         status: "pendente",
         channel: input.channel || "Site",
-        shippingMethod: shippingMethod?.label || input.shippingMethod || "Padrão",
+        shippingMethod: shippingMethod?.label || input.shippingMethod || "Padr�o",
         paymentMethod: input.paymentMethod || "Pix",
         items: itemRows.map((row) => row.payload),
         itemsCount: itemRows.reduce((acc, row) => acc + row.payload.qty, 0),
@@ -245,6 +246,7 @@ async function createStoreOrder(input) {
         cashbackUsedCents: input.cashbackUsedCents || 0,
         address: input.address,
     });
+    const touchedProducts = new Map();
     for (const row of itemRows) {
         const qty = Math.max(1, Math.floor(Number(row.payload.qty)));
         const sizeLabel = row.payload.sizeLabel ? String(row.payload.sizeLabel).trim() : undefined;
@@ -265,6 +267,7 @@ async function createStoreOrder(input) {
             row.product.stock = Math.max(0, Math.floor(Number(row.product.stock ?? 0)) - qty);
         }
         await row.product.save();
+        touchedProducts.set(String(row.product._id), String(row.product.slug || ""));
         await InventoryMovement_1.InventoryMovementModel.create({
             productId: row.product._id,
             type: "saida",
@@ -273,6 +276,14 @@ async function createStoreOrder(input) {
             createdBy: input.customerId || "sistema",
             sizeLabel,
         });
+    }
+    if (touchedProducts.size > 0) {
+        await Promise.all(Array.from(touchedProducts.entries()).map(([id, slug]) => (0, products_service_1.invalidateProductCacheByIdentity)({
+            id,
+            slug,
+            bumpListVersion: false,
+        })));
+        await (0, products_service_1.bumpProductsListVersion)();
     }
     if (finalize) {
         if (input.couponCode && discountCents > 0) {
@@ -304,14 +315,14 @@ async function createStoreOrder(input) {
 async function createOrderFromCart(cartId) {
     const cart = await Cart_1.CartModel.findById(cartId);
     if (!cart)
-        throw new apiError_1.ApiError(404, "Carrinho não encontrado.");
+        throw new apiError_1.ApiError(404, "Carrinho n�o encontrado.");
     if (!cart.items.length)
         throw new apiError_1.ApiError(400, "Carrinho sem itens.");
     const order = await createStoreOrder({
         customerId: cart.customerId ? String(cart.customerId) : undefined,
         cartId: String(cart._id),
         channel: "Site",
-        shippingMethod: "Padrão",
+        shippingMethod: "Padr�o",
         paymentMethod: "Pix",
         couponCode: cart.couponCode,
         items: cart.items.map((item) => ({

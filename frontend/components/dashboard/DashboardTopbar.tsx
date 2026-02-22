@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { Search, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 
 type DashboardTopbarProps = {
   user?: {
@@ -17,15 +17,6 @@ export default function DashboardTopbar({ user }: DashboardTopbarProps) {
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">Minha conta</p>
             <p className="truncate text-base font-semibold text-zinc-900">{user?.name || "Cliente Marima"}</p>
-          </div>
-
-          <div className="hidden w-full max-w-md items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 shadow-sm sm:flex">
-            <Search className="h-4 w-4 text-zinc-500" />
-            <input
-              type="search"
-              placeholder="Buscar pedidos, produtos e endereços..."
-              className="w-full bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-400"
-            />
           </div>
 
           <div className="flex items-center gap-2">
@@ -46,16 +37,6 @@ export default function DashboardTopbar({ user }: DashboardTopbarProps) {
           </div>
         </div>
 
-        <div className="pb-3 sm:hidden">
-          <div className="flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 shadow-sm">
-            <Search className="h-4 w-4 text-zinc-500" />
-            <input
-              type="search"
-              placeholder="Buscar..."
-              className="w-full bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-400"
-            />
-          </div>
-        </div>
       </div>
     </div>
   );

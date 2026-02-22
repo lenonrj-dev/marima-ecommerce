@@ -1,48 +1,36 @@
-﻿import { InferSchemaType, Schema, Types, model, models } from "mongoose";
+import { createDocumentModel } from "../lib/documentModel";
 
-const cartItemSchema = new Schema(
-  {
-    productId: { type: Types.ObjectId, ref: "Product", required: true },
-    slug: { type: String, required: true, trim: true },
-    name: { type: String, required: true, trim: true },
-    imageUrl: { type: String, required: true, trim: true },
-    variant: { type: String, trim: true },
-    sizeLabel: { type: String, trim: true },
-    unitPriceCents: { type: Number, required: true, min: 0 },
-    qty: { type: Number, required: true, min: 1 },
-    stock: { type: Number, required: true, min: 0 },
-  },
-  { _id: true },
-);
+export type CartItemDocument = {
+  _id?: string;
+  productId: string;
+  slug: string;
+  name: string;
+  imageUrl: string;
+  variant?: string;
+  sizeLabel?: string;
+  unitPriceCents: number;
+  qty: number;
+  stock: number;
+};
 
-const cartSchema = new Schema(
-  {
-    customerId: { type: Types.ObjectId, ref: "Customer", index: true },
-    guestToken: { type: String, index: true, sparse: true },
-    items: { type: [cartItemSchema], default: [] },
-    couponCode: { type: String, trim: true, uppercase: true },
-    discountCents: { type: Number, default: 0, min: 0 },
-    shippingCents: { type: Number, default: 0, min: 0 },
-    taxCents: { type: Number, default: 0, min: 0 },
-    subtotalCents: { type: Number, default: 0, min: 0 },
-    totalCents: { type: Number, default: 0, min: 0 },
-    status: {
-      type: String,
-      enum: ["active", "abandoned", "converted"],
-      default: "active",
-      index: true,
-    },
-    recovered: { type: Boolean, default: false, index: true },
-    lastActivityAt: { type: Date, default: Date.now, index: true },
-    notes: { type: [String], default: [] },
-  },
-  { timestamps: true },
-);
+export type CartDocument = {
+  _id: string;
+  customerId?: string;
+  guestToken?: string;
+  items: CartItemDocument[];
+  couponCode?: string;
+  freeShippingCouponApplied?: boolean;
+  discountCents?: number;
+  shippingCents?: number;
+  taxCents?: number;
+  subtotalCents?: number;
+  totalCents?: number;
+  status?: "active" | "abandoned" | "converted";
+  recovered?: boolean;
+  lastActivityAt?: Date;
+  notes?: string[];
+  createdAt?: Date;
+  updatedAt?: Date;
+};
 
-cartSchema.index({ customerId: 1, status: 1 });
-cartSchema.index({ guestToken: 1, status: 1 });
-
-export type CartDocument = InferSchemaType<typeof cartSchema>;
-export type CartItemDocument = InferSchemaType<typeof cartItemSchema>;
-
-export const CartModel = models.Cart || model("Cart", cartSchema);
+export const CartModel = createDocumentModel("Cart");

@@ -53,7 +53,7 @@ exports.toCustomer = toCustomer;
 exports.toOrder = toOrder;
 exports.toAddress = toAddress;
 exports.toFavorite = toFavorite;
-const mongoose_1 = require("mongoose");
+const dbCompat_1 = require("../lib/dbCompat");
 const CustomerAddress_1 = require("../models/CustomerAddress");
 const Customer_1 = require("../models/Customer");
 const Favorite_1 = require("../models/Favorite");
@@ -62,6 +62,7 @@ const Product_1 = require("../models/Product");
 const apiError_1 = require("../utils/apiError");
 const pagination_1 = require("../utils/pagination");
 const money_1 = require("../utils/money");
+const auth_service_1 = require("./auth.service");
 function toCustomer(customer) {
     return {
         id: String(customer._id),
@@ -155,13 +156,13 @@ async function listAdminCustomers(input) {
 async function getAdminCustomerById(id) {
     const customer = await Customer_1.CustomerModel.findById(id);
     if (!customer)
-        throw new apiError_1.ApiError(404, "Cliente não encontrado.");
+        throw new apiError_1.ApiError(404, "Cliente n�o encontrado.");
     return toCustomer(customer);
 }
 async function updateAdminCustomer(id, input) {
     const customer = await Customer_1.CustomerModel.findById(id);
     if (!customer)
-        throw new apiError_1.ApiError(404, "Cliente não encontrado.");
+        throw new apiError_1.ApiError(404, "Cliente n�o encontrado.");
     if (input.segment)
         customer.segment = input.segment;
     if (input.tags)
@@ -169,6 +170,7 @@ async function updateAdminCustomer(id, input) {
     if (input.phone !== undefined)
         customer.phone = input.phone || undefined;
     await customer.save();
+    await (0, auth_service_1.invalidateMeCacheForUser)(String(customer._id));
     return toCustomer(customer);
 }
 async function listAdminCustomerOrders(customerId) {
@@ -178,18 +180,19 @@ async function listAdminCustomerOrders(customerId) {
 async function getMeProfile(customerId) {
     const customer = await Customer_1.CustomerModel.findById(customerId);
     if (!customer)
-        throw new apiError_1.ApiError(404, "Cliente não encontrado.");
+        throw new apiError_1.ApiError(404, "Cliente n�o encontrado.");
     return toCustomer(customer);
 }
 async function patchMeProfile(customerId, input) {
     const customer = await Customer_1.CustomerModel.findById(customerId);
     if (!customer)
-        throw new apiError_1.ApiError(404, "Cliente não encontrado.");
+        throw new apiError_1.ApiError(404, "Cliente n�o encontrado.");
     if (input.name !== undefined)
         customer.name = input.name.trim();
     if (input.phone !== undefined)
         customer.phone = input.phone?.trim() || undefined;
     await customer.save();
+    await (0, auth_service_1.invalidateMeCacheForUser)(String(customer._id));
     return toCustomer(customer);
 }
 async function listMeAddresses(customerId) {
@@ -206,7 +209,7 @@ async function createMeAddress(customerId, input) {
 async function updateMeAddress(customerId, addressId, input) {
     const address = await CustomerAddress_1.CustomerAddressModel.findOne({ _id: addressId, customerId });
     if (!address)
-        throw new apiError_1.ApiError(404, "Endereço não encontrado.");
+        throw new apiError_1.ApiError(404, "Endere�o n�o encontrado.");
     if (input.isDefault) {
         await CustomerAddress_1.CustomerAddressModel.updateMany({ customerId }, { $set: { isDefault: false } });
     }
@@ -222,11 +225,11 @@ async function listMeFavorites(customerId) {
     return rows.map(toFavorite);
 }
 async function addMeFavorite(customerId, productId) {
-    if (!mongoose_1.Types.ObjectId.isValid(productId))
-        throw new apiError_1.ApiError(400, "Produto inválido.");
+    if (!dbCompat_1.Types.ObjectId.isValid(productId))
+        throw new apiError_1.ApiError(400, "Produto inv�lido.");
     const product = await Product_1.ProductModel.findById(productId);
     if (!product)
-        throw new apiError_1.ApiError(404, "Produto não encontrado.");
+        throw new apiError_1.ApiError(404, "Produto n�o encontrado.");
     const row = await Favorite_1.FavoriteModel.findOneAndUpdate({ customerId, productId }, {
         $setOnInsert: {
             customerId,
@@ -246,7 +249,7 @@ async function refreshCustomerMetrics(customerId) {
     const [ordersCount, total] = await Promise.all([
         Order_1.OrderModel.countDocuments({ customerId }),
         Order_1.OrderModel.aggregate([
-            { $match: { customerId: new mongoose_1.Types.ObjectId(customerId), status: { $in: ["pago", "separacao", "enviado", "entregue"] } } },
+            { $match: { customerId: new dbCompat_1.Types.ObjectId(customerId), status: { $in: ["pago", "separacao", "enviado", "entregue"] } } },
             { $group: { _id: null, total: { $sum: "$totalCents" }, lastOrderAt: { $max: "$createdAt" } } },
         ]),
     ]);
@@ -260,7 +263,8 @@ async function refreshCustomerMetrics(customerId) {
     });
 }
 async function getMeCashbackBalance(customerId) {
-    const rows = await Promise.resolve().then(() => __importStar(require("../models/CashbackLedger"))).then(({ CashbackLedgerModel }) => CashbackLedgerModel.find({ customerId }).sort({ createdAt: -1 }));
+    const { CashbackLedgerModel } = await Promise.resolve().then(() => __importStar(require("../models/CashbackLedger")));
+    const rows = await CashbackLedgerModel.find({ customerId }).sort({ createdAt: -1 });
     const balance = rows.length ? rows[0].balanceAfterCents : 0;
     return {
         balance: (0, money_1.fromCents)(balance),

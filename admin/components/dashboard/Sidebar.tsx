@@ -24,6 +24,8 @@ type SidebarUser = {
 const NAV: NavItem[] = [
   { label: "Início", href: "/", icon: "home" },
   { label: "Produtos", href: "/products", icon: "box" },
+  { label: "Blog", href: "/blog", icon: "file" },
+  { label: "Avaliacoes", href: "/reviews", icon: "life" },
   { label: "Vendas", href: "/sales", icon: "cart" },
   { label: "Marketing", href: "/marketing", icon: "tag" },
   { label: "Clientes", href: "/customers", icon: "users" },

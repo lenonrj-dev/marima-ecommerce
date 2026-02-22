@@ -11,6 +11,11 @@ export type ProductSizeRow = {
   active?: boolean;
 };
 
+export type ProductAdditionalInfoItem = {
+  label: string;
+  value: string;
+};
+
 export type Product = {
   id: string;
   name: string;
@@ -27,6 +32,7 @@ export type Product = {
   compareAtPrice?: number;
   shortDescription: string;
   description: string;
+  additionalInfo?: ProductAdditionalInfoItem[];
   tags: string[];
   status: ProductStatus;
   active: boolean;
@@ -169,4 +175,41 @@ export type EmailCampaignRow = {
   deliveredRate: number; // 0-1
   unsubscribeRate: number; // 0-1
   spamRate: number; // 0-1
+};
+
+export type BlogPost = {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string;
+  coverImage: string;
+  tags: string[];
+  topic: string;
+  topic2?: string;
+  featured: boolean;
+  readingMinutes: number;
+  published: boolean;
+  publishedAt?: ISODate;
+  authorName?: string;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+};
+
+export type ReviewStatus = "published" | "pending" | "hidden";
+
+export type ProductReview = {
+  id: string;
+  productId: string;
+  productSlug: string;
+  productTitle: string;
+  customerId: string;
+  customerName: string;
+  customerEmail: string;
+  rating: number;
+  comment: string;
+  status: ReviewStatus;
+  verifiedPurchase: boolean;
+  createdAt: ISODate;
+  updatedAt: ISODate;
 };

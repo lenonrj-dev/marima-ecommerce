@@ -1,17 +1,15 @@
-﻿import { InferSchemaType, Schema, model, models } from "mongoose";
+import { createDocumentModel } from "../lib/documentModel";
 
-const storeSettingsSchema = new Schema(
-  {
-    name: { type: String, required: true, trim: true },
-    domain: { type: String, required: true, trim: true },
-    timezone: { type: String, required: true, trim: true, default: "America/Sao_Paulo" },
-    currency: { type: String, required: true, trim: true, default: "BRL" },
-    supportEmail: { type: String, required: true, trim: true, lowercase: true },
-    policy: { type: String, required: true, trim: true },
-  },
-  { timestamps: true },
-);
+export type StoreSettingsDocument = {
+  _id: string;
+  name: string;
+  domain: string;
+  timezone: string;
+  currency: string;
+  supportEmail: string;
+  policy: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
 
-export type StoreSettingsDocument = InferSchemaType<typeof storeSettingsSchema>;
-
-export const StoreSettingsModel = models.StoreSettings || model("StoreSettings", storeSettingsSchema);
+export const StoreSettingsModel = createDocumentModel("StoreSettings");

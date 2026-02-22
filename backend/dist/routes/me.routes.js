@@ -4,6 +4,7 @@ const express_1 = require("express");
 const zod_1 = require("zod");
 const customers_controller_1 = require("../controllers/customers.controller");
 const carts_controller_1 = require("../controllers/carts.controller");
+const reviews_controller_1 = require("../controllers/reviews.controller");
 const cashback_controller_1 = require("../controllers/cashback.controller");
 const orders_controller_1 = require("../controllers/orders.controller");
 const auth_1 = require("../middlewares/auth");
@@ -25,6 +26,25 @@ router.put("/cart/items", auth_1.optionalAuth, (0, validate_1.validate)({
 router.patch("/cart/items/:itemId", auth_1.optionalAuth, (0, validate_1.validate)({ body: zod_1.z.object({ qty: zod_1.z.number().int().positive() }) }), carts_controller_1.patchMeCartItemHandler);
 router.delete("/cart/items/:itemId", auth_1.optionalAuth, carts_controller_1.deleteMeCartItemHandler);
 router.post("/cart/apply-coupon", auth_1.optionalAuth, (0, validate_1.validate)({ body: zod_1.z.object({ code: zod_1.z.string().min(1) }) }), carts_controller_1.applyMeCartCouponHandler);
+router.post("/cart/remove-coupon", auth_1.optionalAuth, carts_controller_1.removeMeCartCouponHandler);
+router.post("/cart/saved", auth_1.requireCustomerAuth, carts_controller_1.saveMeCartHandler);
+router.get("/cart/saved", auth_1.requireCustomerAuth, carts_controller_1.listMeSavedCartsHandler);
+router.get("/cart/saved/:savedCartId", auth_1.requireCustomerAuth, carts_controller_1.getMeSavedCartHandler);
+router.delete("/cart/saved/:savedCartId", auth_1.requireCustomerAuth, carts_controller_1.deleteMeSavedCartHandler);
+router.post("/cart/saved/:savedCartId/share", auth_1.requireCustomerAuth, carts_controller_1.shareMeSavedCartHandler);
+router.delete("/cart/saved/:savedCartId/share", auth_1.requireCustomerAuth, carts_controller_1.revokeMeSavedCartShareHandler);
+router.post("/cart/saved/:savedCartId/load", auth_1.requireCustomerAuth, carts_controller_1.loadMeSavedCartHandler);
+// Compatibilidade tempor�ria
+router.post("/cart/save", auth_1.requireCustomerAuth, carts_controller_1.saveMeCartHandler);
+router.post("/cart/load/:savedCartId", auth_1.requireCustomerAuth, carts_controller_1.loadMeSavedCartHandler);
+router.post("/reviews", auth_1.requireCustomerAuth, (0, validate_1.validate)({
+    body: zod_1.z.object({
+        productId: zod_1.z.string().min(1),
+        rating: zod_1.z.number().int().min(1).max(5),
+        comment: zod_1.z.string().trim().min(5).max(2000),
+    }),
+}), reviews_controller_1.createMeReviewHandler);
+router.get("/reviews", auth_1.requireCustomerAuth, reviews_controller_1.listMeReviewsHandler);
 router.get("/addresses", auth_1.requireCustomerAuth, customers_controller_1.listMeAddressesHandler);
 router.post("/addresses", auth_1.requireCustomerAuth, (0, validate_1.validate)({
     body: zod_1.z.object({

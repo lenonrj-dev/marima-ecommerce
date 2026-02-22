@@ -1,8 +1,11 @@
+﻿"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import Container from "@/components/ui/Container";
 import { ABOUT_COPY, ABOUT_IMAGES } from "@/lib/aboutData";
+import { useWeeklyDealCountdown } from "@/lib/useWeeklyDealCountdown";
 
 function DealCountdownItem({ value, label }: { value: string; label: string }) {
   return (
@@ -16,14 +19,14 @@ function DealCountdownItem({ value, label }: { value: string; label: string }) {
 }
 
 function CountdownPill() {
-  const c = ABOUT_COPY.deal.countdown;
+  const { days, hours, minutes, seconds, mounted } = useWeeklyDealCountdown();
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <DealCountdownItem value={c.days} label="Dias" />
-      <DealCountdownItem value={c.hours} label="Horas" />
-      <DealCountdownItem value={c.mins} label="Min" />
-      <DealCountdownItem value={c.secs} label="Seg" />
+      <DealCountdownItem value={mounted ? days : "--"} label="Dias" />
+      <DealCountdownItem value={mounted ? hours : "--"} label="Horas" />
+      <DealCountdownItem value={mounted ? minutes : "--"} label="Min" />
+      <DealCountdownItem value={mounted ? seconds : "--"} label="Seg" />
     </div>
   );
 }
@@ -81,13 +84,14 @@ export default function DealOfWeek() {
 
         <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="relative overflow-hidden rounded-3xl bg-zinc-100 shadow-soft ring-1 ring-black/5">
-            <div className="relative aspect-[16/10] w-full">
+            <div className="absolute inset-0">
               <Image
-                src={ABOUT_IMAGES.dealLeft}
+                src="https://res.cloudinary.com/dhcaw7ipf/image/upload/v1771276704/GAB08447_hduswh.png"
                 alt="Oferta da semana"
                 fill
                 className="object-cover"
                 sizes="(min-width: 1024px) 54vw, 100vw"
+                priority
               />
             </div>
 
@@ -116,12 +120,12 @@ export default function DealOfWeek() {
 
           <div className="grid gap-6">
             <SmallDealCard
-              image={ABOUT_IMAGES.dealRight}
+              image="https://res.cloudinary.com/dhcaw7ipf/image/upload/v1771276637/allday_h9scb9.png"
               eyebrow="Novidades"
               title="Escolhas da semana"
             />
             <SmallDealCard
-              image={ABOUT_IMAGES.dealRight}
+              image="https://res.cloudinary.com/dhcaw7ipf/image/upload/v1771276544/Tendencias_f3mrfz.png"
               eyebrow="Essenciais"
               title="Looks para todos os dias"
             />
@@ -131,6 +135,3 @@ export default function DealOfWeek() {
     </section>
   );
 }
-
-
-

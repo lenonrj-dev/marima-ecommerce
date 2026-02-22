@@ -7,7 +7,7 @@ export default function HelpHero({ current }: { current?: { label: string; title
     <section className="relative overflow-hidden bg-zinc-900">
       <div
         className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: `url(${HELP_HERO.bgImage})` }}
+        style={{ backgroundImage: `url(https://res.cloudinary.com/dhcaw7ipf/image/upload/v1771333506/Bnner_qsnwfa.png)` }}
         aria-hidden
       />
       <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/55 to-black/30" aria-hidden />

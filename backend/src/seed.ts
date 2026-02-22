@@ -1,4 +1,4 @@
-ï»¿import bcrypt from "bcryptjs";
+import bcrypt from "bcryptjs";
 import { connectDb, disconnectDb } from "./config/db";
 import { AdminUserModel } from "./models/AdminUser";
 import { CategoryModel } from "./models/Category";
@@ -43,13 +43,13 @@ async function seed() {
         timezone: "America/Sao_Paulo",
         currency: "BRL",
         supportEmail: "suporte@minhaloja.com",
-        policy: "Trocas em atÃ© 7 dias. Consulte regras no site.",
+        policy: "Trocas em até 7 dias. Consulte regras no site.",
       },
     },
     { upsert: true, new: true },
   );
 
-  // MigraÃ§Ã£o simples: substitui "AcessÃ³rios" por "Casual" para manter consistÃªncia entre frontend/admin.
+  // Migração simples: substitui "Acessórios" por "Casual" para manter consistência entre frontend/admin.
   const existingCasual = await CategoryModel.findOne({ slug: "casual" });
   const legacyAccessories = await CategoryModel.findOne({ slug: "acessorios" });
   if (legacyAccessories) {
@@ -108,10 +108,10 @@ async function seed() {
       stock: 8,
       priceCents: toCents(159.9),
       compareAtPriceCents: toCents(199.9),
-      shortDescription: "Modela o corpo com alta compressÃ£o e conforto.",
+      shortDescription: "Modela o corpo com alta compressão e conforto.",
       description:
-        "Legging seamless com alta compressÃ£o, cintura alta e tecido respirÃ¡vel. Ideal para treinos e uso diÃ¡rio.",
-      tags: ["compressÃ£o", "cintura alta", "best-seller"],
+        "Legging seamless com alta compressão, cintura alta e tecido respirável. Ideal para treinos e uso diário.",
+      tags: ["compressão", "cintura alta", "best-seller"],
       status: "destaque",
       active: true,
       images: sampleImages,
@@ -130,9 +130,9 @@ async function seed() {
       size: "P, M, G",
       stock: 6,
       priceCents: toCents(119.9),
-      shortDescription: "SustentaÃ§Ã£o mÃ©dia com acabamento premium.",
-      description: "Top com sustentaÃ§Ã£o mÃ©dia e tecido de secagem rÃ¡pida.",
-      tags: ["secagem rÃ¡pida", "suporte", "novo"],
+      shortDescription: "Sustentação média com acabamento premium.",
+      description: "Top com sustentação média e tecido de secagem rápida.",
+      tags: ["secagem rápida", "suporte", "novo"],
       status: "novo",
       active: true,
       images: sampleImages,
@@ -156,9 +156,9 @@ async function seed() {
       stock: 45,
       priceCents: toCents(89.9),
       compareAtPriceCents: toCents(99.9),
-      shortDescription: "Leve, respirÃ¡vel e com caimento perfeito.",
-      description: "Camiseta dry com tecido leve e respirÃ¡vel.",
-      tags: ["dry", "respirÃ¡vel", "oferta"],
+      shortDescription: "Leve, respirável e com caimento perfeito.",
+      description: "Camiseta dry com tecido leve e respirável.",
+      tags: ["dry", "respirável", "oferta"],
       status: "oferta",
       active: true,
       images: sampleImages,
@@ -169,92 +169,52 @@ async function seed() {
     await ProductModel.findOneAndUpdate({ sku: product.sku }, { $set: product }, { upsert: true, new: true });
   }
 
-  await IntegrationConfigModel.bulkWrite([
+    const integrations = [
     {
-      updateOne: {
-        filter: { group: "pagamentos", name: "Pix + CartÃ£o" },
-        update: {
-          $set: {
-            group: "pagamentos",
-            name: "Pix + CartÃ£o",
-            description: "Conecte gateway para Pix, cartÃ£o e boleto.",
-            connected: false,
-          },
-        },
-        upsert: true,
-      },
+      group: "pagamentos",
+      name: "Pix + Cartão",
+      description: "Conecte gateway para Pix, cartão e boleto.",
+      connected: false,
     },
     {
-      updateOne: {
-        filter: { group: "frete", name: "Correios / Melhor Envio" },
-        update: {
-          $set: {
-            group: "frete",
-            name: "Correios / Melhor Envio",
-            description: "CÃ¡lculo de frete e geraÃ§Ã£o de etiqueta.",
-            connected: false,
-          },
-        },
-        upsert: true,
-      },
+      group: "frete",
+      name: "Correios / Melhor Envio",
+      description: "Cálculo de frete e geração de etiqueta.",
+      connected: false,
     },
     {
-      updateOne: {
-        filter: { group: "email", name: "E-mail Marketing" },
-        update: {
-          $set: {
-            group: "email",
-            name: "E-mail Marketing",
-            description: "AutomaÃ§Ã£o para carrinhos abandonados e pÃ³s-compra.",
-            connected: false,
-          },
-        },
-        upsert: true,
-      },
+      group: "email",
+      name: "E-mail Marketing",
+      description: "Automação para carrinhos abandonados e pós-compra.",
+      connected: false,
     },
     {
-      updateOne: {
-        filter: { group: "whatsapp", name: "WhatsApp" },
-        update: {
-          $set: {
-            group: "whatsapp",
-            name: "WhatsApp",
-            description: "RecuperaÃ§Ã£o, suporte e campanhas via WhatsApp.",
-            connected: false,
-          },
-        },
-        upsert: true,
-      },
+      group: "whatsapp",
+      name: "WhatsApp",
+      description: "Recuperação, suporte e campanhas via WhatsApp.",
+      connected: false,
     },
     {
-      updateOne: {
-        filter: { group: "analytics", name: "Google Analytics" },
-        update: {
-          $set: {
-            group: "analytics",
-            name: "Google Analytics",
-            description: "MÃ©tricas de trÃ¡fego e conversÃ£o transacional.",
-            connected: false,
-          },
-        },
-        upsert: true,
-      },
+      group: "analytics",
+      name: "Google Analytics",
+      description: "Métricas de tráfego e conversão transacional.",
+      connected: false,
     },
     {
-      updateOne: {
-        filter: { group: "pixel", name: "Meta Pixel" },
-        update: {
-          $set: {
-            group: "pixel",
-            name: "Meta Pixel",
-            description: "AtribuiÃ§Ã£o de campanhas e eventos de compra.",
-            connected: false,
-          },
-        },
-        upsert: true,
-      },
+      group: "pixel",
+      name: "Meta Pixel",
+      description: "Atribuição de campanhas e eventos de compra.",
+      connected: false,
     },
-  ]);
+  ];
+
+  for (const integration of integrations) {
+    await IntegrationConfigModel.findOneAndUpdate(
+      { group: integration.group, name: integration.name },
+      { $set: integration },
+      { upsert: true, new: true },
+    );
+  }
 
   const now = new Date();
   const end = new Date(now);
@@ -283,7 +243,7 @@ async function seed() {
     {
       $set: {
         code: "FRETEGRATIS",
-        description: "Frete grÃ¡tis acima de R$199",
+        description: "Frete grátis acima de R$199",
         type: "shipping",
         amount: 0,
         minSubtotalCents: toCents(199),
@@ -297,10 +257,10 @@ async function seed() {
   );
 
   await CashbackRuleModel.findOneAndUpdate(
-    { name: "Cashback padrÃ£o" },
+    { name: "Cashback padrão" },
     {
       $set: {
-        name: "Cashback padrÃ£o",
+        name: "Cashback padrão",
         percent: 5,
         validDays: 30,
         minSubtotalCents: toCents(150),
@@ -404,7 +364,7 @@ async function seed() {
     }
   }
 
-  console.log("Seed concluÃ­do com sucesso.");
+  console.log("Seed concluído com sucesso.");
   console.log(`Admin: ${adminEmail} / ${adminPassword}`);
 }
 
@@ -416,3 +376,4 @@ seed()
   .finally(async () => {
     await disconnectDb();
   });
+

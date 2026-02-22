@@ -8,6 +8,12 @@ type ProductListShellProps = {
   total: number;
   query?: string;
   category?: string;
+  pagination?: {
+    page: number;
+    pages: number;
+    prevHref?: string;
+    nextHref?: string;
+  };
 };
 
 export default function ProductListShell({
@@ -15,8 +21,20 @@ export default function ProductListShell({
   total,
   query,
   category,
+  pagination,
 }: ProductListShellProps) {
   const hasFilters = Boolean(query || category);
+  const shown = products.length;
+  const showXofY = total > shown;
+
+  const subtitle =
+    total === 0
+      ? "Nenhum produto encontrado"
+      : showXofY
+        ? `${shown} de ${total} produtos encontrados`
+        : hasFilters
+          ? `${shown} produtos encontrados`
+          : `${total} produtos para treinar com conforto e performance`;
 
   return (
     <section className="bg-white pb-14">
@@ -37,17 +55,56 @@ export default function ProductListShell({
           </nav>
 
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900">Moda Fitness Marima</h1>
-          <p className="mt-2 text-sm text-zinc-600">
-            {hasFilters
-              ? `${products.length} de ${total} produtos encontrados`
-              : `${total} produtos para treinar com conforto e performance`}
-          </p>
+          <p className="mt-2 text-sm text-zinc-600">{subtitle}</p>
         </div>
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[240px_1fr]">
           <FiltersSidebar category={category} />
           <ProductsGrid products={products} />
         </div>
+
+        {pagination && pagination.pages > 1 ? (
+          <div className="mt-10 flex flex-col gap-3 border-t border-zinc-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-zinc-600">
+              Página <span className="font-medium text-zinc-900">{pagination.page}</span> de{" "}
+              <span className="font-medium text-zinc-900">{pagination.pages}</span>
+            </p>
+
+            <div className="flex items-center gap-2">
+              {pagination.prevHref ? (
+                <Link
+                  href={pagination.prevHref}
+                  className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/25"
+                >
+                  Anterior
+                </Link>
+              ) : (
+                <span
+                  aria-disabled="true"
+                  className="inline-flex h-10 cursor-not-allowed items-center justify-center rounded-full border border-zinc-100 bg-zinc-50 px-4 text-sm font-semibold text-zinc-400"
+                >
+                  Anterior
+                </span>
+              )}
+
+              {pagination.nextHref ? (
+                <Link
+                  href={pagination.nextHref}
+                  className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/25"
+                >
+                  Próxima
+                </Link>
+              ) : (
+                <span
+                  aria-disabled="true"
+                  className="inline-flex h-10 cursor-not-allowed items-center justify-center rounded-full border border-zinc-100 bg-zinc-50 px-4 text-sm font-semibold text-zinc-400"
+                >
+                  Próxima
+                </span>
+              )}
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
   );

@@ -65,7 +65,7 @@ async function listTickets(input) {
 async function getTicketById(id) {
     const ticket = await SupportTicket_1.SupportTicketModel.findById(id);
     if (!ticket)
-        throw new apiError_1.ApiError(404, "Ticket não encontrado.");
+        throw new apiError_1.ApiError(404, "Ticket n�o encontrado.");
     return {
         ...toTicket(ticket),
         messages: (ticket.messages || []).map(toMessage),
@@ -74,7 +74,7 @@ async function getTicketById(id) {
 async function updateTicketStatus(id, status) {
     const ticket = await SupportTicket_1.SupportTicketModel.findById(id);
     if (!ticket)
-        throw new apiError_1.ApiError(404, "Ticket não encontrado.");
+        throw new apiError_1.ApiError(404, "Ticket n�o encontrado.");
     ticket.status = status;
     await ticket.save();
     return toTicket(ticket);
@@ -82,7 +82,7 @@ async function updateTicketStatus(id, status) {
 async function addTicketMessage(id, input) {
     const ticket = await SupportTicket_1.SupportTicketModel.findById(id);
     if (!ticket)
-        throw new apiError_1.ApiError(404, "Ticket não encontrado.");
+        throw new apiError_1.ApiError(404, "Ticket n�o encontrado.");
     ticket.messages.push({
         authorType: input.authorType,
         authorId: input.authorId,
@@ -98,7 +98,7 @@ async function addTicketMessage(id, input) {
 async function listTicketMessages(id) {
     const ticket = await SupportTicket_1.SupportTicketModel.findById(id);
     if (!ticket)
-        throw new apiError_1.ApiError(404, "Ticket não encontrado.");
+        throw new apiError_1.ApiError(404, "Ticket n�o encontrado.");
     return (ticket.messages || []).map(toMessage);
 }
 async function createStoreTicket(input) {

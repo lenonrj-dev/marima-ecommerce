@@ -40,7 +40,7 @@ async function listIntegrations(input) {
 async function updateIntegration(id, input) {
     const item = await IntegrationConfig_1.IntegrationConfigModel.findById(id);
     if (!item)
-        throw new apiError_1.ApiError(404, "Integração não encontrada.");
+        throw new apiError_1.ApiError(404, "Integra��o n�o encontrada.");
     if (input.connected !== undefined)
         item.connected = input.connected;
     if (input.config !== undefined)
@@ -55,7 +55,7 @@ async function updateIntegration(id, input) {
 async function testIntegrationWebhook(id) {
     const item = await IntegrationConfig_1.IntegrationConfigModel.findById(id);
     if (!item)
-        throw new apiError_1.ApiError(404, "Integração não encontrada.");
+        throw new apiError_1.ApiError(404, "Integra��o n�o encontrada.");
     return {
         id,
         ok: true,

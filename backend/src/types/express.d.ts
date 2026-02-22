@@ -1,4 +1,4 @@
-﻿import { Role } from "../models/AdminUser";
+import { Role } from "../models/AdminUser";
 
 declare global {
   namespace Express {

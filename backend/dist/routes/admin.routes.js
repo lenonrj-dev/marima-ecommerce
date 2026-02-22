@@ -17,6 +17,7 @@ const support_controller_1 = require("../controllers/support.controller");
 const integrations_controller_1 = require("../controllers/integrations.controller");
 const settings_controller_1 = require("../controllers/settings.controller");
 const analytics_controller_1 = require("../controllers/analytics.controller");
+const reviews_controller_1 = require("../controllers/reviews.controller");
 const reports_controller_1 = require("../controllers/reports.controller");
 const adminUsers_controller_1 = require("../controllers/adminUsers.controller");
 const router = (0, express_1.Router)();
@@ -45,6 +46,12 @@ router.post("/products", (0, rbac_1.requireRole)("admin", "operacao"), (0, valid
         compareAtPrice: zod_1.z.number().nonnegative().optional(),
         shortDescription: zod_1.z.string().min(3),
         description: zod_1.z.string().min(3),
+        additionalInfo: zod_1.z
+            .array(zod_1.z.object({
+            label: zod_1.z.string().min(1),
+            value: zod_1.z.string().min(1),
+        }))
+            .optional(),
         tags: zod_1.z.array(zod_1.z.string()).default([]),
         status: zod_1.z.enum(["padrao", "novo", "destaque", "oferta"]),
         active: zod_1.z.boolean().default(true),
@@ -55,6 +62,13 @@ router.get("/products/:id", (0, rbac_1.requireRole)("admin", "operacao", "market
 router.patch("/products/:id", (0, rbac_1.requireRole)("admin", "operacao"), products_controller_1.patchProductHandler);
 router.patch("/products/:id/activation", (0, rbac_1.requireRole)("admin", "operacao"), products_controller_1.patchProductActivationHandler);
 router.delete("/products/:id", (0, rbac_1.requireRole)("admin", "operacao"), products_controller_1.deleteProductHandler);
+router.get("/reviews", (0, rbac_1.requireRole)("admin", "operacao", "marketing", "suporte"), reviews_controller_1.listAdminReviewsHandler);
+router.patch("/reviews/:id", (0, rbac_1.requireRole)("admin", "operacao", "marketing", "suporte"), (0, validate_1.validate)({
+    body: zod_1.z.object({
+        status: zod_1.z.enum(["published", "pending", "hidden"]),
+    }),
+}), reviews_controller_1.patchAdminReviewStatusHandler);
+router.delete("/reviews/:id", (0, rbac_1.requireRole)("admin", "operacao"), reviews_controller_1.deleteAdminReviewHandler);
 router.get("/categories", (0, rbac_1.requireRole)("admin", "operacao", "marketing"), categories_controller_1.listAdminCategoriesHandler);
 router.post("/categories", (0, rbac_1.requireRole)("admin", "operacao"), categories_controller_1.createCategoryHandler);
 router.patch("/categories/:id", (0, rbac_1.requireRole)("admin", "operacao"), categories_controller_1.patchCategoryHandler);

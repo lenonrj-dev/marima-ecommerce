@@ -37,10 +37,10 @@ async function seed() {
             timezone: "America/Sao_Paulo",
             currency: "BRL",
             supportEmail: "suporte@minhaloja.com",
-            policy: "Trocas em até 7 dias. Consulte regras no site.",
+            policy: "Trocas em at� 7 dias. Consulte regras no site.",
         },
     }, { upsert: true, new: true });
-    // Migração simples: substitui "Acessórios" por "Casual" para manter consistência entre frontend/admin.
+    // Migra��o simples: substitui "Acess�rios" por "Casual" para manter consist�ncia entre frontend/admin.
     const existingCasual = await Category_1.CategoryModel.findOne({ slug: "casual" });
     const legacyAccessories = await Category_1.CategoryModel.findOne({ slug: "acessorios" });
     if (legacyAccessories) {
@@ -96,9 +96,9 @@ async function seed() {
             stock: 8,
             priceCents: (0, money_1.toCents)(159.9),
             compareAtPriceCents: (0, money_1.toCents)(199.9),
-            shortDescription: "Modela o corpo com alta compressão e conforto.",
-            description: "Legging seamless com alta compressão, cintura alta e tecido respirável. Ideal para treinos e uso diário.",
-            tags: ["compressão", "cintura alta", "best-seller"],
+            shortDescription: "Modela o corpo com alta compress�o e conforto.",
+            description: "Legging seamless com alta compress�o, cintura alta e tecido respir�vel. Ideal para treinos e uso di�rio.",
+            tags: ["compress�o", "cintura alta", "best-seller"],
             status: "destaque",
             active: true,
             images: sampleImages,
@@ -117,9 +117,9 @@ async function seed() {
             size: "P, M, G",
             stock: 6,
             priceCents: (0, money_1.toCents)(119.9),
-            shortDescription: "Sustentação média com acabamento premium.",
-            description: "Top com sustentação média e tecido de secagem rápida.",
-            tags: ["secagem rápida", "suporte", "novo"],
+            shortDescription: "Sustenta��o m�dia com acabamento premium.",
+            description: "Top com sustenta��o m�dia e tecido de secagem r�pida.",
+            tags: ["secagem r�pida", "suporte", "novo"],
             status: "novo",
             active: true,
             images: sampleImages,
@@ -143,9 +143,9 @@ async function seed() {
             stock: 45,
             priceCents: (0, money_1.toCents)(89.9),
             compareAtPriceCents: (0, money_1.toCents)(99.9),
-            shortDescription: "Leve, respirável e com caimento perfeito.",
-            description: "Camiseta dry com tecido leve e respirável.",
-            tags: ["dry", "respirável", "oferta"],
+            shortDescription: "Leve, respir�vel e com caimento perfeito.",
+            description: "Camiseta dry com tecido leve e respir�vel.",
+            tags: ["dry", "respir�vel", "oferta"],
             status: "oferta",
             active: true,
             images: sampleImages,
@@ -154,92 +154,47 @@ async function seed() {
     for (const product of products) {
         await Product_1.ProductModel.findOneAndUpdate({ sku: product.sku }, { $set: product }, { upsert: true, new: true });
     }
-    await IntegrationConfig_1.IntegrationConfigModel.bulkWrite([
+    const integrations = [
         {
-            updateOne: {
-                filter: { group: "pagamentos", name: "Pix + Cartão" },
-                update: {
-                    $set: {
-                        group: "pagamentos",
-                        name: "Pix + Cartão",
-                        description: "Conecte gateway para Pix, cartão e boleto.",
-                        connected: false,
-                    },
-                },
-                upsert: true,
-            },
+            group: "pagamentos",
+            name: "Pix + Cart�o",
+            description: "Conecte gateway para Pix, cart�o e boleto.",
+            connected: false,
         },
         {
-            updateOne: {
-                filter: { group: "frete", name: "Correios / Melhor Envio" },
-                update: {
-                    $set: {
-                        group: "frete",
-                        name: "Correios / Melhor Envio",
-                        description: "Cálculo de frete e geração de etiqueta.",
-                        connected: false,
-                    },
-                },
-                upsert: true,
-            },
+            group: "frete",
+            name: "Correios / Melhor Envio",
+            description: "C�lculo de frete e gera��o de etiqueta.",
+            connected: false,
         },
         {
-            updateOne: {
-                filter: { group: "email", name: "E-mail Marketing" },
-                update: {
-                    $set: {
-                        group: "email",
-                        name: "E-mail Marketing",
-                        description: "Automação para carrinhos abandonados e pós-compra.",
-                        connected: false,
-                    },
-                },
-                upsert: true,
-            },
+            group: "email",
+            name: "E-mail Marketing",
+            description: "Automa��o para carrinhos abandonados e p�s-compra.",
+            connected: false,
         },
         {
-            updateOne: {
-                filter: { group: "whatsapp", name: "WhatsApp" },
-                update: {
-                    $set: {
-                        group: "whatsapp",
-                        name: "WhatsApp",
-                        description: "Recuperação, suporte e campanhas via WhatsApp.",
-                        connected: false,
-                    },
-                },
-                upsert: true,
-            },
+            group: "whatsapp",
+            name: "WhatsApp",
+            description: "Recupera��o, suporte e campanhas via WhatsApp.",
+            connected: false,
         },
         {
-            updateOne: {
-                filter: { group: "analytics", name: "Google Analytics" },
-                update: {
-                    $set: {
-                        group: "analytics",
-                        name: "Google Analytics",
-                        description: "Métricas de tráfego e conversão transacional.",
-                        connected: false,
-                    },
-                },
-                upsert: true,
-            },
+            group: "analytics",
+            name: "Google Analytics",
+            description: "M�tricas de tr�fego e convers�o transacional.",
+            connected: false,
         },
         {
-            updateOne: {
-                filter: { group: "pixel", name: "Meta Pixel" },
-                update: {
-                    $set: {
-                        group: "pixel",
-                        name: "Meta Pixel",
-                        description: "Atribuição de campanhas e eventos de compra.",
-                        connected: false,
-                    },
-                },
-                upsert: true,
-            },
+            group: "pixel",
+            name: "Meta Pixel",
+            description: "Atribui��o de campanhas e eventos de compra.",
+            connected: false,
         },
-    ]);
+    ];
+    for (const integration of integrations) {
+        await IntegrationConfig_1.IntegrationConfigModel.findOneAndUpdate({ group: integration.group, name: integration.name }, { $set: integration }, { upsert: true, new: true });
+    }
     const now = new Date();
     const end = new Date(now);
     end.setMonth(end.getMonth() + 2);
@@ -259,7 +214,7 @@ async function seed() {
     await Coupon_1.CouponModel.findOneAndUpdate({ code: "FRETEGRATIS" }, {
         $set: {
             code: "FRETEGRATIS",
-            description: "Frete grátis acima de R$199",
+            description: "Frete gr�tis acima de R$199",
             type: "shipping",
             amount: 0,
             minSubtotalCents: (0, money_1.toCents)(199),
@@ -269,9 +224,9 @@ async function seed() {
             active: true,
         },
     }, { upsert: true });
-    await CashbackRule_1.CashbackRuleModel.findOneAndUpdate({ name: "Cashback padrão" }, {
+    await CashbackRule_1.CashbackRuleModel.findOneAndUpdate({ name: "Cashback padr�o" }, {
         $set: {
-            name: "Cashback padrão",
+            name: "Cashback padr�o",
             percent: 5,
             validDays: 30,
             minSubtotalCents: (0, money_1.toCents)(150),
@@ -363,7 +318,7 @@ async function seed() {
             });
         }
     }
-    console.log("Seed concluído com sucesso.");
+    console.log("Seed conclu�do com sucesso.");
     console.log(`Admin: ${adminEmail} / ${adminPassword}`);
 }
 seed()

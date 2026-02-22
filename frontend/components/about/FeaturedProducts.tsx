@@ -1,4 +1,4 @@
-import Image from "next/image";
+﻿import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import Container from "@/components/ui/Container";
@@ -29,16 +29,19 @@ export default async function FeaturedProducts() {
           </p>
         </div>
 
+        
         <div className="grid gap-8 lg:grid-cols-[1fr_2fr]">
-          <div className="overflow-hidden rounded-3xl bg-zinc-100 shadow-soft ring-1 ring-black/5">
-            <div className="relative aspect-[4/5] w-full">
+          <div className="flex h-full flex-col overflow-hidden rounded-3xl bg-white shadow-soft ring-1 ring-black/5">
+            <div className="relative flex-1 bg-zinc-100">
               <Image
-                src={ABOUT_IMAGES.featuredLeft}
+                src="https://res.cloudinary.com/dhcaw7ipf/image/upload/v1771279097/GAB08736_diztda.png"
                 alt="Destaque de produtos Marima"
                 fill
                 className="object-cover"
                 sizes="(min-width: 1024px) 28vw, 100vw"
+                priority={false}
               />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/0 via-black/0 to-black/10" aria-hidden />
             </div>
 
             <div className="bg-white p-5">
@@ -83,4 +86,3 @@ export default async function FeaturedProducts() {
     </section>
   );
 }
-

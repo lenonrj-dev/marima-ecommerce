@@ -50,7 +50,7 @@ async function createCoupon(input) {
     const code = input.code.trim().toUpperCase();
     const exists = await Coupon_1.CouponModel.findOne({ code });
     if (exists)
-        throw new apiError_1.ApiError(409, "Cupom já existe.");
+        throw new apiError_1.ApiError(409, "Cupom j� existe.");
     const created = await Coupon_1.CouponModel.create({
         code,
         description: input.description.trim(),
@@ -67,7 +67,7 @@ async function createCoupon(input) {
 async function updateCoupon(id, input) {
     const coupon = await Coupon_1.CouponModel.findById(id);
     if (!coupon)
-        throw new apiError_1.ApiError(404, "Cupom não encontrado.");
+        throw new apiError_1.ApiError(404, "Cupom n�o encontrado.");
     if (input.description !== undefined)
         coupon.description = input.description.trim();
     if (input.type !== undefined)
@@ -90,7 +90,7 @@ async function updateCoupon(id, input) {
 async function toggleCoupon(id) {
     const coupon = await Coupon_1.CouponModel.findById(id);
     if (!coupon)
-        throw new apiError_1.ApiError(404, "Cupom não encontrado.");
+        throw new apiError_1.ApiError(404, "Cupom n�o encontrado.");
     coupon.active = !coupon.active;
     await coupon.save();
     return toCoupon(coupon);
@@ -99,14 +99,14 @@ async function validateCoupon(code, subtotalCents) {
     const normalized = code.trim().toUpperCase();
     const coupon = await Coupon_1.CouponModel.findOne({ code: normalized, active: true });
     if (!coupon)
-        throw new apiError_1.ApiError(404, "Cupom não encontrado.");
+        throw new apiError_1.ApiError(404, "Cupom n�o encontrado.");
     const now = new Date();
     if (coupon.startsAt > now || coupon.endsAt < now)
-        throw new apiError_1.ApiError(400, "Cupom inválido para o período atual.");
+        throw new apiError_1.ApiError(400, "Cupom inv�lido para o per�odo atual.");
     if (coupon.maxUses && coupon.uses >= coupon.maxUses)
         throw new apiError_1.ApiError(400, "Cupom sem saldo de usos.");
     if (coupon.minSubtotalCents && subtotalCents < coupon.minSubtotalCents)
-        throw new apiError_1.ApiError(400, "Subtotal mínimo não atingido.");
+        throw new apiError_1.ApiError(400, "Subtotal m�nimo n�o atingido.");
     let discountCents = 0;
     if (coupon.type === "percent")
         discountCents = Math.round(subtotalCents * (coupon.amount / 100));

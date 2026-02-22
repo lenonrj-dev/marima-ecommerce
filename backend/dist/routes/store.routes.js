@@ -5,6 +5,7 @@ const zod_1 = require("zod");
 const categories_controller_1 = require("../controllers/categories.controller");
 const orders_controller_1 = require("../controllers/orders.controller");
 const products_controller_1 = require("../controllers/products.controller");
+const reviews_controller_1 = require("../controllers/reviews.controller");
 const coupons_controller_1 = require("../controllers/coupons.controller");
 const cashback_controller_1 = require("../controllers/cashback.controller");
 const support_controller_1 = require("../controllers/support.controller");
@@ -13,9 +14,26 @@ const validate_1 = require("../middlewares/validate");
 const router = (0, express_1.Router)();
 router.get("/categories", categories_controller_1.listStoreCategoriesHandler);
 router.get("/products", products_controller_1.listStoreProductsHandler);
+router.get("/products/:productId/reviews", (0, validate_1.validate)({
+    params: zod_1.z.object({
+        productId: zod_1.z.string().min(1),
+    }),
+    query: zod_1.z
+        .object({
+        page: zod_1.z.string().optional(),
+        limit: zod_1.z.string().optional(),
+        sort: zod_1.z.enum(["recent", "oldest", "rating_desc", "rating_asc"]).optional(),
+    })
+        .optional(),
+}), reviews_controller_1.listStoreProductReviewsHandler);
+router.get("/products/:productId/reviews/summary", (0, validate_1.validate)({
+    params: zod_1.z.object({
+        productId: zod_1.z.string().min(1),
+    }),
+}), reviews_controller_1.getStoreProductReviewsSummaryHandler);
 router.get("/products/:slug/variants", products_controller_1.getStoreProductVariantsHandler);
 router.get("/products/:slug", products_controller_1.getStoreProductBySlugHandler);
-router.post("/orders", auth_1.optionalAuth, (0, validate_1.validate)({
+router.post("/orders", auth_1.requireCustomerAuth, (0, validate_1.validate)({
     body: zod_1.z.object({
         cartId: zod_1.z.string().optional(),
         channel: zod_1.z.enum(["Site", "WhatsApp", "Instagram", "Marketplace"]).optional(),

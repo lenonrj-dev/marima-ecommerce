@@ -15,7 +15,7 @@ export default function CTAWideBanner() {
               src={CLOUD_BANNER}
               alt="Banner da coleção Marima"
               fill
-              className="object-cover transition duration-300 group-hover:scale-[1.02]"
+              className="object-cover transition duration-300 group-hover:scale-[1.00]"
             />
           </div>
           <div className="absolute inset-0 bg-black/45" />

@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import BlogPost from "@/components/blog/BlogPost";
-import { getBlogArticle } from "@/lib/blogData";
+import { fetchBlogArticleBySlug, fetchRelatedBlogPosts } from "@/lib/blogData";
+
+type Params = Promise<{ slug: string }>;
+
+export const dynamic = "force-dynamic";
 
 function buildBlogPostTitle(articleTitle: string) {
-  const suffix = " — Blog Marima: moda fitness e alta performance";
+  const suffix = " - Blog Marima: moda fitness e alta performance";
   const maxTotal = 68;
   const maxArticle = Math.max(15, maxTotal - suffix.length);
   const normalizedTitle =
@@ -13,16 +18,13 @@ function buildBlogPostTitle(articleTitle: string) {
   return `${normalizedTitle}${suffix}`;
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: { slug: string };
-}): Promise<Metadata> {
-  const article = getBlogArticle(params.slug);
+export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+  const { slug } = await params;
+  const article = await fetchBlogArticleBySlug(slug);
 
   if (!article) {
     return {
-      title: "Artigo da Marima: conteúdo sobre moda fitness, treino e performance",
+      title: "Artigo da Marima: conteudo sobre moda fitness, treino e performance",
     };
   }
 
@@ -31,14 +33,19 @@ export async function generateMetadata({
   };
 }
 
-export default function BlogPostPage({
-  params,
-}: {
-  params: { slug: string };
-}) {
+export default async function BlogPostPage({ params }: { params: Params }) {
+  const { slug } = await params;
+  const article = await fetchBlogArticleBySlug(slug);
+
+  if (!article) {
+    notFound();
+  }
+
+  const related = await fetchRelatedBlogPosts(slug, 5);
+
   return (
     <main className="min-h-[60vh] bg-white">
-      <BlogPost slug={params.slug} />
+      <BlogPost article={article} related={related} />
     </main>
   );
 }

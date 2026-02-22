@@ -1,22 +1,14 @@
-﻿import { InferSchemaType, Schema, model, models } from "mongoose";
+import { createDocumentModel } from "../lib/documentModel";
 
-const integrationConfigSchema = new Schema(
-  {
-    group: {
-      type: String,
-      enum: ["pagamentos", "frete", "email", "whatsapp", "analytics", "pixel"],
-      required: true,
-      index: true,
-    },
-    name: { type: String, required: true, trim: true },
-    description: { type: String, required: true, trim: true },
-    connected: { type: Boolean, default: false, index: true },
-    config: { type: Schema.Types.Mixed, default: {} },
-  },
-  { timestamps: true },
-);
+export type IntegrationConfigDocument = {
+  _id: string;
+  group: "pagamentos" | "frete" | "email" | "whatsapp" | "analytics" | "pixel";
+  name: string;
+  description: string;
+  connected?: boolean;
+  config?: Record<string, unknown>;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
 
-export type IntegrationConfigDocument = InferSchemaType<typeof integrationConfigSchema>;
-
-export const IntegrationConfigModel =
-  models.IntegrationConfig || model("IntegrationConfig", integrationConfigSchema);
+export const IntegrationConfigModel = createDocumentModel("IntegrationConfig");

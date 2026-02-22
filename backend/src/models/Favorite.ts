@@ -1,19 +1,15 @@
-﻿import { InferSchemaType, Schema, Types, model, models } from "mongoose";
+import { createDocumentModel } from "../lib/documentModel";
 
-const favoriteSchema = new Schema(
-  {
-    customerId: { type: Types.ObjectId, ref: "Customer", required: true, index: true },
-    productId: { type: Types.ObjectId, ref: "Product", required: true, index: true },
-    slug: { type: String, required: true, trim: true },
-    title: { type: String, required: true, trim: true },
-    image: { type: String, required: true, trim: true },
-    priceCents: { type: Number, required: true, min: 0 },
-  },
-  { timestamps: true },
-);
+export type FavoriteDocument = {
+  _id: string;
+  customerId: string;
+  productId: string;
+  slug: string;
+  title: string;
+  image: string;
+  priceCents: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
 
-favoriteSchema.index({ customerId: 1, productId: 1 }, { unique: true });
-
-export type FavoriteDocument = InferSchemaType<typeof favoriteSchema>;
-
-export const FavoriteModel = models.Favorite || model("Favorite", favoriteSchema);
+export const FavoriteModel = createDocumentModel("Favorite");

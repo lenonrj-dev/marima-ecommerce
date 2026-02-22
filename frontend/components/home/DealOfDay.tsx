@@ -1,16 +1,29 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import Container from "@/components/ui/Container";
 import Button from "@/components/ui/Button";
-import { CLOUD_BANNER } from "@/lib/homeData";
+import { DEAL_BANNER2 } from "@/lib/homeData";
 import { SITE_COPY } from "@/lib/siteCopy";
+import { useWeeklyDealCountdown } from "@/lib/useWeeklyDealCountdown";
 
 export default function DealOfDay() {
+  const { days, hours, minutes, seconds, mounted } = useWeeklyDealCountdown();
+
+  const countdownItems = [
+    { k: "H", v: mounted ? hours : "--" },
+    { k: "M", v: mounted ? minutes : "--" },
+    { k: "S", v: mounted ? seconds : "--" },
+    { k: "D", v: mounted ? days : "--" },
+  ];
+
   return (
     <section className="bg-white py-12">
       <Container>
-        <div className= "grid gap-6 overflow-hidden rounded-3xl bg-zinc-50 shadow-soft lg:grid-cols-12"> ?          <div className="relative min-h-[520px] lg :col-span-6">
-            <Image src={CLOUD_BANNER} alt="Oferta especial Marima" fill className="object-cover" />
+        <div className= "grid gap-6 overflow-hidden rounded-3xl bg-zinc-50 shadow-soft lg:grid-cols-12">
+          <div className="relative min-h-[520px] lg:col-span-6">
+            <Image src={DEAL_BANNER2} alt="Oferta especial Marima" fill className="object-cover" />
           </div>
 
           <div className="relative mt-20 px-7 py-10 lg:col-span-6 lg:px-10">
@@ -27,12 +40,7 @@ export default function DealOfDay() {
             </p>
 
             <div className="mt-6 grid grid-cols-4 gap-3">
-              {[
-                { k: "H", v: "12" },
-                { k: "M", v: "45" },
-                { k: "S", v: "05" },
-                { k: "D", v: "20" },
-              ].map((x) => (
+              {countdownItems.map((x) => (
                 <div key={x.k} className="rounded-2xl border border-zinc-200 bg-white px-3 py-3 text-center">
                   <p className="text-lg font-semibold text-zinc-900">{x.v}</p>
                   <p className="mt-0.5 text-[11px] text-zinc-500">{x.k}</p>

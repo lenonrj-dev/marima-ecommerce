@@ -26,13 +26,13 @@ function resolveSiteUrl() {
   const vercelUrl = process.env.VERCEL_URL?.trim();
   if (vercelUrl) return `https://${vercelUrl}`;
 
-  return "http://localhost:3000";
+  return "https://www.usemarima.com.br";
 }
 
 export const SITE_URL = normalizeBaseUrl(resolveSiteUrl());
 
 if (process.env.VERCEL_ENV === "production" && SITE_URL.startsWith("http://")) {
-  throw new Error("Config inválida: NEXT_PUBLIC_SITE_URL deve ser HTTPS em produção.");
+  throw new Error("Config invalida: NEXT_PUBLIC_SITE_URL deve ser HTTPS em producao.");
 }
 
 export function canonical(pathname: string) {

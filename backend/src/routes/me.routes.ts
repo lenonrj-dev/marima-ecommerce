@@ -1,4 +1,4 @@
-ï»¿import { Router } from "express";
+import { Router } from "express";
 import { z } from "zod";
 import {
   createMeAddressHandler,
@@ -13,11 +13,20 @@ import {
 } from "../controllers/customers.controller";
 import {
   applyMeCartCouponHandler,
+  deleteMeSavedCartHandler,
   deleteMeCartItemHandler,
+  getMeSavedCartHandler,
   getMeCartHandler,
+  listMeSavedCartsHandler,
+  loadMeSavedCartHandler,
   putMeCartItemHandler,
   patchMeCartItemHandler,
+  revokeMeSavedCartShareHandler,
+  removeMeCartCouponHandler,
+  saveMeCartHandler,
+  shareMeSavedCartHandler,
 } from "../controllers/carts.controller";
+import { createMeReviewHandler, listMeReviewsHandler } from "../controllers/reviews.controller";
 import { getMeCashbackBalanceHandler } from "../controllers/cashback.controller";
 import { getMeOrderByIdHandler, listMeOrdersHandler } from "../controllers/orders.controller";
 import { optionalAuth, requireCustomerAuth } from "../middlewares/auth";
@@ -63,6 +72,32 @@ router.post(
   validate({ body: z.object({ code: z.string().min(1) }) }),
   applyMeCartCouponHandler,
 );
+router.post("/cart/remove-coupon", optionalAuth, removeMeCartCouponHandler);
+router.post("/cart/saved", requireCustomerAuth, saveMeCartHandler);
+router.get("/cart/saved", requireCustomerAuth, listMeSavedCartsHandler);
+router.get("/cart/saved/:savedCartId", requireCustomerAuth, getMeSavedCartHandler);
+router.delete("/cart/saved/:savedCartId", requireCustomerAuth, deleteMeSavedCartHandler);
+router.post("/cart/saved/:savedCartId/share", requireCustomerAuth, shareMeSavedCartHandler);
+router.delete("/cart/saved/:savedCartId/share", requireCustomerAuth, revokeMeSavedCartShareHandler);
+router.post("/cart/saved/:savedCartId/load", requireCustomerAuth, loadMeSavedCartHandler);
+
+// Compatibilidade temporária
+router.post("/cart/save", requireCustomerAuth, saveMeCartHandler);
+router.post("/cart/load/:savedCartId", requireCustomerAuth, loadMeSavedCartHandler);
+
+router.post(
+  "/reviews",
+  requireCustomerAuth,
+  validate({
+    body: z.object({
+      productId: z.string().min(1),
+      rating: z.number().int().min(1).max(5),
+      comment: z.string().trim().min(5).max(2000),
+    }),
+  }),
+  createMeReviewHandler,
+);
+router.get("/reviews", requireCustomerAuth, listMeReviewsHandler);
 
 router.get("/addresses", requireCustomerAuth, listMeAddressesHandler);
 router.post(

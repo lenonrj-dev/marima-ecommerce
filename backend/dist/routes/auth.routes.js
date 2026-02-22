@@ -8,6 +8,8 @@ const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const zod_1 = require("zod");
 const auth_controller_1 = require("../controllers/auth.controller");
 const auth_1 = require("../middlewares/auth");
+const env_1 = require("../config/env");
+const auth_2 = require("../lib/auth");
 const validate_1 = require("../middlewares/validate");
 const router = (0, express_1.Router)();
 const authLimiter = (0, express_rate_limit_1.default)({
@@ -40,4 +42,21 @@ router.post("/admin/login", authLimiter, (0, validate_1.validate)({
 router.post("/logout", auth_controller_1.logoutHandler);
 router.post("/refresh", auth_controller_1.refreshHandler);
 router.get("/me", auth_1.requireAuth, auth_controller_1.meHandler);
+router.get("/debug", auth_1.optionalAuth, (req, res) => {
+    if (env_1.env.NODE_ENV === "production") {
+        res.status(404).json({ message: "Not found" });
+        return;
+    }
+    const token = (0, auth_2.getToken)(req);
+    const cookieNames = Object.keys(req.cookies || {});
+    res.json({
+        data: {
+            hasToken: Boolean(token),
+            authType: req.auth?.type || null,
+            authRole: req.auth?.role || null,
+            hasAccessCookie: cookieNames.includes("access_token") || cookieNames.includes("marima_access"),
+            cookies: cookieNames,
+        },
+    });
+});
 exports.default = router;

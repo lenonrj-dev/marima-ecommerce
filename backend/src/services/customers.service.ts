@@ -1,4 +1,4 @@
-ï»¿import { FilterQuery, Types } from "mongoose";
+import { FilterQuery, Types } from "../lib/dbCompat";
 import { CustomerAddressModel } from "../models/CustomerAddress";
 import { CustomerModel } from "../models/Customer";
 import { FavoriteModel } from "../models/Favorite";
@@ -7,6 +7,7 @@ import { ProductModel } from "../models/Product";
 import { ApiError } from "../utils/apiError";
 import { buildMeta } from "../utils/pagination";
 import { fromCents, toCents } from "../utils/money";
+import { invalidateMeCacheForUser } from "./auth.service";
 
 function toCustomer(customer: any) {
   return {
@@ -113,19 +114,20 @@ export async function listAdminCustomers(input: {
 
 export async function getAdminCustomerById(id: string) {
   const customer = await CustomerModel.findById(id);
-  if (!customer) throw new ApiError(404, "Cliente nÃ£o encontrado.");
+  if (!customer) throw new ApiError(404, "Cliente não encontrado.");
   return toCustomer(customer);
 }
 
 export async function updateAdminCustomer(id: string, input: { segment?: string; tags?: string[]; phone?: string }) {
   const customer = await CustomerModel.findById(id);
-  if (!customer) throw new ApiError(404, "Cliente nÃ£o encontrado.");
+  if (!customer) throw new ApiError(404, "Cliente não encontrado.");
 
   if (input.segment) customer.segment = input.segment as any;
   if (input.tags) customer.tags = input.tags;
   if (input.phone !== undefined) customer.phone = input.phone || undefined;
 
   await customer.save();
+  await invalidateMeCacheForUser(String(customer._id));
   return toCustomer(customer);
 }
 
@@ -136,18 +138,19 @@ export async function listAdminCustomerOrders(customerId: string) {
 
 export async function getMeProfile(customerId: string) {
   const customer = await CustomerModel.findById(customerId);
-  if (!customer) throw new ApiError(404, "Cliente nÃ£o encontrado.");
+  if (!customer) throw new ApiError(404, "Cliente não encontrado.");
   return toCustomer(customer);
 }
 
 export async function patchMeProfile(customerId: string, input: { name?: string; phone?: string }) {
   const customer = await CustomerModel.findById(customerId);
-  if (!customer) throw new ApiError(404, "Cliente nÃ£o encontrado.");
+  if (!customer) throw new ApiError(404, "Cliente não encontrado.");
 
   if (input.name !== undefined) customer.name = input.name.trim();
   if (input.phone !== undefined) customer.phone = input.phone?.trim() || undefined;
 
   await customer.save();
+  await invalidateMeCacheForUser(String(customer._id));
   return toCustomer(customer);
 }
 
@@ -196,7 +199,7 @@ export async function updateMeAddress(
   }>,
 ) {
   const address = await CustomerAddressModel.findOne({ _id: addressId, customerId });
-  if (!address) throw new ApiError(404, "EndereÃ§o nÃ£o encontrado.");
+  if (!address) throw new ApiError(404, "Endereço não encontrado.");
 
   if (input.isDefault) {
     await CustomerAddressModel.updateMany({ customerId }, { $set: { isDefault: false } });
@@ -217,9 +220,9 @@ export async function listMeFavorites(customerId: string) {
 }
 
 export async function addMeFavorite(customerId: string, productId: string) {
-  if (!Types.ObjectId.isValid(productId)) throw new ApiError(400, "Produto invÃ¡lido.");
+  if (!Types.ObjectId.isValid(productId)) throw new ApiError(400, "Produto inválido.");
   const product = await ProductModel.findById(productId);
-  if (!product) throw new ApiError(404, "Produto nÃ£o encontrado.");
+  if (!product) throw new ApiError(404, "Produto não encontrado.");
 
   const row = await FavoriteModel.findOneAndUpdate(
     { customerId, productId },
@@ -263,9 +266,8 @@ export async function refreshCustomerMetrics(customerId: string) {
 }
 
 export async function getMeCashbackBalance(customerId: string) {
-  const rows = await import("../models/CashbackLedger").then(({ CashbackLedgerModel }) =>
-    CashbackLedgerModel.find({ customerId }).sort({ createdAt: -1 }),
-  );
+  const { CashbackLedgerModel } = await import("../models/CashbackLedger");
+  const rows = await CashbackLedgerModel.find({ customerId }).sort({ createdAt: -1 });
 
   const balance = rows.length ? rows[0]!.balanceAfterCents : 0;
 
@@ -289,3 +291,5 @@ export async function createCustomerFromGuest(input: { name: string; email: stri
 }
 
 export { toCustomer, toOrder, toAddress, toFavorite };
+
+

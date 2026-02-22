@@ -34,7 +34,7 @@ exports.createStoreOrderHandler = (0, notFound_1.asyncHandler)(async (req, res) 
         customerId: req.auth?.type === "customer" ? req.auth.sub : undefined,
         cartId: payload.cartId,
         channel: payload.channel || "Site",
-        shippingMethod: payload.shippingMethod || payload.shippingMethodId || "Padrão",
+        shippingMethod: payload.shippingMethod || payload.shippingMethodId || "Padr�o",
         paymentMethod: payload.paymentMethod || "Pix",
         couponCode: payload.couponCode,
         cashbackUsedCents: payload.cashbackUsedCents,

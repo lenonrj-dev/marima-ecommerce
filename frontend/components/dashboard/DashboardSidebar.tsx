@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, User2, Heart, MapPin, Package2, LogOut } from "lucide-react";
+import { LayoutDashboard, User2, Heart, MapPin, Package2, Bookmark, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DASHBOARD_NAV } from "@/lib/dashboardData";
 
@@ -28,6 +28,8 @@ function iconFor(key: (typeof DASHBOARD_NAV)[number]["key"]) {
       return <MapPin className="h-4 w-4" />;
     case "orders":
       return <Package2 className="h-4 w-4" />;
+    case "savedCarts":
+      return <Bookmark className="h-4 w-4" />;
   }
 }
 

@@ -1,7 +1,11 @@
+import { buildApiUrl } from "@/lib/api";
+
 export type BlogTopic = {
   id: string;
   label: string;
 };
+
+export type BlogCategoryCountMap = Record<string, number>;
 
 export type BlogAuthor = {
   name: string;
@@ -40,10 +44,29 @@ export type BlogArticle = {
   tags: string[];
 };
 
+type ApiPost = {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt?: string;
+  content?: string;
+  coverImage?: string;
+  tags?: string[];
+  topic?: string;
+  topic2?: string;
+  featured?: boolean;
+  readingMinutes?: number;
+  published?: boolean;
+  publishedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  authorName?: string;
+};
+
 export const BLOG_TOPICS: BlogTopic[] = [
   { id: "treino", label: "Treino" },
   { id: "moda-fitness", label: "Moda fitness" },
-  { id: "tecnologia-textil", label: "Tecnologia têxtil" },
+  { id: "tecnologia-textil", label: "Tecnologia textil" },
   { id: "bem-estar", label: "Bem-estar" },
   { id: "estilo-casual", label: "Estilo casual" },
   { id: "novidades", label: "Novidades" },
@@ -53,7 +76,7 @@ export const BLOG_TOPICS: BlogTopic[] = [
 
 export const BLOG_AUTHOR: BlogAuthor = {
   name: "Time Marima",
-  role: "Conteúdo e curadoria",
+  role: "Conteudo e curadoria",
   avatar:
     "https://res.cloudinary.com/dxeooztro/image/upload/v1764855923/products/wm3vuf0hbfpmvf92ofma.png",
   location: "Volta Redonda, RJ",
@@ -62,175 +85,208 @@ export const BLOG_AUTHOR: BlogAuthor = {
 export const BLOG_COVER =
   "https://res.cloudinary.com/dpyrbbvjd/image/upload/v1768760004/AthleisureBanner_dzhuwp.png";
 
-export const BLOG_POSTS: BlogPostItem[] = [
-  {
-    slug: "legging-ideal-para-cada-treino",
-    title: "Como escolher a legging ideal para cada tipo de treino",
-    excerpt:
-      "Entenda quais modelos oferecem mais compressão, conforto e respirabilidade para musculação, corrida e funcional.",
-    dateISO: "2026-01-16",
-    topic: "guias",
-    topic2: "moda-fitness",
-    author: "Time Marima",
-    cover: BLOG_COVER,
-    featured: true,
-  },
-  {
-    slug: "top-alta-sustentacao-o-que-observar",
-    title: "Top de alta sustentação: o que observar antes de comprar",
-    excerpt:
-      "Suporte, tecido tecnológico e ajuste correto fazem diferença no desempenho e no conforto do treino.",
-    dateISO: "2026-01-12",
-    topic: "treino",
-    topic2: "tecnologia-textil",
-    author: "Time Marima",
-    cover: BLOG_COVER,
-  },
-  {
-    slug: "tecido-tecnologico-e-performance-real",
-    title: "Tecido tecnológico entrega performance de verdade?",
-    excerpt:
-      "Saiba como compressão, secagem rápida e respirabilidade impactam sua rotina fitness dentro e fora da academia.",
-    dateISO: "2026-01-08",
-    topic: "tecnologia-textil",
-    topic2: "novidades",
-    author: "Time Marima",
-    cover: BLOG_COVER,
-  },
-  {
-    slug: "look-fitness-para-dia-a-dia",
-    title: "Look fitness para o dia a dia: conforto sem perder estilo",
-    excerpt:
-      "Veja como montar combinações versáteis de tops, jaquetas, leggings e peças casuais para uma rotina dinâmica.",
-    dateISO: "2026-01-04",
-    topic: "estilo-casual",
-    author: "Time Marima",
-    cover: BLOG_COVER,
-  },
-  {
-    slug: "como-cuidar-das-pecas-fitness",
-    title: "Como cuidar das peças fitness para aumentar a durabilidade",
-    excerpt:
-      "Boas práticas de lavagem e secagem para preservar a elasticidade, cor e ajuste das suas peças por mais tempo.",
-    dateISO: "2025-12-28",
-    topic: "guias",
-    author: "Time Marima",
-    cover: BLOG_COVER,
-  },
-  {
-    slug: "frete-rastreio-e-transparencia-marima",
-    title: "Frete, rastreio e transparência: como funciona na Marima",
-    excerpt:
-      "Do carrinho à entrega, explicamos os pontos de acompanhamento para você comprar com mais segurança.",
-    dateISO: "2025-12-22",
-    topic: "marima",
-    topic2: "novidades",
-    author: "Time Marima",
-    cover: BLOG_COVER,
-  },
-  {
-    slug: "rotina-fitness-com-mais-confianca",
-    title: "Rotina fitness com mais confiança: peças certas para o seu objetivo",
-    excerpt:
-      "Escolher bem o caimento e o nível de compressão ajuda na mobilidade, no foco e na autoestima durante os treinos.",
-    dateISO: "2025-12-18",
-    topic: "bem-estar",
-    author: "Time Marima",
-    cover: BLOG_COVER,
-  },
-  {
-    slug: "novidades-marima-janeiro",
-    title: "Explorar novidades Marima: lançamentos do mês",
-    excerpt:
-      "Conheça os novos conjuntos, leggings e jaquetas da coleção com foco em conforto e performance.",
-    dateISO: "2025-12-14",
-    topic: "novidades",
-    author: "Time Marima",
-    cover: BLOG_COVER,
-  },
-];
+export const BLOG_ARTICLES: BlogArticle[] = [];
+export const BLOG_POSTS: BlogPostItem[] = [];
 
-export const BLOG_ARTICLES: BlogArticle[] = [
-  {
-    slug: "legging-ideal-para-cada-treino",
-    title: "Como escolher a legging ideal para cada tipo de treino",
-    excerpt:
-      "A legging certa melhora conforto, mobilidade e segurança no treino. O segredo está em tecido, compressão e ajuste.",
-    dateISO: "2026-01-16",
-    readingMinutes: 6,
-    topic: "guias",
-    author: "Time Marima",
-    cover: BLOG_COVER,
-    tags: ["legging", "compressão", "treino"],
-    content: [
-      {
-        type: "p",
-        text: "Na prática, não existe uma legging única para todos os treinos. Cada atividade pede níveis diferentes de sustentação e respirabilidade.",
-      },
-      { type: "h2", text: "O que avaliar antes da compra" },
-      {
-        type: "ul",
-        items: [
-          "Compressão adequada para reduzir transparência e aumentar firmeza",
-          "Tecido tecnológico com secagem rápida",
-          "Cós de alta sustentação para estabilidade",
-        ],
-      },
-      {
-        type: "p",
-        text: "Para treino funcional e corrida, prefira modelos com compressão média a alta. Para treinos leves e uso casual, opte por tecidos mais macios e flexíveis.",
-      },
-      {
-        type: "quote",
-        text: "A peça ideal é aquela que acompanha seu ritmo, sem apertar demais e sem perder sustentação ao longo do dia.",
-      },
-      { type: "h2", text: "Como acertar no tamanho" },
-      {
-        type: "p",
-        text: "Consulte a tabela de medidas e compare com uma peça que você já usa. O ajuste correto evita desconforto e melhora a performance.",
-      },
-    ],
-  },
-  {
-    slug: "tecido-tecnologico-e-performance-real",
-    title: "Tecido tecnológico entrega performance de verdade?",
-    excerpt:
-      "Mais do que tendência, tecidos certos reduzem desconfortos e melhoram o uso em treinos intensos e rotina corrida.",
-    dateISO: "2026-01-08",
-    readingMinutes: 7,
-    topic: "tecnologia-textil",
-    author: "Time Marima",
-    cover: BLOG_COVER,
-    tags: ["tecido tecnológico", "respirabilidade", "durabilidade"],
-    content: [
-      {
-        type: "p",
-        text: "Peças fitness de qualidade usam materiais pensados para respirabilidade, controle térmico e elasticidade com memória.",
-      },
-      { type: "h2", text: "Benefícios que você sente no uso" },
-      {
-        type: "ul",
-        items: [
-          "Menos sensação de umidade durante o treino",
-          "Maior conforto em movimentos amplos",
-          "Durabilidade superior mesmo com uso frequente",
-        ],
-      },
-      {
-        type: "p",
-        text: "Quando a modelagem e o tecido trabalham juntos, o caimento permanece estável e a peça mantém aparência premium por mais tempo.",
-      },
-      { type: "h2", text: "Como escolher com segurança" },
-      {
-        type: "p",
-        text: "Priorize marcas transparentes sobre composição, cuidados e política de troca. Isso reduz risco e melhora a experiência de compra.",
-      },
-    ],
-  },
-];
+function normalizeKey(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .trim();
+}
+
+const TOPIC_IDS = new Set(BLOG_TOPICS.map((topic) => topic.id));
+const TOPIC_LOOKUP = new Map<string, string>();
+
+for (const topic of BLOG_TOPICS) {
+  TOPIC_LOOKUP.set(normalizeKey(topic.id), topic.id);
+  TOPIC_LOOKUP.set(normalizeKey(topic.label), topic.id);
+}
+
+function normalizeTopic(topic: unknown, tags: string[] = []) {
+  if (typeof topic === "string" && TOPIC_IDS.has(topic)) {
+    return topic;
+  }
+
+  if (typeof topic === "string") {
+    const byTopicText = TOPIC_LOOKUP.get(normalizeKey(topic));
+    if (byTopicText) return byTopicText;
+  }
+
+  for (const tag of tags) {
+    const byTagText = TOPIC_LOOKUP.get(normalizeKey(tag));
+    if (byTagText) return byTagText;
+  }
+
+  return "novidades";
+}
+
+function toDateISO(rawDate: unknown) {
+  if (typeof rawDate !== "string" || !rawDate.trim()) return "";
+  const parsed = new Date(rawDate);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+}
+
+function sanitizeTags(tags: unknown) {
+  if (!Array.isArray(tags)) return [] as string[];
+  return tags.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+function estimateReadingMinutes(content: string, explicit?: number) {
+  if (typeof explicit === "number" && Number.isFinite(explicit) && explicit > 0) {
+    return Math.floor(explicit);
+  }
+  const words = String(content || "").trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.ceil(words / 200));
+}
+
+function parseContentBlocks(rawContent: string) {
+  const content = String(rawContent || "").replace(/\r/g, "").trim();
+  if (!content) {
+    return [{ type: "p", text: "Conteudo indisponivel." }] as BlogArticle["content"];
+  }
+
+  const blocks: BlogArticle["content"] = [];
+  const lines = content.split("\n");
+  const listBuffer: string[] = [];
+
+  function flushListBuffer() {
+    if (!listBuffer.length) return;
+    blocks.push({ type: "ul", items: [...listBuffer] });
+    listBuffer.length = 0;
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      flushListBuffer();
+      continue;
+    }
+
+    if (trimmed.startsWith("## ")) {
+      flushListBuffer();
+      blocks.push({ type: "h2", text: trimmed.slice(3).trim() });
+      continue;
+    }
+
+    if (trimmed.startsWith("- ")) {
+      listBuffer.push(trimmed.slice(2).trim());
+      continue;
+    }
+
+    if (trimmed.startsWith("> ")) {
+      flushListBuffer();
+      blocks.push({ type: "quote", text: trimmed.slice(2).trim() });
+      continue;
+    }
+
+    flushListBuffer();
+    blocks.push({ type: "p", text: trimmed });
+  }
+
+  flushListBuffer();
+
+  if (!blocks.length) {
+    return [{ type: "p", text: "Conteudo indisponivel." }] as BlogArticle["content"];
+  }
+
+  return blocks;
+}
+
+function toBlogPostItem(post: ApiPost): BlogPostItem {
+  const tags = sanitizeTags(post.tags);
+  const primaryTopic = normalizeTopic(post.topic, tags);
+  const secondaryTopic = post.topic2 ? normalizeTopic(post.topic2, tags) : undefined;
+
+  return {
+    slug: post.slug,
+    title: post.title,
+    excerpt: post.excerpt || "",
+    dateISO: toDateISO(post.publishedAt || post.createdAt),
+    topic: primaryTopic,
+    topic2: secondaryTopic && secondaryTopic !== primaryTopic ? secondaryTopic : undefined,
+    author: post.authorName || "Time Marima",
+    cover: post.coverImage || BLOG_COVER,
+    featured: Boolean(post.featured),
+  };
+}
+
+function toBlogArticle(post: ApiPost): BlogArticle {
+  const tags = sanitizeTags(post.tags);
+  const topic = normalizeTopic(post.topic, tags);
+  const content = String(post.content || post.excerpt || "").trim();
+
+  return {
+    slug: post.slug,
+    title: post.title,
+    excerpt: post.excerpt || "",
+    dateISO: toDateISO(post.publishedAt || post.createdAt),
+    readingMinutes: estimateReadingMinutes(content, post.readingMinutes),
+    topic,
+    author: post.authorName || "Time Marima",
+    cover: post.coverImage || BLOG_COVER,
+    tags,
+    content: parseContentBlocks(content),
+  };
+}
+
+async function requestBlogApi<T>(path: string): Promise<T | null> {
+  try {
+    const response = await fetch(buildApiUrl(path), { cache: "no-store" });
+    if (!response.ok) return null;
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchBlogPostsForListing(options?: { page?: number; limit?: number }) {
+  const page = options?.page ?? 1;
+  const limit = options?.limit ?? 48;
+  const response = await requestBlogApi<{ data: ApiPost[] }>(
+    `/api/v1/blog/posts?status=published&page=${page}&limit=${limit}`,
+  );
+
+  if (!response?.data?.length) {
+    return [] as BlogPostItem[];
+  }
+
+  return response.data.map(toBlogPostItem);
+}
+
+export async function fetchBlogArticleBySlug(slug: string) {
+  const response = await requestBlogApi<{ data: ApiPost }>(`/api/v1/blog/posts/${encodeURIComponent(slug)}`);
+  if (!response?.data) return null;
+  return toBlogArticle(response.data);
+}
+
+export async function fetchRelatedBlogPosts(currentSlug: string, limit = 5) {
+  const response = await requestBlogApi<{ data: ApiPost[] }>(
+    `/api/v1/blog/posts?status=published&page=1&limit=20`,
+  );
+
+  if (!response?.data?.length) {
+    return [] as BlogPostItem[];
+  }
+
+  return response.data.map(toBlogPostItem).filter((post) => post.slug !== currentSlug).slice(0, limit);
+}
+
+export function getBlogArticle(_slug: string) {
+  return null;
+}
+
+export function getRelatedPosts(_currentSlug: string) {
+  return [] as BlogPostItem[];
+}
 
 export function formatBlogDate(dateISO: string) {
-  const date = new Date(dateISO + "T00:00:00");
+  if (!dateISO) return "";
+  const date = new Date(`${dateISO}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return dateISO;
   return date.toLocaleDateString("pt-BR", {
     day: "2-digit",
     month: "short",
@@ -238,44 +294,56 @@ export function formatBlogDate(dateISO: string) {
   });
 }
 
-export function getBlogArticle(slug: string) {
-  const article = BLOG_ARTICLES.find((a) => a.slug === slug);
-  if (article) return article;
-
-  const fallback = BLOG_POSTS.find((p) => p.slug === slug);
-  if (!fallback) return BLOG_ARTICLES[0];
-
-  return {
-    slug: fallback.slug,
-    title: fallback.title,
-    excerpt: fallback.excerpt,
-    dateISO: fallback.dateISO,
-    readingMinutes: 5,
-    topic: fallback.topic,
-    author: fallback.author,
-    cover: fallback.cover,
-    tags: ["marima", "moda fitness", "novidades"],
-    content: [
-      { type: "p", text: fallback.excerpt },
-      { type: "h2", text: "Resumo do conteúdo" },
-      {
-        type: "p",
-        text: "Este artigo está em evolução e será atualizado com novos detalhes, exemplos e recomendações práticas.",
-      },
-      { type: "h2", text: "Próximos passos" },
-      {
-        type: "ul",
-        items: ["Adicionar fotos reais das peças", "Incluir comparativos", "Publicar dicas extras de uso"],
-      },
-    ],
-  } as BlogArticle;
-}
-
-export function getRelatedPosts(currentSlug: string) {
-  return BLOG_POSTS.filter((p) => p.slug !== currentSlug).slice(0, 5);
-}
-
 export function topicLabel(topicId: string) {
-  const t = BLOG_TOPICS.find((x) => x.id === topicId);
-  return t?.label ?? "Categoria";
+  const topic = BLOG_TOPICS.find((item) => item.id === topicId);
+  return topic?.label ?? "Categoria";
+}
+
+function createEmptyTopicCountMap(): BlogCategoryCountMap {
+  return BLOG_TOPICS.reduce((acc, topic) => {
+    acc[topic.id] = 0;
+    return acc;
+  }, {} as BlogCategoryCountMap);
+}
+
+function toSafeCount(value: unknown) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.floor(numeric));
+}
+
+function normalizeTopicId(value: unknown) {
+  if (typeof value !== "string") return "novidades";
+  const normalized = TOPIC_LOOKUP.get(normalizeKey(value));
+  return normalized || "novidades";
+}
+
+export async function fetchBlogCategoryCounts() {
+  const emptyCounts = createEmptyTopicCountMap();
+
+  try {
+    const response = await requestBlogApi<{
+      data?: {
+        counts?: Array<{ slug?: string; category?: string; count?: number }>;
+      };
+      counts?: Array<{ slug?: string; category?: string; count?: number }>;
+    }>("/api/v1/blog/categories/counts");
+
+    const responseCounts = Array.isArray(response?.data?.counts)
+      ? response?.data?.counts
+      : Array.isArray(response?.counts)
+        ? response?.counts
+        : [];
+
+    for (const item of responseCounts) {
+      const topicId = normalizeTopicId(item?.slug || item?.category);
+      emptyCounts[topicId] = emptyCounts[topicId] + toSafeCount(item?.count);
+    }
+  } catch {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[blog] Falha ao carregar contagem por categoria.");
+    }
+  }
+
+  return emptyCounts;
 }

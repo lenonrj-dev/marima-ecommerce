@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { CreditCard, Gift, Lock, Truck } from "lucide-react";
@@ -11,36 +11,38 @@ export default function CartDrawerFooter() {
   const empty = items.length === 0;
 
   return (
-    <div className="border-t border-zinc-200 px-5 py-4 sm:px-6">
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-zinc-600">Subtotal</span>
-        <span className="font-semibold text-zinc-900">{formatMoney(totals.subtotal)}</span>
+    <footer className="sticky bottom-0 border-t border-zinc-200 bg-white px-4 py-4 sm:px-6">
+      <div className="space-y-2 text-sm">
+        <div className="flex items-center justify-between">
+          <span className="text-zinc-600">Subtotal</span>
+          <span className="font-semibold text-zinc-900">{formatMoney(totals.subtotal)}</span>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <span className="text-zinc-600">Desconto</span>
+          <span className="font-semibold text-zinc-900">- {formatMoney(totals.discount)}</span>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <span className="inline-flex items-center gap-2 text-zinc-600">
+            <Truck className="h-4 w-4" />
+            Frete
+          </span>
+          <span className="font-semibold text-zinc-900">{formatMoney(totals.shipping)}</span>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <span className="text-zinc-600">Impostos (estimado)</span>
+          <span className="font-semibold text-zinc-900">{formatMoney(totals.tax)}</span>
+        </div>
       </div>
 
-      <div className="mt-2 flex items-center justify-between text-sm">
-        <span className="text-zinc-600">Desconto</span>
-        <span className="font-semibold text-zinc-900">- {formatMoney(totals.discount)}</span>
-      </div>
-
-      <div className="mt-2 flex items-center justify-between text-sm">
-        <span className="inline-flex items-center gap-2 text-zinc-600">
-          <Truck className="h-4 w-4" />
-          Frete
-        </span>
-        <span className="font-semibold text-zinc-900">{formatMoney(totals.shipping)}</span>
-      </div>
-
-      <div className="mt-2 flex items-center justify-between text-sm">
-        <span className="text-zinc-600">Impostos (estimado)</span>
-        <span className="font-semibold text-zinc-900">{formatMoney(totals.tax)}</span>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between text-base">
+      <div className="mt-3 flex items-center justify-between border-t border-zinc-100 pt-3">
         <span className="font-semibold text-zinc-900">Total</span>
         <span className="text-lg font-semibold text-zinc-900">{formatMoney(totals.total)}</span>
       </div>
 
-      <div className="mt-3 flex items-center gap-2 text-xs text-zinc-500">
+      <div className="mt-2 flex items-center gap-2 text-xs text-zinc-500">
         <Lock className="h-4 w-4" />
         SSL seguro • finalização protegida
         {isQuoting ? <span className="ml-auto">recalculando...</span> : null}
@@ -49,7 +51,7 @@ export default function CartDrawerFooter() {
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         <Link
           href="/produtos"
-          className="inline-flex h-11 items-center justify-center rounded-md border border-zinc-200 bg-white text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+          className="inline-flex h-11 items-center justify-center rounded-md border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
         >
           {SITE_COPY.ctas.continueShopping}
         </Link>
@@ -59,8 +61,8 @@ export default function CartDrawerFooter() {
           onClick={startCheckout}
           disabled={empty}
           className={[
-            "inline-flex h-11 items-center justify-center rounded-md bg-zinc-900 text-sm font-semibold text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20",
-            empty ? "cursor-not-allowed opacity-60" : "hover:bg-zinc-800",
+            "inline-flex h-11 items-center justify-center rounded-md px-4 text-sm font-semibold text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20",
+            empty ? "cursor-not-allowed bg-zinc-400" : "bg-zinc-900 hover:bg-zinc-800",
           ].join(" ")}
         >
           <CreditCard className="mr-2 h-4 w-4" />
@@ -81,7 +83,7 @@ export default function CartDrawerFooter() {
       <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
         <span className="inline-flex items-center gap-2">
           <Gift className="h-4 w-4" />
-          Frete grátis acima de {formatMoney(39990)}
+          Frete grátis acima de {formatMoney(29900)}
         </span>
 
         <button
@@ -92,7 +94,6 @@ export default function CartDrawerFooter() {
           Fechar
         </button>
       </div>
-    </div>
+    </footer>
   );
 }
-

@@ -1,6 +1,23 @@
-const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL;
+const RAW_PUBLIC_API_BASE = process.env.NEXT_PUBLIC_API_URL;
+const RAW_SERVER_API_BASE = process.env.API_URL;
+const PROXY_API_BASE = "/api";
 
-export const API_BASE = typeof RAW_API_BASE === "string" ? RAW_API_BASE.trim().replace(/\/$/, "") : "";
+function normalizeApiBase(base: string) {
+  return base.trim().replace(/\/+$/, "");
+}
+
+function resolveApiBase() {
+  const publicBase = typeof RAW_PUBLIC_API_BASE === "string" ? normalizeApiBase(RAW_PUBLIC_API_BASE) : "";
+  const serverBase = typeof RAW_SERVER_API_BASE === "string" ? normalizeApiBase(RAW_SERVER_API_BASE) : "";
+
+  if (typeof window === "undefined") {
+    return publicBase || serverBase || PROXY_API_BASE;
+  }
+
+  return publicBase || PROXY_API_BASE;
+}
+
+export const API_BASE = resolveApiBase();
 
 let warnedMissingApiBase = false;
 
@@ -8,13 +25,13 @@ function getApiBase() {
   if (!API_BASE) {
     if (typeof window !== "undefined" && !warnedMissingApiBase) {
       warnedMissingApiBase = true;
-      console.error("NEXT_PUBLIC_API_URL não configurado.");
+      console.error("NEXT_PUBLIC_API_URL nao configurado. Usando fallback relativo /api.");
     }
-    throw new Error("NEXT_PUBLIC_API_URL não configurado.");
+    return PROXY_API_BASE;
   }
 
-  if (process.env.NODE_ENV === "production" && API_BASE.startsWith("http://")) {
-    throw new Error("Config inválida: NEXT_PUBLIC_API_URL deve ser HTTPS em produção.");
+  if (process.env.NODE_ENV === "production" && /^http:\/\//i.test(API_BASE)) {
+    throw new Error("Config invalida: a base da API deve usar HTTPS em producao.");
   }
 
   return API_BASE;
@@ -32,6 +49,7 @@ export type ApiListResponse<T> = {
 
 type ApiFetchOptions = RequestInit & {
   query?: Record<string, string | number | boolean | undefined | null>;
+  skipAuthRedirect?: boolean;
 };
 
 export class HttpError extends Error {
@@ -103,6 +121,26 @@ function withQuery(path: string, query?: ApiFetchOptions["query"]) {
   return qs ? `${path}?${qs}` : path;
 }
 
+function isAbsoluteUrl(value: string) {
+  return /^https?:\/\//i.test(value);
+}
+
+function joinApiPath(base: string, path: string) {
+  if (isAbsoluteUrl(path)) return path;
+
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  if (!base) return normalizedPath;
+
+  const normalizedBase = normalizeApiBase(base);
+
+  // Evita "/api/api/*" quando o path ja inclui o prefixo da API.
+  if (normalizedBase.endsWith("/api") && normalizedPath.startsWith("/api/")) {
+    return `${normalizedBase}${normalizedPath.slice(4)}`;
+  }
+
+  return `${normalizedBase}${normalizedPath}`;
+}
+
 function isJsonContentType(contentType: string | null) {
   return (contentType || "").toLowerCase().includes("application/json");
 }
@@ -115,25 +153,26 @@ function getPayloadCode(payload: unknown) {
 }
 
 export function buildApiUrl(path: string, query?: ApiFetchOptions["query"]) {
-  return `${getApiBase()}${withQuery(path, query)}`;
+  return joinApiPath(getApiBase(), withQuery(path, query));
 }
 
 export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+  const { query, skipAuthRedirect = false, ...requestOptions } = options;
   const base = getApiBase();
-  const url = `${base}${withQuery(path, options.query)}`;
-  const hasJsonBody = typeof options.body === "string";
+  const url = joinApiPath(base, withQuery(path, query));
+  const hasJsonBody = typeof requestOptions.body === "string";
   const skipNgrokWarning = base.includes("ngrok");
   const headers = {
     ...(skipNgrokWarning ? { "ngrok-skip-browser-warning": "true" } : {}),
     ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
-    ...(options.headers || {}),
+    ...(requestOptions.headers || {}),
   };
 
   const response = await fetch(url, {
-    ...options,
+    ...requestOptions,
     headers,
     credentials: "include",
-    cache: options.cache ?? "no-store",
+    cache: requestOptions.cache ?? "no-store",
   });
 
   const contentType = response.headers.get("content-type");
@@ -143,10 +182,10 @@ export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptio
     const code = getPayloadCode(payload);
     const message =
       typeof payload === "object" && payload !== null && "message" in payload
-        ? String((payload as Record<string, unknown>).message || "Falha na requisição")
-        : "Falha na requisição";
+        ? String((payload as Record<string, unknown>).message || "Falha na requisicao")
+        : "Falha na requisicao";
 
-    if (response.status === 401 && code !== "AUTH_INVALID_CREDENTIALS") {
+    if (!skipAuthRedirect && response.status === 401 && code !== "AUTH_INVALID_CREDENTIALS") {
       if (code === "AUTH_EXPIRED" || code === undefined) {
         emitAuthExpired({ status: response.status, code, message, path });
       }
@@ -154,7 +193,7 @@ export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptio
 
     const finalMessage =
       response.status === 401 && (code === "AUTH_EXPIRED" || code === undefined)
-        ? "Sua sessão expirou. Faça login novamente para continuar."
+        ? "Sua sessao expirou. Faca login novamente para continuar."
         : message;
 
     throw new HttpError(response.status, finalMessage, payload);
@@ -162,4 +201,3 @@ export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptio
 
   return payload as T;
 }
-

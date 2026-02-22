@@ -58,7 +58,7 @@ export default function HelpSidebar({ active }: { active: HelpTopicSlug }) {
           Se preferir, fale com nosso suporte e resolvemos com você.
         </p>
         <Link
-          href="mailto:suporte.marima.loja@gmail.com"
+          href="https://wa.me/5524981467489?text=Ola!%20Vim%20pelo%20site%20da%20Marima%20e%20quero%20saber%20das%20promocoes."
           className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-md bg-zinc-900 text-sm font-semibold text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
         >
           Falar com suporte
@@ -67,4 +67,5 @@ export default function HelpSidebar({ active }: { active: HelpTopicSlug }) {
       </div>
     </aside>
   );
-}
+}
+

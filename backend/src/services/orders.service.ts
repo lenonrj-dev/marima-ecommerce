@@ -1,4 +1,4 @@
-ï»¿import { FilterQuery, Types } from "mongoose";
+import { FilterQuery, Types } from "../lib/dbCompat";
 import { CartModel } from "../models/Cart";
 import { InventoryMovementModel } from "../models/InventoryMovement";
 import { OrderModel, OrderStatus } from "../models/Order";
@@ -10,6 +10,7 @@ import { validateCoupon, registerCouponRedemption } from "./coupons.service";
 import { grantCashbackForOrder } from "./cashback.service";
 import { refreshCustomerMetrics } from "./customers.service";
 import { markCartConverted } from "./carts.service";
+import { bumpProductsListVersion, invalidateProductCacheByIdentity } from "./products.service";
 
 function toOrder(order: any) {
   return {
@@ -70,12 +71,12 @@ const FREE_SHIPPING_THRESHOLD_CENTS = 29900;
 const SHIPPING_METHODS: Record<string, { id: string; label: string; priceCents: number }> = {
   "sul-fluminense": {
     id: "sul-fluminense",
-    label: "Envio rÃ¡pido Sul Fluminense",
+    label: "Envio rápido Sul Fluminense",
     priceCents: 1290,
   },
   "padrao-br": {
     id: "padrao-br",
-    label: "Envio padrÃ£o nacional",
+    label: "Envio padrão nacional",
     priceCents: 1990,
   },
   expresso: {
@@ -134,13 +135,13 @@ export async function listAdminOrders(input: {
 
 export async function getAdminOrderById(id: string) {
   const order = await OrderModel.findById(id);
-  if (!order) throw new ApiError(404, "Pedido nÃ£o encontrado.");
+  if (!order) throw new ApiError(404, "Pedido não encontrado.");
   return toOrder(order);
 }
 
 export async function updateOrderStatus(id: string, status: OrderStatus) {
   const order = await OrderModel.findById(id);
-  if (!order) throw new ApiError(404, "Pedido nÃ£o encontrado.");
+  if (!order) throw new ApiError(404, "Pedido não encontrado.");
 
   order.status = status;
   await order.save();
@@ -165,7 +166,7 @@ export async function listMeOrders(customerId: string, input: { page: number; li
 
 export async function getMeOrderById(customerId: string, orderId: string) {
   const order = await OrderModel.findOne({ _id: orderId, customerId });
-  if (!order) throw new ApiError(404, "Pedido nÃ£o encontrado.");
+  if (!order) throw new ApiError(404, "Pedido não encontrado.");
   return toOrder(order);
 }
 
@@ -199,14 +200,14 @@ export async function createStoreOrder(input: {
   const productIds = input.items.map((item) => item.id);
   const products = await ProductModel.find({ _id: { $in: productIds }, active: true });
   if (products.length !== input.items.length) {
-    throw new ApiError(400, "Um ou mais produtos do pedido nÃ£o foram encontrados.");
+    throw new ApiError(400, "Um ou mais produtos do pedido não foram encontrados.");
   }
 
   const itemRows: any[] = [];
 
   for (const requested of input.items) {
     const product = products.find((row) => String(row._id) === requested.id);
-    if (!product) throw new ApiError(400, "Produto invÃ¡lido no pedido.");
+    if (!product) throw new ApiError(400, "Produto inválido no pedido.");
 
     const qty = Math.max(1, Math.floor(requested.qty));
 
@@ -230,7 +231,7 @@ export async function createStoreOrder(input: {
         return active && label.toLocaleLowerCase("pt-BR") === normalized;
       });
 
-      if (!row) throw new ApiError(400, `Tamanho invÃ¡lido para ${product.name}.`);
+      if (!row) throw new ApiError(400, `Tamanho inválido para ${product.name}.`);
 
       sizeLabel = String(row.label || rawLabel).trim();
       availableStock = Math.max(0, Math.floor(Number(row.stock ?? 0)));
@@ -284,7 +285,7 @@ export async function createStoreOrder(input: {
     email: input.address.email.toLowerCase(),
     status: "pendente",
     channel: input.channel || "Site",
-    shippingMethod: shippingMethod?.label || input.shippingMethod || "PadrÃ£o",
+    shippingMethod: shippingMethod?.label || input.shippingMethod || "Padrão",
     paymentMethod: input.paymentMethod || "Pix",
     items: itemRows.map((row) => row.payload),
     itemsCount: itemRows.reduce((acc, row) => acc + row.payload.qty, 0),
@@ -297,6 +298,8 @@ export async function createStoreOrder(input: {
     cashbackUsedCents: input.cashbackUsedCents || 0,
     address: input.address,
   });
+
+  const touchedProducts = new Map<string, string>();
 
   for (const row of itemRows) {
     const qty = Math.max(1, Math.floor(Number(row.payload.qty)));
@@ -323,6 +326,7 @@ export async function createStoreOrder(input: {
     }
 
     await row.product.save();
+    touchedProducts.set(String(row.product._id), String(row.product.slug || ""));
 
     await InventoryMovementModel.create({
       productId: row.product._id,
@@ -332,6 +336,19 @@ export async function createStoreOrder(input: {
       createdBy: input.customerId || "sistema",
       sizeLabel,
     });
+  }
+
+  if (touchedProducts.size > 0) {
+    await Promise.all(
+      Array.from(touchedProducts.entries()).map(([id, slug]) =>
+        invalidateProductCacheByIdentity({
+          id,
+          slug,
+          bumpListVersion: false,
+        }),
+      ),
+    );
+    await bumpProductsListVersion();
   }
 
   if (finalize) {
@@ -369,14 +386,14 @@ export async function createStoreOrder(input: {
 
 export async function createOrderFromCart(cartId: string) {
   const cart = await CartModel.findById(cartId);
-  if (!cart) throw new ApiError(404, "Carrinho nÃ£o encontrado.");
+  if (!cart) throw new ApiError(404, "Carrinho não encontrado.");
   if (!cart.items.length) throw new ApiError(400, "Carrinho sem itens.");
 
   const order = await createStoreOrder({
     customerId: cart.customerId ? String(cart.customerId) : undefined,
     cartId: String(cart._id),
     channel: "Site",
-    shippingMethod: "PadrÃ£o",
+    shippingMethod: "Padrão",
     paymentMethod: "Pix",
     couponCode: cart.couponCode,
     items: cart.items.map((item: any) => ({
@@ -403,3 +420,4 @@ export async function createOrderFromCart(cartId: string) {
 }
 
 export { toOrder };
+

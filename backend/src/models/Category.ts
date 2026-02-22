@@ -1,15 +1,13 @@
-﻿import { InferSchemaType, Schema, model, models } from "mongoose";
+import { createDocumentModel } from "../lib/documentModel";
 
-const categorySchema = new Schema(
-  {
-    name: { type: String, required: true, trim: true, unique: true },
-    slug: { type: String, required: true, trim: true, unique: true, index: true },
-    active: { type: Boolean, default: true, index: true },
-    sortOrder: { type: Number, default: 0 },
-  },
-  { timestamps: true },
-);
+export type CategoryDocument = {
+  _id: string;
+  name: string;
+  slug: string;
+  active: boolean;
+  sortOrder?: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
 
-export type CategoryDocument = InferSchemaType<typeof categorySchema>;
-
-export const CategoryModel = models.Category || model("Category", categorySchema);
+export const CategoryModel = createDocumentModel("Category");

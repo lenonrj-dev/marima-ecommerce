@@ -1,4 +1,4 @@
-﻿import { OrderModel } from "../models/Order";
+import { OrderModel } from "../models/Order";
 import { ProductModel } from "../models/Product";
 import { CustomerModel } from "../models/Customer";
 import { fromCents } from "../utils/money";

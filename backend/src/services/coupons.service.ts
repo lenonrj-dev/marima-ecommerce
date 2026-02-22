@@ -1,4 +1,4 @@
-ï»¿import { FilterQuery } from "mongoose";
+import { FilterQuery } from "../lib/dbCompat";
 import { CouponModel } from "../models/Coupon";
 import { ApiError } from "../utils/apiError";
 import { buildMeta } from "../utils/pagination";
@@ -56,7 +56,7 @@ export async function createCoupon(input: {
 }) {
   const code = input.code.trim().toUpperCase();
   const exists = await CouponModel.findOne({ code });
-  if (exists) throw new ApiError(409, "Cupom jÃ¡ existe.");
+  if (exists) throw new ApiError(409, "Cupom já existe.");
 
   const created = await CouponModel.create({
     code,
@@ -87,7 +87,7 @@ export async function updateCoupon(
   }>,
 ) {
   const coupon = await CouponModel.findById(id);
-  if (!coupon) throw new ApiError(404, "Cupom nÃ£o encontrado.");
+  if (!coupon) throw new ApiError(404, "Cupom não encontrado.");
 
   if (input.description !== undefined) coupon.description = input.description.trim();
   if (input.type !== undefined) coupon.type = input.type;
@@ -104,7 +104,7 @@ export async function updateCoupon(
 
 export async function toggleCoupon(id: string) {
   const coupon = await CouponModel.findById(id);
-  if (!coupon) throw new ApiError(404, "Cupom nÃ£o encontrado.");
+  if (!coupon) throw new ApiError(404, "Cupom não encontrado.");
 
   coupon.active = !coupon.active;
   await coupon.save();
@@ -115,12 +115,12 @@ export async function toggleCoupon(id: string) {
 export async function validateCoupon(code: string, subtotalCents: number) {
   const normalized = code.trim().toUpperCase();
   const coupon = await CouponModel.findOne({ code: normalized, active: true });
-  if (!coupon) throw new ApiError(404, "Cupom nÃ£o encontrado.");
+  if (!coupon) throw new ApiError(404, "Cupom não encontrado.");
 
   const now = new Date();
-  if (coupon.startsAt > now || coupon.endsAt < now) throw new ApiError(400, "Cupom invÃ¡lido para o perÃ­odo atual.");
+  if (coupon.startsAt > now || coupon.endsAt < now) throw new ApiError(400, "Cupom inválido para o período atual.");
   if (coupon.maxUses && coupon.uses >= coupon.maxUses) throw new ApiError(400, "Cupom sem saldo de usos.");
-  if (coupon.minSubtotalCents && subtotalCents < coupon.minSubtotalCents) throw new ApiError(400, "Subtotal mÃ­nimo nÃ£o atingido.");
+  if (coupon.minSubtotalCents && subtotalCents < coupon.minSubtotalCents) throw new ApiError(400, "Subtotal mínimo não atingido.");
 
   let discountCents = 0;
   if (coupon.type === "percent") discountCents = Math.round(subtotalCents * (coupon.amount / 100));
@@ -154,3 +154,4 @@ export async function registerCouponRedemption(input: {
 }
 
 export { toCoupon };
+

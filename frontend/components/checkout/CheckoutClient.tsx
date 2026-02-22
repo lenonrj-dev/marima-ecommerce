@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import CheckoutHeader from "@/components/checkout/CheckoutHeader";
 import CheckoutShell from "@/components/checkout/CheckoutShell";
 import CheckoutSteps from "@/components/checkout/CheckoutSteps";
@@ -17,9 +18,14 @@ import {
 } from "@/lib/checkoutData";
 import MercadoPagoWalletBrick from "@/components/checkout/MercadoPagoWalletBrick";
 import { cancelPendingMercadoPagoOrder } from "@/lib/payments/mercadoPago";
+import { buildLoginUrl, isAuthenticated } from "@/lib/authSession";
 
 export default function CheckoutClient() {
+  const router = useRouter();
+  const pathname = usePathname();
   const { isHydrated, coupon, items } = useCart();
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isAuthed, setIsAuthed] = useState(false);
   const [values, setValues] = useState<CheckoutFormValues>(DEFAULT_CHECKOUT_VALUES);
   const [shippingMethod, setShippingMethod] = useState(SHIPPING_METHODS[0]?.id ?? "");
   const [paymentInput, setPaymentInput] = useState<{
@@ -39,6 +45,28 @@ export default function CheckoutClient() {
     };
   } | null>(null);
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
+  const nextPath = pathname || "/checkout";
+
+  useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      const authed = await isAuthenticated();
+      if (!active) return;
+
+      if (!authed) {
+        router.replace(buildLoginUrl(nextPath || "/checkout"));
+        return;
+      }
+
+      setIsAuthed(true);
+      setAuthChecked(true);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [nextPath, router]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -85,6 +113,12 @@ export default function CheckoutClient() {
   }
 
   async function handleContinueToPayment() {
+    const authed = await isAuthenticated();
+    if (!authed) {
+      router.push(buildLoginUrl(nextPath || "/checkout"));
+      return;
+    }
+
     if (items.length === 0) {
       setPaymentMessage("Seu carrinho está vazio. Adicione produtos antes de continuar.");
       return;
@@ -118,6 +152,20 @@ export default function CheckoutClient() {
       },
     });
     setPaymentMessage(null);
+  }
+
+  if (!authChecked) {
+    return (
+      <section className="mx-auto w-full max-w-[1180px] px-4 py-10 sm:px-6 lg:px-8">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 shadow-soft">
+          Validando sua sessão...
+        </div>
+      </section>
+    );
+  }
+
+  if (!isAuthed) {
+    return null;
   }
 
   if (!isHydrated) {

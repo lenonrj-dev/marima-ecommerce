@@ -13,6 +13,7 @@ import {
 import { useRouter } from "next/navigation";
 import type { Product } from "@/lib/productsData";
 import { apiFetch, HttpError, onAuthExpired } from "@/lib/api";
+import { buildLoginUrl, isAuthenticated } from "@/lib/authSession";
 import {
   INITIAL_CART_STATE,
   type CartItem,
@@ -41,6 +42,7 @@ type CheckoutDraft = {
 
 type CartContextValue = {
   isHydrated: boolean;
+  isCustomer: boolean;
   isOpen: boolean;
   open: () => void;
   close: () => void;
@@ -53,6 +55,12 @@ type CartContextValue = {
   totals: CartTotals;
   coupon: string | null;
   isQuoting: boolean;
+  couponLoading: boolean;
+  couponStatus: "idle" | "success" | "error";
+  saveLoading: boolean;
+  shareLoading: boolean;
+  shareUrl: string | null;
+  shareExpiresAt: string | null;
   error: string | null;
   setError: (value: string | null) => void;
 
@@ -62,7 +70,11 @@ type CartContextValue = {
   setQty: (itemId: string, qty: number) => void;
   clear: () => void;
 
-  applyCoupon: (code: string) => void;
+  applyCoupon: (code: string) => Promise<boolean>;
+  removeCoupon: () => Promise<boolean>;
+  saveCart: () => Promise<boolean>;
+  shareCart: () => Promise<string | null>;
+  importSharedCart: (token: string) => Promise<boolean>;
 
   checkoutDraft: CheckoutDraft;
   updateCheckoutDraft: (patch: Partial<CheckoutDraft>) => void;
@@ -119,11 +131,20 @@ type ApiFavorite = {
   price: number;
 };
 
+type ApiCartShare = {
+  token: string;
+  savedCartId?: string;
+  path: string;
+  url: string;
+  expiresAt: string;
+};
+
 const CartContext = createContext<CartContextValue | null>(null);
 const FavoritesContext = createContext<FavoritesContextValue | null>(null);
 
 const MONGO_ID_REGEX = /^[a-f\d]{24}$/i;
 const AUTH_CHANGED_EVENT = "marima:auth-changed";
+const CART_CHANGED_EVENT = "marima:cart-changed";
 
 function isMongoId(value: string) {
   return MONGO_ID_REGEX.test(value);
@@ -182,6 +203,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [favoritesState, dispatchFavorites] = useReducer(favoritesReducer, INITIAL_FAVORITES_STATE);
   const [isOpen, setIsOpen] = useState(false);
   const [coupon, setCoupon] = useState<string | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponStatus, setCouponStatus] = useState<"idle" | "success" | "error">("idle");
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareExpiresAt, setShareExpiresAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isQuoting] = useState(false);
   const [isCustomer, setIsCustomer] = useState(false);
@@ -208,6 +235,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setServerTotals(normalizeTotalsFromApi(cart));
     setCoupon(cart.couponCode || null);
     setCartId(cart.id || null);
+    setCouponStatus("idle");
   }, []);
 
   const forceLogout = useCallback(
@@ -293,11 +321,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       void hydrateFromBackend();
     }
 
+    function onCartChanged() {
+      void hydrateFromBackend();
+    }
+
     window.addEventListener(AUTH_CHANGED_EVENT, onAuthChanged);
+    window.addEventListener(CART_CHANGED_EVENT, onCartChanged);
 
     return () => {
       active = false;
       window.removeEventListener(AUTH_CHANGED_EVENT, onAuthChanged);
+      window.removeEventListener(CART_CHANGED_EVENT, onCartChanged);
     };
   }, [syncCartFromApi]);
 
@@ -444,27 +478,163 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [cartState.items, syncCartFromApi]);
 
   const applyCoupon = useCallback(
-    (code: string) => {
+    async (code: string) => {
       const normalized = code.trim().toUpperCase();
-      setCoupon(normalized || null);
+      if (!normalized) {
+        setCouponStatus("error");
+        setError("Digite um cupom para aplicar.");
+        return false;
+      }
+
+      setCouponLoading(true);
+      setCouponStatus("idle");
       setError(null);
 
-      void (async () => {
-        try {
-          const response = await apiFetch<{ data: ApiCart }>("/api/v1/me/cart/apply-coupon", {
-            method: "POST",
-            body: JSON.stringify({ code: normalized }),
-          });
+      try {
+        const response = await apiFetch<{ data: ApiCart }>("/api/v1/me/cart/apply-coupon", {
+          method: "POST",
+          body: JSON.stringify({ code: normalized }),
+        });
 
-          syncCartFromApi(response.data);
-        } catch (err) {
-          if (err instanceof HttpError) {
-            setError(err.message || "Não foi possível aplicar o cupom.");
-          } else {
-            setError("Não foi possível aplicar o cupom.");
-          }
+        syncCartFromApi(response.data);
+        setCoupon(response.data.couponCode || normalized);
+        setCouponStatus("success");
+        return true;
+      } catch (err) {
+        setCouponStatus("error");
+        if (err instanceof HttpError) {
+          setError(err.message || "Não foi possível aplicar o cupom.");
+        } else {
+          setError("Não foi possível aplicar o cupom.");
         }
-      })();
+        return false;
+      } finally {
+        setCouponLoading(false);
+      }
+    },
+    [syncCartFromApi],
+  );
+
+  const removeCoupon = useCallback(async () => {
+    setCouponLoading(true);
+    setCouponStatus("idle");
+    setError(null);
+
+    try {
+      const response = await apiFetch<{ data: ApiCart }>("/api/v1/me/cart/remove-coupon", {
+        method: "POST",
+      });
+      syncCartFromApi(response.data);
+      setCoupon(null);
+      setCouponStatus("success");
+      return true;
+    } catch (err) {
+      setCouponStatus("error");
+      if (err instanceof HttpError) {
+        setError(err.message || "Não foi possível remover o cupom.");
+      } else {
+        setError("Não foi possível remover o cupom.");
+      }
+      return false;
+    } finally {
+      setCouponLoading(false);
+    }
+  }, [syncCartFromApi]);
+
+  const saveCart = useCallback(async () => {
+    if (!isCustomer) {
+      setError("Entre na sua conta para salvar o carrinho.");
+      router.push("/login");
+      return false;
+    }
+
+    if (cartState.items.length === 0) {
+      setError("Adicione produtos antes de salvar o carrinho.");
+      return false;
+    }
+
+    setSaveLoading(true);
+    setError(null);
+    try {
+      await apiFetch("/api/v1/me/cart/saved", { method: "POST" });
+      return true;
+    } catch (err) {
+      if (err instanceof HttpError) {
+        setError(err.message || "Não foi possível salvar o carrinho.");
+      } else {
+        setError("Não foi possível salvar o carrinho.");
+      }
+      return false;
+    } finally {
+      setSaveLoading(false);
+    }
+  }, [cartState.items.length, isCustomer, router]);
+
+  const shareCart = useCallback(async () => {
+    if (!isCustomer) {
+      setError("Faça login para compartilhar seu carrinho.");
+      router.push("/login");
+      return null;
+    }
+
+    if (cartState.items.length === 0) {
+      setError("Adicione produtos antes de compartilhar o carrinho.");
+      return null;
+    }
+
+    setShareLoading(true);
+    setError(null);
+
+    try {
+      const saved = await apiFetch<{ data: { id: string } }>("/api/v1/me/cart/saved", {
+        method: "POST",
+      });
+      const savedCartId = saved.data?.id;
+
+      if (!savedCartId) {
+        throw new Error("Carrinho salvo inválido.");
+      }
+
+      const response = await apiFetch<{ data: ApiCartShare }>(`/api/v1/me/cart/saved/${savedCartId}/share`, {
+        method: "POST",
+      });
+      const nextUrl = response.data.path || response.data.url;
+      setShareUrl(nextUrl);
+      setShareExpiresAt(response.data.expiresAt || null);
+      return nextUrl;
+    } catch (err) {
+      if (err instanceof HttpError) {
+        setError(err.message || "Não foi possível compartilhar o carrinho.");
+      } else {
+        setError("Não foi possível compartilhar o carrinho.");
+      }
+      return null;
+    } finally {
+      setShareLoading(false);
+    }
+  }, [cartState.items.length, isCustomer, router]);
+
+  const importSharedCart = useCallback(
+    async (token: string) => {
+      const normalized = token.trim();
+      if (!normalized) return false;
+
+      setError(null);
+      try {
+        const response = await apiFetch<{ data: { cart: ApiCart } }>(`/api/v1/cart/shared/${normalized}/import`, {
+          method: "POST",
+        });
+        syncCartFromApi(response.data.cart);
+        window.dispatchEvent(new Event(CART_CHANGED_EVENT));
+        return true;
+      } catch (err) {
+        if (err instanceof HttpError) {
+          setError(err.message || "Não foi possível importar o carrinho compartilhado.");
+        } else {
+          setError("Não foi possível importar o carrinho compartilhado.");
+        }
+        return false;
+      }
     },
     [syncCartFromApi],
   );
@@ -475,7 +645,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const startCheckout = useCallback(() => {
     close();
-    router.push("/checkout");
+    void (async () => {
+      const authed = await isAuthenticated();
+      if (!authed) {
+        router.push(buildLoginUrl("/checkout"));
+        return;
+      }
+      router.push("/checkout");
+    })();
   }, [close, router]);
 
   const favoriteIds = useMemo(
@@ -636,6 +813,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const cartValue = useMemo<CartContextValue>(
     () => ({
       isHydrated,
+      isCustomer,
       isOpen,
       open,
       close,
@@ -647,6 +825,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       totals,
       coupon,
       isQuoting,
+      couponLoading,
+      couponStatus,
+      saveLoading,
+      shareLoading,
+      shareUrl,
+      shareExpiresAt,
       error,
       setError,
       addItem,
@@ -655,12 +839,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setQty,
       clear,
       applyCoupon,
+      removeCoupon,
+      saveCart,
+      shareCart,
+      importSharedCart,
       checkoutDraft,
       updateCheckoutDraft,
       startCheckout,
     }),
     [
       isHydrated,
+      isCustomer,
       isOpen,
       open,
       close,
@@ -671,6 +860,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       totals,
       coupon,
       isQuoting,
+      couponLoading,
+      couponStatus,
+      saveLoading,
+      shareLoading,
+      shareUrl,
+      shareExpiresAt,
       error,
       addItem,
       addProduct,
@@ -678,6 +873,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setQty,
       clear,
       applyCoupon,
+      removeCoupon,
+      saveCart,
+      shareCart,
+      importSharedCart,
       checkoutDraft,
       updateCheckoutDraft,
       startCheckout,

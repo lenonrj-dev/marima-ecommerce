@@ -1,6 +1,5 @@
 ﻿import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import ProductListToolbar from "@/components/products/ProductListToolbar";
 import ProductDetailsMain from "@/components/products/details/ProductDetailsMain";
 import ProductDetailsTabs from "@/components/products/details/ProductDetailsTabs";
 import MoreNeeds from "@/components/products/MoreNeeds";
@@ -61,7 +60,6 @@ export default async function ProdutoDetalhesPage({ params }: { params: Params }
 
   return (
     <main className="min-h-[60vh] bg-white">
-      <ProductListToolbar />
       <ProductDetailsMain product={product} variants={variants} />
       <ProductDetailsTabs product={product} />
       <MoreNeeds products={related} currentSlug={product.slug} />

@@ -1,37 +1,24 @@
-﻿import { InferSchemaType, Schema, Types, model, models } from "mongoose";
+import { createDocumentModel } from "../lib/documentModel";
 
-const supportMessageSchema = new Schema(
-  {
-    authorType: { type: String, enum: ["customer", "agent"], required: true },
-    authorId: { type: Types.ObjectId },
-    authorName: { type: String, trim: true },
-    message: { type: String, required: true, trim: true },
-    createdAt: { type: Date, default: Date.now },
-  },
-  { _id: true },
-);
+export type SupportTicketDocument = {
+  _id: string;
+  code: string;
+  customerId?: string;
+  subject: string;
+  customerName: string;
+  email: string;
+  status?: "aberto" | "em_andamento" | "resolvido";
+  priority?: "baixa" | "media" | "alta";
+  messages?: Array<{
+    _id?: string;
+    authorType: "customer" | "agent";
+    authorId?: string;
+    authorName?: string;
+    message: string;
+    createdAt?: Date;
+  }>;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
 
-const supportTicketSchema = new Schema(
-  {
-    code: { type: String, required: true, unique: true, index: true },
-    customerId: { type: Types.ObjectId, ref: "Customer", index: true },
-    subject: { type: String, required: true, trim: true },
-    customerName: { type: String, required: true, trim: true },
-    email: { type: String, required: true, trim: true, lowercase: true },
-    status: {
-      type: String,
-      enum: ["aberto", "em_andamento", "resolvido"],
-      default: "aberto",
-      index: true,
-    },
-    priority: { type: String, enum: ["baixa", "media", "alta"], default: "media", index: true },
-    messages: { type: [supportMessageSchema], default: [] },
-  },
-  { timestamps: true },
-);
-
-supportTicketSchema.index({ createdAt: -1, status: 1 });
-
-export type SupportTicketDocument = InferSchemaType<typeof supportTicketSchema>;
-
-export const SupportTicketModel = models.SupportTicket || model("SupportTicket", supportTicketSchema);
+export const SupportTicketModel = createDocumentModel("SupportTicket");

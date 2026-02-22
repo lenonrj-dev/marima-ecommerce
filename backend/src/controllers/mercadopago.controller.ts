@@ -1,10 +1,9 @@
-import { randomUUID } from "crypto";
 import { Request, Response } from "express";
 import { asyncHandler } from "../middlewares/notFound";
 import { requireRole } from "../middlewares/rbac";
-import { requireAdminAuth, optionalAuth } from "../middlewares/auth";
-import { GUEST_CART_COOKIE } from "../services/carts.service";
+import { requireAdminAuth, requireCustomerAuth } from "../middlewares/auth";
 import { cookieBaseOptions, cookieOptions } from "../utils/cookies";
+import { ApiError } from "../utils/apiError";
 import {
   cancelMercadoPagoOrder,
   createMercadoPagoCheckoutPro,
@@ -14,24 +13,17 @@ import {
 
 const MP_CANCEL_TOKEN_COOKIE = "mp_cancel_token";
 
-function resolveCartIdentity(req: Request, res: Response) {
+function resolveCartIdentity(req: Request) {
   if (req.auth?.type === "customer") {
     return { customerId: req.auth.sub };
   }
-
-  let guestToken = req.cookies?.[GUEST_CART_COOKIE] as string | undefined;
-  if (!guestToken) {
-    guestToken = randomUUID();
-    res.cookie(GUEST_CART_COOKIE, guestToken, cookieOptions(req, 30 * 24 * 60 * 60 * 1000));
-  }
-
-  return { guestToken };
+  throw new ApiError(401, "Acesso do cliente não autenticado.", "AUTH_REQUIRED");
 }
 
 export const mercadoPagoCheckoutProHandler = [
-  optionalAuth,
+  requireCustomerAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const identity = resolveCartIdentity(req, res);
+    const identity = resolveCartIdentity(req);
 
     const data = await createMercadoPagoCheckoutPro({
       identity,

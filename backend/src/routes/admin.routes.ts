@@ -1,4 +1,4 @@
-﻿import { Router } from "express";
+import { Router } from "express";
 import { z } from "zod";
 import { requireAdminAuth } from "../middlewares/auth";
 import { requireRole } from "../middlewares/rbac";
@@ -67,6 +67,11 @@ import {
   analyticsRevenueSeriesHandler,
 } from "../controllers/analytics.controller";
 import {
+  deleteAdminReviewHandler,
+  listAdminReviewsHandler,
+  patchAdminReviewStatusHandler,
+} from "../controllers/reviews.controller";
+import {
   exportCustomersCsvHandler,
   exportProductsCsvHandler,
   exportSalesCsvHandler,
@@ -106,6 +111,14 @@ router.post(
       compareAtPrice: z.number().nonnegative().optional(),
       shortDescription: z.string().min(3),
       description: z.string().min(3),
+      additionalInfo: z
+        .array(
+          z.object({
+            label: z.string().min(1),
+            value: z.string().min(1),
+          }),
+        )
+        .optional(),
       tags: z.array(z.string()).default([]),
       status: z.enum(["padrao", "novo", "destaque", "oferta"]),
       active: z.boolean().default(true),
@@ -118,6 +131,18 @@ router.get("/products/:id", requireRole("admin", "operacao", "marketing"), getAd
 router.patch("/products/:id", requireRole("admin", "operacao"), patchProductHandler);
 router.patch("/products/:id/activation", requireRole("admin", "operacao"), patchProductActivationHandler);
 router.delete("/products/:id", requireRole("admin", "operacao"), deleteProductHandler);
+router.get("/reviews", requireRole("admin", "operacao", "marketing", "suporte"), listAdminReviewsHandler);
+router.patch(
+  "/reviews/:id",
+  requireRole("admin", "operacao", "marketing", "suporte"),
+  validate({
+    body: z.object({
+      status: z.enum(["published", "pending", "hidden"]),
+    }),
+  }),
+  patchAdminReviewStatusHandler,
+);
+router.delete("/reviews/:id", requireRole("admin", "operacao"), deleteAdminReviewHandler);
 
 router.get("/categories", requireRole("admin", "operacao", "marketing"), listAdminCategoriesHandler);
 router.post("/categories", requireRole("admin", "operacao"), createCategoryHandler);

@@ -1,32 +1,76 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GUEST_CART_COOKIE = void 0;
+exports.invalidateCartCache = invalidateCartCache;
 exports.getOrCreateCart = getOrCreateCart;
 exports.getCart = getCart;
 exports.upsertCartItem = upsertCartItem;
 exports.patchCartItemQty = patchCartItemQty;
 exports.deleteCartItem = deleteCartItem;
 exports.applyCouponToCart = applyCouponToCart;
+exports.removeCouponFromCart = removeCouponFromCart;
+exports.saveCartSnapshotForCustomer = saveCartSnapshotForCustomer;
+exports.listSavedCartsForCustomer = listSavedCartsForCustomer;
+exports.getSavedCartForCustomer = getSavedCartForCustomer;
+exports.deleteSavedCartForCustomer = deleteSavedCartForCustomer;
+exports.loadSavedCartForCustomer = loadSavedCartForCustomer;
+exports.shareSavedCartForCustomer = shareSavedCartForCustomer;
+exports.revokeSavedCartShareForCustomer = revokeSavedCartShareForCustomer;
+exports.createSharedCartLink = createSharedCartLink;
+exports.getSharedCartByToken = getSharedCartByToken;
+exports.importSharedCartByToken = importSharedCartByToken;
 exports.bindGuestCartToCustomer = bindGuestCartToCustomer;
 exports.markCartConverted = markCartConverted;
 exports.listAbandonedCarts = listAbandonedCarts;
 exports.recoverAbandonedCart = recoverAbandonedCart;
 exports.getCartForConversion = getCartForConversion;
 const crypto_1 = require("crypto");
-const mongoose_1 = require("mongoose");
+const dbCompat_1 = require("../lib/dbCompat");
+const env_1 = require("../config/env");
+const cache_1 = require("../lib/cache");
 const Cart_1 = require("../models/Cart");
 const Coupon_1 = require("../models/Coupon");
 const Product_1 = require("../models/Product");
+const SavedCart_1 = require("../models/SavedCart");
+const SharedCart_1 = require("../models/SharedCart");
 const apiError_1 = require("../utils/apiError");
 const SHIPPING_FLAT_CENTS = 1290;
 const FREE_SHIPPING_THRESHOLD_CENTS = 29900;
 const TAX_RATE = 0.08;
+const SHARED_CART_TTL_DAYS = 1;
 exports.GUEST_CART_COOKIE = "marima_guest_cart";
-function computeTotals(cart) {
+const CART_CACHE_TTL_SECONDS = 60 * 5;
+function toIsoDate(value) {
+    if (!value)
+        return undefined;
+    if (value instanceof Date)
+        return value.toISOString();
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+}
+function buildCartCacheKey(identity) {
+    if (identity.customerId)
+        return `cache:v1:cart:saved:${identity.customerId}`;
+    if (identity.guestToken)
+        return `cache:v1:cart:saved:guest:${identity.guestToken}`;
+    return null;
+}
+async function invalidateCartCache(identity) {
+    const key = buildCartCacheKey(identity);
+    if (!key)
+        return;
+    await (0, cache_1.delCache)(key);
+}
+function computeTotals(cart, options) {
     const subtotalCents = cart.items.reduce((acc, item) => acc + item.unitPriceCents * item.qty, 0);
     const discountCents = cart.discountCents || 0;
     const taxable = Math.max(0, subtotalCents - discountCents);
-    const shippingCents = subtotalCents >= FREE_SHIPPING_THRESHOLD_CENTS || subtotalCents === 0 ? 0 : SHIPPING_FLAT_CENTS;
+    const shouldForceFreeShipping = options?.forceFreeShipping !== undefined ? options.forceFreeShipping : Boolean(cart.freeShippingCouponApplied);
+    const shippingCents = shouldForceFreeShipping
+        ? 0
+        : subtotalCents >= FREE_SHIPPING_THRESHOLD_CENTS || subtotalCents === 0
+            ? 0
+            : SHIPPING_FLAT_CENTS;
     const taxCents = Math.round(taxable * TAX_RATE);
     const totalCents = Math.max(0, taxable + shippingCents + taxCents);
     cart.subtotalCents = subtotalCents;
@@ -41,8 +85,9 @@ function toOutput(cart) {
         guestToken: cart.guestToken,
         status: cart.status,
         recovered: cart.recovered,
-        lastActivityAt: cart.lastActivityAt?.toISOString(),
+        lastActivityAt: toIsoDate(cart.lastActivityAt),
         couponCode: cart.couponCode,
+        freeShippingCouponApplied: Boolean(cart.freeShippingCouponApplied),
         items: cart.items.map((item) => ({
             itemId: String(item._id),
             id: String(item._id),
@@ -72,6 +117,186 @@ function toOutput(cart) {
         },
     };
 }
+function toSnapshotItems(cart) {
+    return (cart.items || []).map((item) => ({
+        productId: String(item.productId),
+        slug: String(item.slug || ""),
+        name: String(item.name || ""),
+        imageUrl: String(item.imageUrl || ""),
+        variant: item.variant ? String(item.variant) : undefined,
+        sizeLabel: item.sizeLabel ? String(item.sizeLabel) : undefined,
+        unitPriceCents: Math.max(0, Math.floor(Number(item.unitPriceCents || 0))),
+        qty: Math.max(1, Math.floor(Number(item.qty || 1))),
+        stock: Math.max(0, Math.floor(Number(item.stock || 0))),
+    }));
+}
+function normalizeSnapshotItem(input) {
+    if (!input || typeof input !== "object")
+        return null;
+    const row = input;
+    const productId = String(row.productId || "").trim();
+    if (!dbCompat_1.Types.ObjectId.isValid(productId))
+        return null;
+    const slug = String(row.slug || "").trim();
+    const name = String(row.name || "").trim();
+    const imageUrl = String(row.imageUrl || "").trim();
+    if (!slug || !name || !imageUrl)
+        return null;
+    const qty = Math.max(1, Math.floor(Number(row.qty || 1)));
+    const stock = Math.max(0, Math.floor(Number(row.stock || 0)));
+    const unitPriceCents = Math.max(0, Math.floor(Number(row.unitPriceCents || 0)));
+    return {
+        productId,
+        slug,
+        name,
+        imageUrl,
+        variant: typeof row.variant === "string" && row.variant.trim() ? row.variant.trim() : undefined,
+        sizeLabel: typeof row.sizeLabel === "string" && row.sizeLabel.trim() ? row.sizeLabel.trim() : undefined,
+        unitPriceCents,
+        qty,
+        stock,
+    };
+}
+function normalizeStoreBaseUrl() {
+    const base = String(env_1.env.STORE_URL || "").trim();
+    if (!base)
+        return "";
+    return base.replace(/\/+$/, "");
+}
+function buildSharedCartPath(token) {
+    return `/carrinho/compartilhado/${token}`;
+}
+function toSavedCartOutput(row) {
+    return {
+        id: String(row._id),
+        title: row.title || "Carrinho salvo",
+        itemCount: Number(row.itemCount || 0),
+        couponCode: row.couponCode || undefined,
+        createdAt: toIsoDate(row.createdAt),
+        updatedAt: toIsoDate(row.updatedAt),
+        items: (row.items || []).map((item) => ({
+            productId: String(item.productId),
+            slug: item.slug,
+            name: item.name,
+            imageUrl: item.imageUrl,
+            variant: item.variant,
+            sizeLabel: item.sizeLabel,
+            unitPriceCents: item.unitPriceCents,
+            qty: item.qty,
+            stock: item.stock,
+            subtotalCents: item.unitPriceCents * item.qty,
+        })),
+        totals: {
+            subtotalCents: Number(row.subtotalCents || 0),
+            discountCents: Number(row.discountCents || 0),
+            shippingCents: Number(row.shippingCents || 0),
+            taxCents: Number(row.taxCents || 0),
+            totalCents: Number(row.totalCents || 0),
+        },
+    };
+}
+function toSharedCartOutput(row) {
+    return {
+        token: row.token,
+        savedCartId: row.sourceSavedCartId ? String(row.sourceSavedCartId) : undefined,
+        itemCount: Number(row.itemCount || 0),
+        couponCode: row.couponCode || undefined,
+        expiresAt: toIsoDate(row.expiresAt),
+        createdAt: toIsoDate(row.createdAt),
+        items: (row.items || []).map((item) => ({
+            productId: String(item.productId),
+            slug: item.slug,
+            name: item.name,
+            imageUrl: item.imageUrl,
+            variant: item.variant,
+            sizeLabel: item.sizeLabel,
+            unitPriceCents: item.unitPriceCents,
+            qty: item.qty,
+            stock: item.stock,
+            subtotalCents: item.unitPriceCents * item.qty,
+        })),
+        totals: {
+            subtotalCents: Number(row.subtotalCents || 0),
+            discountCents: Number(row.discountCents || 0),
+            shippingCents: Number(row.shippingCents || 0),
+            taxCents: Number(row.taxCents || 0),
+            totalCents: Number(row.totalCents || 0),
+        },
+    };
+}
+function toSharedLinkOutput(row) {
+    const path = buildSharedCartPath(String(row.token || ""));
+    const storeBase = normalizeStoreBaseUrl();
+    return {
+        token: String(row.token || ""),
+        savedCartId: row.sourceSavedCartId ? String(row.sourceSavedCartId) : undefined,
+        path,
+        url: storeBase ? `${storeBase}${path}` : path,
+        expiresAt: toIsoDate(row.expiresAt),
+    };
+}
+async function replaceCartWithSnapshot(identity, snapshotItems) {
+    const normalizedItems = snapshotItems
+        .map((row) => normalizeSnapshotItem(row))
+        .filter((row) => row !== null);
+    if (!normalizedItems.length) {
+        throw new apiError_1.ApiError(400, "Nenhum item válido para carregar no carrinho.");
+    }
+    const cart = await getOrCreateCart(identity);
+    cart.items = [];
+    cart.couponCode = undefined;
+    cart.discountCents = 0;
+    cart.freeShippingCouponApplied = false;
+    cart.lastActivityAt = new Date();
+    computeTotals(cart);
+    await cart.save();
+    await invalidateCartCache(identity);
+    let imported = 0;
+    for (const item of normalizedItems) {
+        try {
+            await upsertCartItem(identity, {
+                productId: item.productId,
+                qty: item.qty,
+                variant: item.variant,
+                sizeLabel: item.sizeLabel,
+            });
+            imported += 1;
+        }
+        catch {
+            // Ignora itens inválidos/sem estoque e continua importação.
+        }
+    }
+    if (imported === 0) {
+        throw new apiError_1.ApiError(400, "Não foi possível importar itens disponíveis para o carrinho.");
+    }
+    return getCart(identity);
+}
+async function getSharedCartDocumentByToken(token) {
+    const normalized = String(token || "").trim();
+    if (!normalized)
+        throw new apiError_1.ApiError(400, "Token inválido.");
+    const row = await SharedCart_1.SharedCartModel.findOne({ token: normalized });
+    if (!row)
+        throw new apiError_1.ApiError(404, "Carrinho compartilhado não encontrado.");
+    const now = Date.now();
+    const expiresAt = row.expiresAt ? row.expiresAt.getTime() : 0;
+    if (expiresAt && expiresAt <= now) {
+        await row.deleteOne();
+        throw new apiError_1.ApiError(410, "Este link de carrinho compartilhado expirou.");
+    }
+    return row;
+}
+async function getSavedCartDocumentForCustomer(customerId, savedCartId) {
+    if (!dbCompat_1.Types.ObjectId.isValid(savedCartId))
+        throw new apiError_1.ApiError(400, "Carrinho salvo inválido.");
+    const row = await SavedCart_1.SavedCartModel.findOne({
+        _id: new dbCompat_1.Types.ObjectId(savedCartId),
+        customerId: new dbCompat_1.Types.ObjectId(customerId),
+    });
+    if (!row)
+        throw new apiError_1.ApiError(404, "Carrinho salvo não encontrado.");
+    return row;
+}
 async function getOrCreateCart(identity) {
     let cart;
     if (identity.customerId) {
@@ -94,8 +319,15 @@ async function getOrCreateCart(identity) {
     return cart;
 }
 async function getCart(identity) {
-    const cart = await getOrCreateCart(identity);
-    return toOutput(cart);
+    const key = buildCartCacheKey(identity);
+    if (!key) {
+        const cart = await getOrCreateCart(identity);
+        return toOutput(cart);
+    }
+    return (0, cache_1.getOrSetCache)(key, CART_CACHE_TTL_SECONDS, async () => {
+        const cart = await getOrCreateCart(identity);
+        return toOutput(cart);
+    });
 }
 function normalizeVariant(value) {
     return value?.trim().toLowerCase() || "default";
@@ -104,7 +336,7 @@ function normalizeSizeLabel(value) {
     return value?.trim().toLowerCase() || "default";
 }
 async function upsertCartItem(identity, input) {
-    if (!mongoose_1.Types.ObjectId.isValid(input.productId))
+    if (!dbCompat_1.Types.ObjectId.isValid(input.productId))
         throw new apiError_1.ApiError(400, "Produto inválido.");
     const product = await Product_1.ProductModel.findById(input.productId);
     if (!product || !product.active)
@@ -167,6 +399,7 @@ async function upsertCartItem(identity, input) {
     cart.recovered = false;
     computeTotals(cart);
     await cart.save();
+    await invalidateCartCache(identity);
     return toOutput(cart);
 }
 async function patchCartItemQty(identity, itemId, qty) {
@@ -180,6 +413,7 @@ async function patchCartItemQty(identity, itemId, qty) {
         cart.lastActivityAt = new Date();
         computeTotals(cart);
         await cart.save();
+        await invalidateCartCache(identity);
         return toOutput(cart);
     }
     const sizeType = product.sizeType || (Array.isArray(product.sizes) && product.sizes.length ? "custom" : "unico");
@@ -192,6 +426,7 @@ async function patchCartItemQty(identity, itemId, qty) {
             cart.lastActivityAt = new Date();
             computeTotals(cart);
             await cart.save();
+            await invalidateCartCache(identity);
             return toOutput(cart);
         }
         const normalized = rawLabel.toLocaleLowerCase("pt-BR");
@@ -207,6 +442,7 @@ async function patchCartItemQty(identity, itemId, qty) {
         cart.lastActivityAt = new Date();
         computeTotals(cart);
         await cart.save();
+        await invalidateCartCache(identity);
         return toOutput(cart);
     }
     item.slug = product.slug;
@@ -218,17 +454,24 @@ async function patchCartItemQty(identity, itemId, qty) {
     cart.lastActivityAt = new Date();
     computeTotals(cart);
     await cart.save();
+    await invalidateCartCache(identity);
     return toOutput(cart);
 }
 async function deleteCartItem(identity, itemId) {
     const cart = await getOrCreateCart(identity);
-    const item = cart.items.id(itemId);
+    const item = (cart.items || []).find((row) => String(row?._id || "") === String(itemId));
     if (!item)
         return toOutput(cart);
-    item.deleteOne();
+    if (typeof item.deleteOne === "function") {
+        item.deleteOne();
+    }
+    else {
+        cart.items = (cart.items || []).filter((row) => String(row?._id || "") !== String(itemId));
+    }
     cart.lastActivityAt = new Date();
     computeTotals(cart);
     await cart.save();
+    await invalidateCartCache(identity);
     return toOutput(cart);
 }
 async function applyCouponToCart(identity, code) {
@@ -237,8 +480,10 @@ async function applyCouponToCart(identity, code) {
     if (!normalized) {
         cart.couponCode = undefined;
         cart.discountCents = 0;
+        cart.freeShippingCouponApplied = false;
         computeTotals(cart);
         await cart.save();
+        await invalidateCartCache(identity);
         return toOutput(cart);
     }
     const coupon = await Coupon_1.CouponModel.findOne({ code: normalized, active: true });
@@ -256,17 +501,156 @@ async function applyCouponToCart(identity, code) {
         throw new apiError_1.ApiError(400, "Subtotal mínimo não atingido para este cupom.");
     }
     let discount = 0;
+    let freeShipping = false;
     if (coupon.type === "percent")
         discount = Math.round(subtotal * (coupon.amount / 100));
     if (coupon.type === "fixed")
         discount = Math.min(subtotal, coupon.amount);
     if (coupon.type === "shipping")
-        discount = 0;
+        freeShipping = true;
     cart.couponCode = normalized;
     cart.discountCents = discount;
-    computeTotals(cart);
+    cart.freeShippingCouponApplied = freeShipping;
+    computeTotals(cart, { forceFreeShipping: freeShipping });
     await cart.save();
+    await invalidateCartCache(identity);
     return toOutput(cart);
+}
+async function removeCouponFromCart(identity) {
+    return applyCouponToCart(identity, "");
+}
+async function saveCartSnapshotForCustomer(customerId) {
+    const identity = { customerId };
+    const cart = await getOrCreateCart(identity);
+    if (!cart.items.length) {
+        throw new apiError_1.ApiError(400, "Adicione itens ao carrinho antes de salvar.");
+    }
+    const items = toSnapshotItems(cart);
+    const itemCount = items.reduce((acc, item) => acc + item.qty, 0);
+    const created = await SavedCart_1.SavedCartModel.create({
+        customerId: new dbCompat_1.Types.ObjectId(customerId),
+        sourceCartId: cart._id,
+        title: `Carrinho salvo em ${new Date().toLocaleDateString("pt-BR")}`,
+        items,
+        itemCount,
+        couponCode: cart.couponCode || undefined,
+        discountCents: cart.discountCents || 0,
+        shippingCents: cart.shippingCents || 0,
+        taxCents: cart.taxCents || 0,
+        subtotalCents: cart.subtotalCents || 0,
+        totalCents: cart.totalCents || 0,
+    });
+    return toSavedCartOutput(created);
+}
+async function listSavedCartsForCustomer(customerId) {
+    const rows = await SavedCart_1.SavedCartModel.find({ customerId: new dbCompat_1.Types.ObjectId(customerId) })
+        .sort({ createdAt: -1 })
+        .limit(30);
+    return rows.map((row) => toSavedCartOutput(row));
+}
+async function getSavedCartForCustomer(customerId, savedCartId) {
+    const row = await getSavedCartDocumentForCustomer(customerId, savedCartId);
+    return toSavedCartOutput(row);
+}
+async function deleteSavedCartForCustomer(customerId, savedCartId) {
+    const row = await getSavedCartDocumentForCustomer(customerId, savedCartId);
+    await Promise.all([
+        SavedCart_1.SavedCartModel.deleteOne({ _id: row._id }),
+        SharedCart_1.SharedCartModel.deleteMany({ sourceSavedCartId: row._id }),
+    ]);
+}
+async function loadSavedCartForCustomer(customerId, savedCartId) {
+    const row = await getSavedCartDocumentForCustomer(customerId, savedCartId);
+    const cart = await replaceCartWithSnapshot({ customerId }, row.items || []);
+    return {
+        savedCart: toSavedCartOutput(row),
+        cart,
+    };
+}
+async function shareSavedCartForCustomer(customerId, savedCartId) {
+    const row = await getSavedCartDocumentForCustomer(customerId, savedCartId);
+    const now = new Date();
+    const existing = await SharedCart_1.SharedCartModel.findOne({
+        sourceSavedCartId: row._id,
+        sourceCustomerId: new dbCompat_1.Types.ObjectId(customerId),
+        expiresAt: { $gt: now },
+    }).sort({ createdAt: -1 });
+    if (existing) {
+        return toSharedLinkOutput(existing);
+    }
+    const token = (0, crypto_1.randomUUID)().replace(/-/g, "");
+    const expiresAt = new Date(Date.now() + SHARED_CART_TTL_DAYS * 24 * 60 * 60 * 1000);
+    const items = (row.items || []).map((item) => ({
+        productId: item.productId,
+        slug: item.slug,
+        name: item.name,
+        imageUrl: item.imageUrl,
+        variant: item.variant,
+        sizeLabel: item.sizeLabel,
+        unitPriceCents: item.unitPriceCents,
+        qty: item.qty,
+        stock: item.stock,
+    }));
+    const shared = await SharedCart_1.SharedCartModel.create({
+        token,
+        sourceCustomerId: new dbCompat_1.Types.ObjectId(customerId),
+        sourceSavedCartId: row._id,
+        sourceCartId: row.sourceCartId || undefined,
+        items,
+        itemCount: Number(row.itemCount || 0),
+        couponCode: row.couponCode || undefined,
+        discountCents: Number(row.discountCents || 0),
+        shippingCents: Number(row.shippingCents || 0),
+        taxCents: Number(row.taxCents || 0),
+        subtotalCents: Number(row.subtotalCents || 0),
+        totalCents: Number(row.totalCents || 0),
+        expiresAt,
+    });
+    return toSharedLinkOutput(shared);
+}
+async function revokeSavedCartShareForCustomer(customerId, savedCartId) {
+    const row = await getSavedCartDocumentForCustomer(customerId, savedCartId);
+    await SharedCart_1.SharedCartModel.deleteMany({
+        sourceSavedCartId: row._id,
+        sourceCustomerId: new dbCompat_1.Types.ObjectId(customerId),
+    });
+}
+async function createSharedCartLink(identity) {
+    const cart = await getOrCreateCart(identity);
+    if (!cart.items.length) {
+        throw new apiError_1.ApiError(400, "Adicione itens ao carrinho antes de compartilhar.");
+    }
+    const token = (0, crypto_1.randomUUID)().replace(/-/g, "");
+    const items = toSnapshotItems(cart);
+    const itemCount = items.reduce((acc, item) => acc + item.qty, 0);
+    const expiresAt = new Date(Date.now() + SHARED_CART_TTL_DAYS * 24 * 60 * 60 * 1000);
+    const shared = await SharedCart_1.SharedCartModel.create({
+        token,
+        sourceCustomerId: identity.customerId ? new dbCompat_1.Types.ObjectId(identity.customerId) : undefined,
+        sourceCartId: cart._id,
+        items,
+        itemCount,
+        couponCode: cart.couponCode || undefined,
+        discountCents: cart.discountCents || 0,
+        shippingCents: cart.shippingCents || 0,
+        taxCents: cart.taxCents || 0,
+        subtotalCents: cart.subtotalCents || 0,
+        totalCents: cart.totalCents || 0,
+        expiresAt,
+    });
+    return toSharedLinkOutput(shared);
+}
+async function getSharedCartByToken(token) {
+    const row = await getSharedCartDocumentByToken(token);
+    return toSharedCartOutput(row);
+}
+async function importSharedCartByToken(identity, token) {
+    const row = await getSharedCartDocumentByToken(token);
+    const cart = await replaceCartWithSnapshot(identity, row.items || []);
+    return {
+        sharedCart: toSharedCartOutput(row),
+        cart,
+    };
 }
 async function bindGuestCartToCustomer(guestToken, customerId) {
     if (!guestToken)
@@ -274,7 +658,7 @@ async function bindGuestCartToCustomer(guestToken, customerId) {
     const guestCart = await Cart_1.CartModel.findOne({ guestToken, status: "active" });
     if (!guestCart)
         return;
-    const customerObjectId = new mongoose_1.Types.ObjectId(customerId);
+    const customerObjectId = new dbCompat_1.Types.ObjectId(customerId);
     const customerCart = await Cart_1.CartModel.findOne({ customerId: customerObjectId, status: "active" });
     if (!customerCart) {
         guestCart.customerId = customerObjectId;
@@ -282,6 +666,8 @@ async function bindGuestCartToCustomer(guestToken, customerId) {
         guestCart.lastActivityAt = new Date();
         computeTotals(guestCart);
         await guestCart.save();
+        await invalidateCartCache({ guestToken });
+        await invalidateCartCache({ customerId });
         return;
     }
     for (const guestItem of guestCart.items) {
@@ -306,7 +692,6 @@ async function bindGuestCartToCustomer(guestToken, customerId) {
             stock: guestItem.stock,
         });
     }
-    // Revalida itens com dados atuais de produto (estoque/preço/slug).
     for (const item of [...customerCart.items]) {
         const product = await Product_1.ProductModel.findById(item.productId);
         if (!product || !product.active) {
@@ -345,6 +730,8 @@ async function bindGuestCartToCustomer(guestToken, customerId) {
     computeTotals(customerCart);
     await customerCart.save();
     await guestCart.deleteOne();
+    await invalidateCartCache({ guestToken });
+    await invalidateCartCache({ customerId });
 }
 async function markCartConverted(cartId) {
     const cart = await Cart_1.CartModel.findById(cartId);
@@ -353,6 +740,10 @@ async function markCartConverted(cartId) {
     cart.status = "converted";
     cart.lastActivityAt = new Date();
     await cart.save();
+    await invalidateCartCache({
+        customerId: cart.customerId ? String(cart.customerId) : undefined,
+        guestToken: cart.guestToken || undefined,
+    });
 }
 function stageByDate(lastActivityAt) {
     const diffHours = (Date.now() - lastActivityAt.getTime()) / 36e5;
@@ -381,7 +772,7 @@ async function listAbandonedCarts(input) {
             value: Number((cart.totalCents / 100).toFixed(2)),
             stage: stageByDate(cart.lastActivityAt),
             recovered: cart.recovered,
-            lastActivityAt: cart.lastActivityAt.toISOString(),
+            lastActivityAt: toIsoDate(cart.lastActivityAt),
         })),
         meta: {
             total,

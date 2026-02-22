@@ -1,4 +1,4 @@
-﻿import { Request, Response } from "express";
+import { Request, Response } from "express";
 import { asyncHandler } from "../middlewares/notFound";
 import { listIntegrations, testIntegrationWebhook, updateIntegration } from "../services/integrations.service";
 

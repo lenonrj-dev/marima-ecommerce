@@ -10,7 +10,7 @@ exports.redeemCashback = redeemCashback;
 exports.getCustomerCashbackBalance = getCustomerCashbackBalance;
 exports.toRule = toRule;
 exports.toLedger = toLedger;
-const mongoose_1 = require("mongoose");
+const dbCompat_1 = require("../lib/dbCompat");
 const CashbackLedger_1 = require("../models/CashbackLedger");
 const CashbackRule_1 = require("../models/CashbackRule");
 const apiError_1 = require("../utils/apiError");
@@ -67,7 +67,7 @@ async function createCashbackRule(input) {
 async function updateCashbackRule(id, input) {
     const rule = await CashbackRule_1.CashbackRuleModel.findById(id);
     if (!rule)
-        throw new apiError_1.ApiError(404, "Regra de cashback não encontrada.");
+        throw new apiError_1.ApiError(404, "Regra de cashback n�o encontrada.");
     if (input.name !== undefined)
         rule.name = input.name;
     if (input.percent !== undefined)
@@ -86,7 +86,7 @@ async function updateCashbackRule(id, input) {
 async function toggleCashbackRule(id) {
     const rule = await CashbackRule_1.CashbackRuleModel.findById(id);
     if (!rule)
-        throw new apiError_1.ApiError(404, "Regra de cashback não encontrada.");
+        throw new apiError_1.ApiError(404, "Regra de cashback n�o encontrada.");
     rule.active = !rule.active;
     await rule.save();
     return toRule(rule);
@@ -131,13 +131,13 @@ async function redeemCashback(input) {
     const amountCents = (0, money_1.toCents)(input.amount);
     const current = await getCurrentBalanceCents(input.customerId);
     if (amountCents <= 0)
-        throw new apiError_1.ApiError(400, "Valor inválido para resgate.");
+        throw new apiError_1.ApiError(400, "Valor inv�lido para resgate.");
     if (current < amountCents)
         throw new apiError_1.ApiError(400, "Saldo de cashback insuficiente.");
     const balanceAfter = current - amountCents;
     await CashbackLedger_1.CashbackLedgerModel.create({
         customerId: input.customerId,
-        orderId: input.orderId ? new mongoose_1.Types.ObjectId(input.orderId) : undefined,
+        orderId: input.orderId ? new dbCompat_1.Types.ObjectId(input.orderId) : undefined,
         type: "debit",
         amountCents: -amountCents,
         balanceAfterCents: balanceAfter,

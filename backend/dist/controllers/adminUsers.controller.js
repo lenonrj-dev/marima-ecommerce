@@ -55,7 +55,7 @@ exports.inviteAdminUserHandler = (0, notFound_1.asyncHandler)(async (req, res) =
 exports.patchAdminUserHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
     const user = await AdminUser_1.AdminUserModel.findById(String(req.params.id));
     if (!user) {
-        res.status(404).json({ message: "Usuário não encontrado." });
+        res.status(404).json({ message: "Usu�rio n�o encontrado." });
         return;
     }
     if (req.body.name !== undefined)
@@ -65,5 +65,6 @@ exports.patchAdminUserHandler = (0, notFound_1.asyncHandler)(async (req, res) =>
     if (req.body.active !== undefined)
         user.active = req.body.active;
     await user.save();
+    await (0, auth_service_1.invalidateMeCacheForUser)(String(user._id));
     res.json({ data: toAdminUser(user) });
 });

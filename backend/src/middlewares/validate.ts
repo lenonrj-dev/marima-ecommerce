@@ -1,5 +1,5 @@
-﻿import { NextFunction, Request, Response } from "express";
-import { z, ZodTypeAny } from "zod";
+import { NextFunction, Request, Response } from "express";
+import { ZodTypeAny } from "zod";
 
 export function validate(schema: {
   body?: ZodTypeAny;
@@ -13,10 +13,6 @@ export function validate(schema: {
       if (schema.params) req.params = schema.params.parse(req.params);
       next();
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        next(new Error(error.issues.map((issue) => issue.message).join("; ")));
-        return;
-      }
       next(error);
     }
   };

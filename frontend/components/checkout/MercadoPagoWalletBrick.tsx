@@ -1,11 +1,14 @@
 "use client";
 
 import Script from "next/script";
+import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   createMercadoPagoCheckoutPreference,
   type MercadoPagoCheckoutAddress,
 } from "@/lib/payments/mercadoPago";
+import { HttpError } from "@/lib/api";
+import { buildLoginUrl } from "@/lib/authSession";
 
 type MercadoPagoWalletBrickProps = {
   orderId?: string;
@@ -46,6 +49,7 @@ export default function MercadoPagoWalletBrick({
   address,
   onCreated,
 }: MercadoPagoWalletBrickProps) {
+  const router = useRouter();
   const publicKey = (
     process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY ||
     process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY ||
@@ -105,8 +109,12 @@ export default function MercadoPagoWalletBrick({
 
         setState("rendering");
         setMessage("Carregando Mercado Pago...");
-      } catch {
+      } catch (error) {
         if (!active) return;
+        if (error instanceof HttpError && error.status === 401) {
+          router.replace(buildLoginUrl("/checkout"));
+          return;
+        }
         setState("error");
         setMessage("Não foi possível preparar o pagamento. Tente novamente em alguns instantes.");
       }
@@ -115,7 +123,7 @@ export default function MercadoPagoWalletBrick({
     return () => {
       active = false;
     };
-  }, [onCreated, payload, publicKey]);
+  }, [onCreated, payload, publicKey, router]);
 
   useEffect(() => {
     if (!sdkReady) return;
@@ -176,8 +184,12 @@ export default function MercadoPagoWalletBrick({
         }
 
         brickRef.current = controller;
-      } catch {
+      } catch (error) {
         if (!active) return;
+        if (error instanceof HttpError && error.status === 401) {
+          router.replace(buildLoginUrl("/checkout"));
+          return;
+        }
         setState("error");
         setMessage("Não foi possível carregar o pagamento. Recarregue a página e tente novamente.");
       }
@@ -195,7 +207,7 @@ export default function MercadoPagoWalletBrick({
         }
       }
     };
-  }, [containerId, preferenceId, publicKey, sdkReady]);
+  }, [containerId, preferenceId, publicKey, router, sdkReady]);
 
   return (
     <div className="space-y-4">
@@ -226,3 +238,4 @@ export default function MercadoPagoWalletBrick({
     </div>
   );
 }
+

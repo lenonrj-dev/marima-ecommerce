@@ -1,4 +1,4 @@
-ï»¿import { Request, Response } from "express";
+import { Request, Response } from "express";
 import { asyncHandler } from "../middlewares/notFound";
 import {
   clearAuthCookies,
@@ -102,7 +102,7 @@ export const logoutHandler = asyncHandler(async (req: Request, res: Response) =>
 export const refreshHandler = asyncHandler(async (req: Request, res: Response) => {
   const refresh = req.cookies?.[REFRESH_COOKIE] || req.cookies?.[LEGACY_REFRESH_COOKIE];
   if (!refresh) {
-    res.status(401).json({ code: "AUTH_REQUIRED", message: "NÃ£o autenticado." });
+    res.status(401).json({ code: "AUTH_REQUIRED", message: "Não autenticado." });
     return;
   }
 
@@ -111,7 +111,7 @@ export const refreshHandler = asyncHandler(async (req: Request, res: Response) =
     payload = verifyRefreshToken(refresh);
   } catch {
     clearAuthCookies(res, req);
-    res.status(401).json({ code: "AUTH_EXPIRED", message: "SessÃ£o expirada." });
+    res.status(401).json({ code: "AUTH_EXPIRED", message: "Sessão expirada." });
     return;
   }
 
@@ -121,7 +121,7 @@ export const refreshHandler = asyncHandler(async (req: Request, res: Response) =
 
 export const meHandler = asyncHandler(async (req: Request, res: Response) => {
   if (!req.auth) {
-    res.status(401).json({ code: "AUTH_REQUIRED", message: "NÃ£o autenticado." });
+    res.status(401).json({ code: "AUTH_REQUIRED", message: "Não autenticado." });
     return;
   }
 

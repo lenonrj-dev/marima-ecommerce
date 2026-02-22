@@ -13,6 +13,7 @@ const routes_1 = __importDefault(require("./routes"));
 const env_1 = require("./config/env");
 const errorHandler_1 = require("./middlewares/errorHandler");
 const notFound_1 = require("./middlewares/notFound");
+const health_1 = require("./lib/health");
 exports.app = (0, express_1.default)();
 exports.app.set("trust proxy", 1);
 const corsOriginsSet = new Set(env_1.corsOrigins.map((item) => item.replace(/\/$/, "")));
@@ -39,6 +40,13 @@ exports.app.options("*", (0, cors_1.default)(corsConfig));
 exports.app.use(express_1.default.json({ limit: "2mb" }));
 exports.app.use(express_1.default.urlencoded({ extended: true }));
 exports.app.use((0, cookie_parser_1.default)());
+exports.app.get("/health", async (_req, res) => {
+    const health = await (0, health_1.runHealthChecks)();
+    res.status(health.ok ? 200 : 503).json({
+        status: health.ok ? "ok" : "degraded",
+        checks: health.checks,
+    });
+});
 exports.app.use("/api/v1", routes_1.default);
 exports.app.use(notFound_1.notFound);
 exports.app.use(errorHandler_1.errorHandler);

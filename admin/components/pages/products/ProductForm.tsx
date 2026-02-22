@@ -18,6 +18,7 @@ export type DraftProduct = {
   compareAtPrice: number;
   shortDescription: string;
   description: string;
+  additionalInfo: Array<{ label: string; value: string }>;
   tags: string;
   status: "padrao" | "novo" | "destaque" | "oferta";
   active: boolean;
@@ -135,6 +136,30 @@ export default function ProductForm({
     const next = [...draft.images];
     next[index] = value;
     set("images", next);
+  }
+
+  function addAdditionalInfoRow() {
+    set("additionalInfo", [...(draft.additionalInfo || []), { label: "", value: "" }]);
+  }
+
+  function removeAdditionalInfoRow(index: number) {
+    const next = [...(draft.additionalInfo || [])];
+    next.splice(index, 1);
+    set("additionalInfo", next);
+  }
+
+  function setAdditionalInfoLabel(index: number, value: string) {
+    const next = [...(draft.additionalInfo || [])];
+    const current = next[index] || { label: "", value: "" };
+    next[index] = { ...current, label: value };
+    set("additionalInfo", next);
+  }
+
+  function setAdditionalInfoValue(index: number, value: string) {
+    const next = [...(draft.additionalInfo || [])];
+    const current = next[index] || { label: "", value: "" };
+    next[index] = { ...current, value };
+    set("additionalInfo", next);
   }
 
   const totalSizeStock = useMemo(() => {
@@ -528,6 +553,53 @@ export default function ProductForm({
           value={draft.description}
           onChange={(event) => set("description", event.target.value)}
         />
+      </div>
+
+      <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Informacoes adicionais</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Configure os itens exibidos na aba de informacoes adicionais da pagina do produto.
+            </p>
+          </div>
+
+          <Button variant="secondary" size="sm" onClick={addAdditionalInfoRow}>
+            Adicionar item
+          </Button>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {draft.additionalInfo.length ? (
+            draft.additionalInfo.map((row, index) => (
+              <div key={`additional-info-${index}`} className="grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
+                <Input
+                  label={index === 0 ? "Rótulo" : undefined}
+                  placeholder="Ex.: Composição"
+                  value={row.label}
+                  onChange={(event) => setAdditionalInfoLabel(index, event.target.value)}
+                />
+                <Input
+                  label={index === 0 ? "Valor" : undefined}
+                  placeholder="Ex.: 88% poliamida, 12% elastano"
+                  value={row.value}
+                  onChange={(event) => setAdditionalInfoValue(index, event.target.value)}
+                />
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={() => removeAdditionalInfoRow(index)}
+                    className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/90"
+                  >
+                    Remover
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-slate-500">Nenhum item adicional configurado.</p>
+          )}
+        </div>
       </div>
 
       <div className="rounded-2xl border border-slate-200/70 bg-[#F7F5FD] p-4">
