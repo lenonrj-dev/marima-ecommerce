@@ -45,7 +45,7 @@ export default async function BlogPostPage({ params }: { params: Params }) {
 
   return (
     <main className="min-h-[60vh] bg-white">
-      <BlogPost article={article} related={related} />
+      <BlogPost article={article} related={related} slug={slug} />
     </main>
   );
 }

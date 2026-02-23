@@ -42,10 +42,11 @@ function ensureHttps(url, label) {
         throw new apiError_1.ApiError(400, `Config inválida: ${label} deve começar com http:// ou https://.`, "INVALID_CONFIG");
     }
     if (parsed.protocol === "http:") {
-        parsed.protocol = "https:";
-        const https = normalizeBaseUrl(parsed.toString(), label);
-        console.warn(`[URLS] ${label} estava em HTTP e foi convertida para HTTPS: ${https}`);
-        return https;
+        if (env_1.env.NODE_ENV === "production") {
+            throw new apiError_1.ApiError(400, `Config inválida: ${label} deve ser HTTPS em produção.`, "INVALID_CONFIG");
+        }
+        console.warn(`[URLS] ${label} em HTTP (permitido apenas em desenvolvimento): ${base}`);
+        return base;
     }
     return base;
 }
@@ -58,10 +59,9 @@ function requireHttpsInProd(url, label) {
 }
 function buildStoreRedirectUrls(storeUrl) {
     const base = ensureHttps(storeUrl, "STORE_URL");
-    // Checkout Pro precisa de URLs públicas (localhost não funciona como back_urls).
     const hostname = new URL(base).hostname.toLowerCase();
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
-        throw new apiError_1.ApiError(400, "STORE_URL deve ser https (use ngrok) para Checkout Pro.", "INVALID_CONFIG");
+    if ((hostname === "localhost" || hostname === "127.0.0.1") && env_1.env.NODE_ENV !== "production") {
+        console.warn("[URLS] STORE_URL local detectada. Para callbacks externos do Mercado Pago, use ngrok/URL pública.");
     }
     const success = `${base}/checkout/success`;
     const failure = `${base}/checkout/failure`;

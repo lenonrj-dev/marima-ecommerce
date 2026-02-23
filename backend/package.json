@@ -11,11 +11,15 @@
     "test": "vitest run --bail=1",
     "test:smoke": "vitest run --bail=1 src/tests/routes.smoke.test.ts",
     "routes:inventory": "ts-node --files src/tests/route-inventory.ts",
-    "seed": "ts-node src/seed.ts",
+    "seed": "prisma db seed",
+    "seed:run": "ts-node src/seed.ts",
     "migrate:colors": "ts-node src/migrate-colors.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy"
+  },
+  "prisma": {
+    "seed": "ts-node src/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.15.0",

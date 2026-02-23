@@ -119,7 +119,7 @@ export function InstagramStrip() {
       id="instagram"
       className="bg-body mt-20 py-12 scroll-mt-20 sm:py-16 lg:py-20"
       variants={enableMotion ? staggerContainer(0.08) : undefined}
-      initial={enableMotion ? "hidden" : false}
+      initial={false}
       whileInView={enableMotion ? "show" : undefined}
       viewport={enableMotion ? { once: true, amount: 0.25 } : undefined}
     >

@@ -1,7 +1,6 @@
 import {
   BookOpen,
   RefreshCcw,
-  Scale,
   ShieldCheck,
   ShoppingBag,
   Truck,
@@ -12,9 +11,10 @@ export type HelpTopicSlug =
   | "privacidade"
   | "trocas-e-devolucoes"
   | "como-comprar"
-  | "procon-rj";
+  | "contato";
 
-export type HelpTopic = { slug : HelpTopicSlug;
+export type HelpTopic = {
+  slug: HelpTopicSlug;
   label: string;
   title: string;
   description: string;
@@ -23,7 +23,6 @@ export type HelpTopic = { slug : HelpTopicSlug;
     | typeof ShieldCheck
     | typeof RefreshCcw
     | typeof ShoppingBag
-    | typeof Scale
     | typeof BookOpen;
 };
 
@@ -61,16 +60,17 @@ export const HELP_TOPICS: HelpTopic[] = [
     icon: ShoppingBag,
   },
   {
-    slug: "procon-rj",
-    label: "Atendimento",
+    slug: "contato",
+    label: "Contato",
     title: "Atendimento e transparência",
     description:
       "Canais oficiais, horários, transparência no pedido e contato com suporte.",
-    icon: Scale,
+    icon: BookOpen,
   },
 ];
 
-export const HELP_HERO = { title : "Central de Ajuda",
+export const HELP_HERO = {
+  title: "Central de Ajuda",
   breadcrumb: [
     { label: "Início", href: "/" },
     { label: "Ajuda", href: "/central-de-ajuda" },
@@ -79,17 +79,19 @@ export const HELP_HERO = { title : "Central de Ajuda",
     "https://res.cloudinary.com/dpyrbbvjd/image/upload/v1768760004/AthleisureBanner_dzhuwp.png",
 };
 
-export const HELP_CONTACT_CARD = { title : "Fale com a Marima",
+export const HELP_CONTACT_CARD = {
+  title: "Fale com a Marima",
   subtitle: "Precisa de suporte agora?",
-  phone: "+55 (24) 98888-1234",
+  phone: "+55 (24) 98146-7489",
   hint: "Seg a Sex, 9h - 18h (exceto feriados)",
   primaryCta: "Falar com suporte",
-  primaryHref: "mailto:suporte.marima.loja@gmail.com",
+  primaryHref: "https://wa.me/5524981467489?text=Ola!%20Vim%20pelo%20site%20da%20Marima%20e%20quero%20saber%20das%20promocoes.",
   secondaryCta: "Acompanhar pedido",
   secondaryHref: "/dashboard/pedidos",
 };
 
-export const HELP_FAQ = { title : "Perguntas frequentes",
+export const HELP_FAQ = {
+  title: "Perguntas frequentes",
   items: [
     {
       q: "Como acompanho meu pedido?",
@@ -104,7 +106,7 @@ export const HELP_FAQ = { title : "Perguntas frequentes",
       a: "Sim. Você pode solicitar troca em até 7 dias corridos após o recebimento, conforme CDC e disponibilidade de estoque.",
     },
     {
-      q: "Quais formas de pagamento so aceitas?",
+      q: "Quais formas de pagamento são aceitas?",
       a: "Cartão, PIX e outras opções podem variar conforme a finalização da compra. Todas as formas disponíveis aparecem ao finalizar o pedido.",
     },
   ],
@@ -130,4 +132,3 @@ export function resolveHelpTopic(rawSlug: string) {
   const slug = resolveHelpTopicSlug(rawSlug);
   return slug ? HELP_TOPIC_MAP.get(slug) : undefined;
 }
-

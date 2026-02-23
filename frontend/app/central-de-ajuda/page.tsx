@@ -24,7 +24,7 @@ const helpIndex = [
     description: "Passo a passo da compra",
   },
   {
-    href: "/central-de-ajuda/procon-rj",
+    href: "/central-de-ajuda/contato",
     title: "Atendimento",
     description: "Canais oficiais e transparência",
   },

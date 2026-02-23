@@ -8,14 +8,14 @@ import TopicEntrega from "@/components/help/topics/TopicEntrega";
 import TopicPrivacidade from "@/components/help/topics/TopicPrivacidade";
 import TopicTrocasDevolucoes from "@/components/help/topics/TopicTrocasDevolucoes";
 import TopicComoComprar from "@/components/help/topics/TopicComoComprar";
-import TopicProconRJ from "@/components/help/topics/TopicProconRJ";
+import TopicContato from "@/components/help/topics/TopicContato";
 
 const TOPIC_COMPONENTS: Record<HelpTopicSlug, React.ReactNode> = {
   entrega: <TopicEntrega />,
   privacidade: <TopicPrivacidade />,
   "trocas-e-devolucoes": <TopicTrocasDevolucoes />,
   "como-comprar": <TopicComoComprar />,
-  "procon-rj": <TopicProconRJ />,
+  contato: <TopicContato />,
 };
 
 function buildHelpTopicTitle(topicTitle: string) {

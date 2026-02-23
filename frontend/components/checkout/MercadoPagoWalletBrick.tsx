@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
-import Script from "next/script";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Wallet, initMercadoPago } from "@mercadopago/sdk-react";
 import {
   createMercadoPagoCheckoutPreference,
   type MercadoPagoCheckoutAddress,
@@ -19,28 +19,6 @@ type MercadoPagoWalletBrickProps = {
   onCreated?: (data: { preferenceId: string; orderId: string }) => void;
 };
 
-type BrickController = { unmount: () => Promise<void> | void };
-
-declare global {
-  interface Window {
-    MercadoPago?: new (publicKey: string, options?: { locale?: string }) => {
-      bricks: () => {
-        create: (
-          name: "wallet",
-          containerId: string,
-          settings: {
-            initialization: { preferenceId: string };
-            callbacks?: {
-              onReady?: () => void;
-              onError?: (error: unknown) => void;
-            };
-          },
-        ) => Promise<BrickController>;
-      };
-    };
-  }
-}
-
 export default function MercadoPagoWalletBrick({
   orderId,
   shippingMethodId,
@@ -55,13 +33,11 @@ export default function MercadoPagoWalletBrick({
     process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY ||
     ""
   ).trim();
-  const reactId = useId();
-  const containerId = useMemo(() => `mp_wallet_${reactId.replace(/[:]/g, "_")}`, [reactId]);
-  const brickRef = useRef<BrickController | null>(null);
-  const [sdkReady, setSdkReady] = useState(false);
-  const [state, setState] = useState<"idle" | "creating" | "rendering" | "ready" | "error">("idle");
-  const [message, setMessage] = useState<string | null>(null);
+
+  const [state, setState] = useState<"idle" | "creating" | "ready" | "error">("idle");
+  const [runtimeMessage, setRuntimeMessage] = useState<string | null>(null);
   const [preferenceId, setPreferenceId] = useState<string>("");
+  const missingPublicKey = !publicKey;
 
   const payload = useMemo(
     () => ({
@@ -75,24 +51,20 @@ export default function MercadoPagoWalletBrick({
   );
 
   useEffect(() => {
-    if (typeof window !== "undefined" && window.MercadoPago) {
-      setSdkReady(true);
-    }
-  }, []);
+    if (!publicKey) return;
+
+    initMercadoPago(publicKey, { locale: "pt-BR" });
+  }, [publicKey]);
 
   useEffect(() => {
-    if (!publicKey) {
-      setState("error");
-      setMessage("Pagamento indisponível. Chave pública do Mercado Pago não configurada.");
-      return;
-    }
+    if (!publicKey) return;
 
     let active = true;
 
-    setState("creating");
-    setMessage("Preparando pagamento...");
-
     void (async () => {
+      setState("creating");
+      setRuntimeMessage("Preparando pagamento...");
+
       try {
         const response = await createMercadoPagoCheckoutPreference(payload);
         if (!active) return;
@@ -102,21 +74,21 @@ export default function MercadoPagoWalletBrick({
         try {
           sessionStorage.setItem("mp_pending_order_id", response.orderId);
         } catch {
-          // ignore
+          // Ignore session storage errors.
         }
 
         onCreated?.({ preferenceId: response.preferenceId, orderId: response.orderId });
-
-        setState("rendering");
-        setMessage("Carregando Mercado Pago...");
+        setState("ready");
+        setRuntimeMessage(null);
       } catch (error) {
         if (!active) return;
         if (error instanceof HttpError && error.status === 401) {
           router.replace(buildLoginUrl("/checkout"));
           return;
         }
+
         setState("error");
-        setMessage("Não foi possível preparar o pagamento. Tente novamente em alguns instantes.");
+        setRuntimeMessage("Não foi possível preparar o pagamento. Tente novamente em alguns instantes.");
       }
     })();
 
@@ -125,102 +97,18 @@ export default function MercadoPagoWalletBrick({
     };
   }, [onCreated, payload, publicKey, router]);
 
-  useEffect(() => {
-    if (!sdkReady) return;
-    if (!preferenceId) return;
-    if (!publicKey) {
-      setState("error");
-      setMessage("Pagamento indisponível. Chave pública do Mercado Pago não configurada.");
-      return;
-    }
-
-    let active = true;
-
-    void (async () => {
-      try {
-        setState("rendering");
-
-        if (brickRef.current) {
-          try {
-            await brickRef.current.unmount();
-          } catch {
-            // ignore
-          }
-          brickRef.current = null;
-        }
-
-        const container = document.getElementById(containerId);
-        if (container) container.innerHTML = "";
-
-        const MercadoPago = window.MercadoPago;
-        if (!MercadoPago) throw new Error("SDK do Mercado Pago não carregado.");
-
-        const mp = new MercadoPago(publicKey, { locale: "pt-BR" });
-        const bricksBuilder = mp.bricks();
-
-        const controller = await bricksBuilder.create("wallet", containerId, {
-          initialization: { preferenceId },
-          callbacks: {
-            onReady: () => {
-              if (!active) return;
-              setState("ready");
-              setMessage(null);
-            },
-            onError: () => {
-              if (!active) return;
-              setState("error");
-              setMessage("Não foi possível carregar o pagamento. Recarregue a página e tente novamente.");
-            },
-          },
-        });
-
-        if (!active) {
-          try {
-            await controller.unmount();
-          } catch {
-            // ignore
-          }
-          return;
-        }
-
-        brickRef.current = controller;
-      } catch (error) {
-        if (!active) return;
-        if (error instanceof HttpError && error.status === 401) {
-          router.replace(buildLoginUrl("/checkout"));
-          return;
-        }
-        setState("error");
-        setMessage("Não foi possível carregar o pagamento. Recarregue a página e tente novamente.");
-      }
-    })();
-
-    return () => {
-      active = false;
-      const current = brickRef.current;
-      brickRef.current = null;
-      if (current) {
-        try {
-          void current.unmount();
-        } catch {
-          // ignore
-        }
-      }
-    };
-  }, [containerId, preferenceId, publicKey, router, sdkReady]);
+  const message = missingPublicKey
+    ? "Pagamento indisponível. Chave pública do Mercado Pago não configurada."
+    : runtimeMessage;
 
   return (
     <div className="space-y-4">
-      <Script
-        src="https://sdk.mercadopago.com/js/v2"
-        strategy="afterInteractive"
-        onLoad={() => setSdkReady(true)}
-      />
-
       {message ? (
         <div
           className={`rounded-2xl border p-4 text-sm ${
-            state === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-zinc-200 bg-zinc-50 text-zinc-700"
+            state === "error" || missingPublicKey
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-zinc-200 bg-zinc-50 text-zinc-700"
           }`}
           role="status"
           aria-live="polite"
@@ -230,12 +118,24 @@ export default function MercadoPagoWalletBrick({
       ) : null}
 
       <div
-        id={containerId}
         className={`min-h-[72px] rounded-2xl border border-zinc-200 bg-white p-4 ${
           state === "ready" ? "shadow-soft" : ""
         }`}
-      />
+      >
+        {preferenceId ? (
+          <Wallet
+            initialization={{ preferenceId }}
+            onReady={() => {
+              setState("ready");
+              setRuntimeMessage(null);
+            }}
+            onError={() => {
+              setState("error");
+              setRuntimeMessage("Não foi possível carregar o pagamento. Recarregue a página e tente novamente.");
+            }}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
-

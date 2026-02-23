@@ -6,6 +6,7 @@ import {
   mercadoPagoCheckoutProHandler,
   mercadoPagoPaymentDebugHandler,
   mercadoPagoVerifyHandler,
+  mercadoPagoWebhookHandler,
 } from "../controllers/mercadopago.controller";
 
 const router = Router();
@@ -37,6 +38,8 @@ router.post(
 );
 
 router.get("/mercadopago/verify", mercadoPagoVerifyHandler);
+router.post("/mercadopago/webhook", mercadoPagoWebhookHandler);
+router.get("/mercadopago/webhook", mercadoPagoWebhookHandler);
 
 router.post(
   "/mercadopago/cancel",

@@ -1,8 +1,4 @@
-import { FilterQuery, Types } from "../lib/dbCompat";
-import { CartModel } from "../models/Cart";
-import { InventoryMovementModel } from "../models/InventoryMovement";
-import { OrderModel, OrderStatus } from "../models/Order";
-import { ProductModel } from "../models/Product";
+import { prisma } from "../lib/prisma";
 import { ApiError } from "../utils/apiError";
 import { buildMeta } from "../utils/pagination";
 import { fromCents } from "../utils/money";
@@ -12,9 +8,32 @@ import { refreshCustomerMetrics } from "./customers.service";
 import { markCartConverted } from "./carts.service";
 import { bumpProductsListVersion, invalidateProductCacheByIdentity } from "./products.service";
 
+type OrderStatus = "pendente" | "pago" | "separacao" | "enviado" | "entregue" | "cancelado" | "reembolsado";
+
+type SizeRow = { label: string; stock: number; active?: boolean };
+
+function normalizeSizes(value: unknown): SizeRow[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((raw) => {
+      if (!raw || typeof raw !== "object") return null;
+      const row = raw as any;
+      const label = String(row.label || "").trim();
+      if (!label) return null;
+      return {
+        label,
+        stock: Math.max(0, Math.floor(Number(row.stock ?? 0))),
+        active: row.active === undefined ? true : Boolean(row.active),
+      } as SizeRow;
+    })
+    .filter((row): row is SizeRow => row !== null);
+}
+
 function toOrder(order: any) {
+  const items = Array.isArray(order.items) ? order.items : [];
+
   return {
-    id: String(order._id),
+    id: String(order.id),
     code: order.code,
     customerId: order.customerId ? String(order.customerId) : undefined,
     customerName: order.customerName,
@@ -26,13 +45,13 @@ function toOrder(order: any) {
     shippingMethod: order.shippingMethod,
     paymentMethod: order.paymentMethod,
     createdAt: order.createdAt?.toISOString(),
-    items: (order.items || []).map((item: any) => ({
-      id: String(item._id),
-      name: item.name,
-      sku: item.sku,
-      qty: item.qty,
-      unitPrice: fromCents(item.unitPriceCents),
-      total: fromCents(item.totalCents),
+    items: items.map((item: any, index: number) => ({
+      id: String(item?.id || item?._id || `${index}`),
+      name: item?.name,
+      sku: item?.sku,
+      qty: Number(item?.qty || 0),
+      unitPrice: fromCents(Number(item?.unitPriceCents || 0)),
+      total: fromCents(Number(item?.totalCents || 0)),
     })),
     totals: {
       subtotal: fromCents(order.subtotalCents),
@@ -47,22 +66,22 @@ function toOrder(order: any) {
       totalCents: order.totalCents,
     },
     address: {
-      fullName: order.address.fullName,
-      email: order.address.email,
-      phone: order.address.phone,
-      zip: order.address.zip,
-      state: order.address.state,
-      city: order.address.city,
-      neighborhood: order.address.neighborhood,
-      street: order.address.street,
-      number: order.address.number,
-      complement: order.address.complement,
+      fullName: order.address?.fullName,
+      email: order.address?.email,
+      phone: order.address?.phone,
+      zip: order.address?.zip,
+      state: order.address?.state,
+      city: order.address?.city,
+      neighborhood: order.address?.neighborhood,
+      street: order.address?.street,
+      number: order.address?.number,
+      complement: order.address?.complement,
     },
   };
 }
 
 async function nextOrderCode() {
-  const count = await OrderModel.countDocuments();
+  const count = await prisma.order.count();
   return String(10000 + count + 1);
 }
 
@@ -107,24 +126,26 @@ export async function listAdminOrders(input: {
   q?: string;
   status?: string;
 }) {
-  const query: FilterQuery<any> = {};
+  const where: any = {};
 
   if (input.q) {
-    query.$or = [
-      { code: { $regex: input.q, $options: "i" } },
-      { customerName: { $regex: input.q, $options: "i" } },
-      { email: { $regex: input.q, $options: "i" } },
+    where.OR = [
+      { code: { contains: input.q, mode: "insensitive" } },
+      { customerName: { contains: input.q, mode: "insensitive" } },
+      { email: { contains: input.q, mode: "insensitive" } },
     ];
   }
 
-  if (input.status && input.status !== "all") query.status = input.status;
+  if (input.status && input.status !== "all") where.status = input.status;
 
   const [rows, total] = await Promise.all([
-    OrderModel.find(query)
-      .sort({ createdAt: -1 })
-      .skip((input.page - 1) * input.limit)
-      .limit(input.limit),
-    OrderModel.countDocuments(query),
+    prisma.order.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (input.page - 1) * input.limit,
+      take: input.limit,
+    }),
+    prisma.order.count({ where }),
   ]);
 
   return {
@@ -134,28 +155,32 @@ export async function listAdminOrders(input: {
 }
 
 export async function getAdminOrderById(id: string) {
-  const order = await OrderModel.findById(id);
+  const order = await prisma.order.findUnique({ where: { id } });
   if (!order) throw new ApiError(404, "Pedido não encontrado.");
   return toOrder(order);
 }
 
 export async function updateOrderStatus(id: string, status: OrderStatus) {
-  const order = await OrderModel.findById(id);
+  const order = await prisma.order.findUnique({ where: { id } });
   if (!order) throw new ApiError(404, "Pedido não encontrado.");
 
-  order.status = status;
-  await order.save();
+  const updated = await prisma.order.update({
+    where: { id },
+    data: { status },
+  });
 
-  return toOrder(order);
+  return toOrder(updated);
 }
 
 export async function listMeOrders(customerId: string, input: { page: number; limit: number }) {
   const [rows, total] = await Promise.all([
-    OrderModel.find({ customerId })
-      .sort({ createdAt: -1 })
-      .skip((input.page - 1) * input.limit)
-      .limit(input.limit),
-    OrderModel.countDocuments({ customerId }),
+    prisma.order.findMany({
+      where: { customerId },
+      orderBy: { createdAt: "desc" },
+      skip: (input.page - 1) * input.limit,
+      take: input.limit,
+    }),
+    prisma.order.count({ where: { customerId } }),
   ]);
 
   return {
@@ -165,7 +190,7 @@ export async function listMeOrders(customerId: string, input: { page: number; li
 }
 
 export async function getMeOrderById(customerId: string, orderId: string) {
-  const order = await OrderModel.findOne({ _id: orderId, customerId });
+  const order = await prisma.order.findFirst({ where: { id: orderId, customerId } });
   if (!order) throw new ApiError(404, "Pedido não encontrado.");
   return toOrder(order);
 }
@@ -197,26 +222,36 @@ export async function createStoreOrder(input: {
 
   const finalize = input.finalize ?? true;
 
-  const productIds = input.items.map((item) => item.id);
-  const products = await ProductModel.find({ _id: { $in: productIds }, active: true });
-  if (products.length !== input.items.length) {
+  const productIds = Array.from(new Set(input.items.map((item) => item.id)));
+  const products = await prisma.product.findMany({
+    where: { id: { in: productIds }, active: true },
+  });
+  if (products.length !== productIds.length) {
     throw new ApiError(400, "Um ou mais produtos do pedido não foram encontrados.");
+  }
+
+  const productMap = new Map(products.map((p) => [p.id, p] as const));
+  const mutableStock = new Map<string, { stock: number; sizes: SizeRow[]; sizeType: string }>();
+  for (const p of products) {
+    mutableStock.set(p.id, {
+      stock: Math.max(0, Math.floor(Number(p.stock ?? 0))),
+      sizes: normalizeSizes(p.sizes),
+      sizeType: (p.sizeType as string) || "unico",
+    });
   }
 
   const itemRows: any[] = [];
 
   for (const requested of input.items) {
-    const product = products.find((row) => String(row._id) === requested.id);
+    const product = productMap.get(requested.id);
     if (!product) throw new ApiError(400, "Produto inválido no pedido.");
 
     const qty = Math.max(1, Math.floor(requested.qty));
-
-    const sizeType =
-      (product.sizeType as string) || (Array.isArray(product.sizes) && product.sizes.length ? "custom" : "unico");
-    const hasSizes = sizeType !== "unico" && Array.isArray(product.sizes) && product.sizes.length > 0;
+    const stockState = mutableStock.get(product.id)!;
+    const hasSizes = stockState.sizeType !== "unico" && stockState.sizes.length > 0;
 
     let sizeLabel: string | undefined;
-    let availableStock = Math.max(0, Math.floor(Number(product.stock ?? 0)));
+    let availableStock = stockState.stock;
 
     if (hasSizes) {
       const rawLabel = String(requested.sizeLabel || "").trim();
@@ -225,20 +260,34 @@ export async function createStoreOrder(input: {
       }
 
       const normalized = rawLabel.toLocaleLowerCase("pt-BR");
-      const row = product.sizes.find((entry: any) => {
+      const idx = stockState.sizes.findIndex((entry) => {
         const label = String(entry?.label || "").trim();
         const active = entry?.active === undefined ? true : Boolean(entry.active);
         return active && label.toLocaleLowerCase("pt-BR") === normalized;
       });
 
-      if (!row) throw new ApiError(400, `Tamanho inválido para ${product.name}.`);
+      if (idx === -1) throw new ApiError(400, `Tamanho inválido para ${product.name}.`);
 
-      sizeLabel = String(row.label || rawLabel).trim();
-      availableStock = Math.max(0, Math.floor(Number(row.stock ?? 0)));
-    }
+      sizeLabel = String(stockState.sizes[idx]!.label || rawLabel).trim();
+      availableStock = Math.max(0, Math.floor(Number(stockState.sizes[idx]?.stock ?? 0)));
 
-    if (availableStock < qty) {
-      throw new ApiError(400, hasSizes ? `Estoque insuficiente para ${product.name} (${sizeLabel}).` : `Estoque insuficiente para ${product.name}.`);
+      if (availableStock < qty) {
+        throw new ApiError(400, `Estoque insuficiente para ${product.name} (${sizeLabel}).`);
+      }
+
+      stockState.sizes[idx] = {
+        ...stockState.sizes[idx]!,
+        stock: availableStock - qty,
+      };
+      stockState.stock = stockState.sizes.reduce((acc, entry) => {
+        const isActive = entry.active === undefined ? true : Boolean(entry.active);
+        return acc + (isActive ? Math.max(0, entry.stock) : 0);
+      }, 0);
+    } else {
+      if (stockState.stock < qty) {
+        throw new ApiError(400, `Estoque insuficiente para ${product.name}.`);
+      }
+      stockState.stock -= qty;
     }
 
     const totalCents = product.priceCents * qty;
@@ -246,7 +295,7 @@ export async function createStoreOrder(input: {
     itemRows.push({
       product,
       payload: {
-        productId: product._id,
+        productId: product.id,
         name: product.name,
         sku: product.sku,
         qty,
@@ -278,65 +327,71 @@ export async function createStoreOrder(input: {
 
   const code = await nextOrderCode();
 
-  const created = await OrderModel.create({
-    code,
-    customerId: input.customerId ? new Types.ObjectId(input.customerId) : undefined,
-    customerName: input.address.fullName,
-    email: input.address.email.toLowerCase(),
-    status: "pendente",
-    channel: input.channel || "Site",
-    shippingMethod: shippingMethod?.label || input.shippingMethod || "Padrão",
-    paymentMethod: input.paymentMethod || "Pix",
-    items: itemRows.map((row) => row.payload),
-    itemsCount: itemRows.reduce((acc, row) => acc + row.payload.qty, 0),
-    subtotalCents,
-    discountCents,
-    shippingCents,
-    taxCents,
-    totalCents,
-    couponCode: input.couponCode?.toUpperCase(),
-    cashbackUsedCents: input.cashbackUsedCents || 0,
-    address: input.address,
-  });
-
   const touchedProducts = new Map<string, string>();
 
-  for (const row of itemRows) {
-    const qty = Math.max(1, Math.floor(Number(row.payload.qty)));
-    const sizeLabel = row.payload.sizeLabel ? String(row.payload.sizeLabel).trim() : undefined;
+  const created = await prisma.$transaction(async (tx) => {
+    const order = await tx.order.create({
+      data: {
+        code,
+        customerId: input.customerId || null,
+        customerName: input.address.fullName,
+        email: input.address.email.toLowerCase(),
+        status: "pendente",
+        channel: input.channel || "Site",
+        shippingMethod: shippingMethod?.label || input.shippingMethod || "Padrão",
+        paymentMethod: input.paymentMethod || "Pix",
+        items: itemRows.map((row) => row.payload) as any,
+        itemsCount: itemRows.reduce((acc, row) => acc + row.payload.qty, 0),
+        subtotalCents,
+        discountCents,
+        shippingCents,
+        taxCents,
+        totalCents,
+        couponCode: input.couponCode?.toUpperCase(),
+        cashbackUsedCents: input.cashbackUsedCents || 0,
+        address: input.address as any,
+        orderItems: {
+          create: itemRows.map((row) => ({
+            productId: row.product.id,
+            name: row.payload.name,
+            sku: row.payload.sku,
+            qty: row.payload.qty,
+            unitPriceCents: row.payload.unitPriceCents,
+            totalCents: row.payload.totalCents,
+            variant: row.payload.variant,
+            sizeLabel: row.payload.sizeLabel,
+            slug: row.payload.slug,
+          })),
+        },
+      },
+    });
 
-    if (sizeLabel && Array.isArray(row.product.sizes) && row.product.sizes.length > 0) {
-      const normalized = sizeLabel.toLocaleLowerCase("pt-BR");
-      const idx = row.product.sizes.findIndex(
-        (entry: any) => String(entry?.label || "").trim().toLocaleLowerCase("pt-BR") === normalized,
-      );
+    for (const row of itemRows) {
+      const stockState = mutableStock.get(row.product.id)!;
+      await tx.product.update({
+        where: { id: row.product.id },
+        data: {
+          stock: stockState.stock,
+          sizes: stockState.sizes as any,
+        },
+      });
 
-      if (idx >= 0) {
-        const current = Math.max(0, Math.floor(Number(row.product.sizes[idx]?.stock ?? 0)));
-        row.product.sizes[idx]!.stock = Math.max(0, current - qty);
-      }
+      touchedProducts.set(row.product.id, String(row.product.slug || ""));
 
-      row.product.stock = row.product.sizes.reduce((acc: number, entry: any) => {
-        const isActive = entry?.active === undefined ? true : Boolean(entry.active);
-        const value = Math.max(0, Math.floor(Number(entry?.stock ?? 0)));
-        return acc + (isActive ? value : 0);
-      }, 0);
-    } else {
-      row.product.stock = Math.max(0, Math.floor(Number(row.product.stock ?? 0)) - qty);
+      await tx.inventoryMovement.create({
+        data: {
+          productId: row.product.id,
+          type: "saida",
+          quantity: -Math.max(1, Math.floor(Number(row.payload.qty))),
+          reason: `Pedido ${code}`,
+          createdBy: input.customerId || "sistema",
+          sizeLabel: row.payload.sizeLabel,
+        },
+      });
     }
 
-    await row.product.save();
-    touchedProducts.set(String(row.product._id), String(row.product.slug || ""));
-
-    await InventoryMovementModel.create({
-      productId: row.product._id,
-      type: "saida",
-      quantity: -qty,
-      reason: `Pedido ${code}`,
-      createdBy: input.customerId || "sistema",
-      sizeLabel,
-    });
-  }
+    return order;
+  });
 
   if (touchedProducts.size > 0) {
     await Promise.all(
@@ -355,7 +410,7 @@ export async function createStoreOrder(input: {
     if (input.couponCode && discountCents > 0) {
       await registerCouponRedemption({
         couponCode: input.couponCode,
-        orderId: String(created._id),
+        orderId: String(created.id),
         customerId: input.customerId,
         discountCents,
       });
@@ -363,13 +418,15 @@ export async function createStoreOrder(input: {
 
     const cashback = await grantCashbackForOrder({
       customerId: input.customerId,
-      orderId: String(created._id),
+      orderId: String(created.id),
       subtotalCents,
     });
 
     if (cashback.grantedCents > 0) {
-      created.cashbackGrantedCents = cashback.grantedCents;
-      await created.save();
+      await prisma.order.update({
+        where: { id: created.id },
+        data: { cashbackGrantedCents: cashback.grantedCents },
+      });
     }
 
     if (input.customerId) {
@@ -381,24 +438,28 @@ export async function createStoreOrder(input: {
     }
   }
 
-  return toOrder(created);
+  const fresh = await prisma.order.findUnique({ where: { id: created.id } });
+  if (!fresh) throw new ApiError(500, "Falha ao carregar pedido criado.");
+  return toOrder(fresh);
 }
 
 export async function createOrderFromCart(cartId: string) {
-  const cart = await CartModel.findById(cartId);
+  const cart = await prisma.cart.findUnique({ where: { id: cartId } });
   if (!cart) throw new ApiError(404, "Carrinho não encontrado.");
-  if (!cart.items.length) throw new ApiError(400, "Carrinho sem itens.");
+
+  const items = Array.isArray(cart.items) ? cart.items : [];
+  if (!items.length) throw new ApiError(400, "Carrinho sem itens.");
 
   const order = await createStoreOrder({
-    customerId: cart.customerId ? String(cart.customerId) : undefined,
-    cartId: String(cart._id),
+    customerId: cart.customerId || undefined,
+    cartId: String(cart.id),
     channel: "Site",
     shippingMethod: "Padrão",
     paymentMethod: "Pix",
-    couponCode: cart.couponCode,
-    items: cart.items.map((item: any) => ({
+    couponCode: cart.couponCode || undefined,
+    items: items.map((item: any) => ({
       id: String(item.productId),
-      qty: item.qty,
+      qty: Number(item.qty || 1),
       variant: item.variant,
       sizeLabel: item.sizeLabel,
     })),
@@ -420,4 +481,3 @@ export async function createOrderFromCart(cartId: string) {
 }
 
 export { toOrder };
-

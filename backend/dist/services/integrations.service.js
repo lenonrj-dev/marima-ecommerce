@@ -4,12 +4,12 @@ exports.listIntegrations = listIntegrations;
 exports.updateIntegration = updateIntegration;
 exports.testIntegrationWebhook = testIntegrationWebhook;
 exports.toIntegration = toIntegration;
-const IntegrationConfig_1 = require("../models/IntegrationConfig");
+const prisma_1 = require("../lib/prisma");
 const pagination_1 = require("../utils/pagination");
 const apiError_1 = require("../utils/apiError");
 function toIntegration(row) {
     return {
-        id: String(row._id),
+        id: String(row.id),
         group: row.group,
         name: row.name,
         description: row.description,
@@ -20,40 +20,42 @@ function toIntegration(row) {
     };
 }
 async function listIntegrations(input) {
-    const query = {};
+    const where = {};
     if (input.q) {
-        query.$or = [
-            { group: { $regex: input.q, $options: "i" } },
-            { name: { $regex: input.q, $options: "i" } },
-            { description: { $regex: input.q, $options: "i" } },
+        where.OR = [
+            { group: { contains: input.q, mode: "insensitive" } },
+            { name: { contains: input.q, mode: "insensitive" } },
+            { description: { contains: input.q, mode: "insensitive" } },
         ];
     }
     const [rows, total] = await Promise.all([
-        IntegrationConfig_1.IntegrationConfigModel.find(query)
-            .sort({ group: 1, createdAt: -1 })
-            .skip((input.page - 1) * input.limit)
-            .limit(input.limit),
-        IntegrationConfig_1.IntegrationConfigModel.countDocuments(query),
+        prisma_1.prisma.integrationConfig.findMany({
+            where,
+            orderBy: [{ group: "asc" }, { createdAt: "desc" }],
+            skip: (input.page - 1) * input.limit,
+            take: input.limit,
+        }),
+        prisma_1.prisma.integrationConfig.count({ where }),
     ]);
     return { data: rows.map(toIntegration), meta: (0, pagination_1.buildMeta)(total, input.page, input.limit) };
 }
 async function updateIntegration(id, input) {
-    const item = await IntegrationConfig_1.IntegrationConfigModel.findById(id);
+    const item = await prisma_1.prisma.integrationConfig.findUnique({ where: { id } });
     if (!item)
         throw new apiError_1.ApiError(404, "Integra��o n�o encontrada.");
-    if (input.connected !== undefined)
-        item.connected = input.connected;
-    if (input.config !== undefined)
-        item.config = input.config;
-    if (input.description !== undefined)
-        item.description = input.description;
-    if (input.name !== undefined)
-        item.name = input.name;
-    await item.save();
-    return toIntegration(item);
+    const updated = await prisma_1.prisma.integrationConfig.update({
+        where: { id },
+        data: {
+            ...(input.connected !== undefined ? { connected: input.connected } : {}),
+            ...(input.config !== undefined ? { config: input.config } : {}),
+            ...(input.description !== undefined ? { description: input.description } : {}),
+            ...(input.name !== undefined ? { name: input.name } : {}),
+        },
+    });
+    return toIntegration(updated);
 }
 async function testIntegrationWebhook(id) {
-    const item = await IntegrationConfig_1.IntegrationConfigModel.findById(id);
+    const item = await prisma_1.prisma.integrationConfig.findUnique({ where: { id } });
     if (!item)
         throw new apiError_1.ApiError(404, "Integra��o n�o encontrada.");
     return {

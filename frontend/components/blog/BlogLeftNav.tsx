@@ -112,7 +112,7 @@ export default function BlogLeftNav({ topics, activeTopic }: { topics: BlogTopic
               Central de ajuda
             </Link>
             <Link
-              href="mailto:suporte.marima.loja@gmail.com"
+              href="/central-de-ajuda/contato"
               className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
             >
               Falar com suporte

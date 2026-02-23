@@ -1,12 +1,11 @@
-import { FilterQuery } from "../lib/dbCompat";
-import { CouponModel } from "../models/Coupon";
+import { prisma } from "../lib/prisma";
 import { ApiError } from "../utils/apiError";
 import { buildMeta } from "../utils/pagination";
 import { fromCents, toCents } from "../utils/money";
 
 function toCoupon(coupon: any) {
   return {
-    id: String(coupon._id),
+    id: String(coupon.id),
     code: coupon.code,
     description: coupon.description,
     type: coupon.type,
@@ -24,20 +23,22 @@ function toCoupon(coupon: any) {
 }
 
 export async function listCoupons(input: { page: number; limit: number; q?: string }) {
-  const query: FilterQuery<any> = {};
+  const where: any = {};
   if (input.q) {
-    query.$or = [
-      { code: { $regex: input.q, $options: "i" } },
-      { description: { $regex: input.q, $options: "i" } },
+    where.OR = [
+      { code: { contains: input.q, mode: "insensitive" } },
+      { description: { contains: input.q, mode: "insensitive" } },
     ];
   }
 
   const [rows, total] = await Promise.all([
-    CouponModel.find(query)
-      .sort({ createdAt: -1 })
-      .skip((input.page - 1) * input.limit)
-      .limit(input.limit),
-    CouponModel.countDocuments(query),
+    prisma.coupon.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (input.page - 1) * input.limit,
+      take: input.limit,
+    }),
+    prisma.coupon.count({ where }),
   ]);
 
   return { data: rows.map(toCoupon), meta: buildMeta(total, input.page, input.limit) };
@@ -55,22 +56,29 @@ export async function createCoupon(input: {
   active?: boolean;
 }) {
   const code = input.code.trim().toUpperCase();
-  const exists = await CouponModel.findOne({ code });
-  if (exists) throw new ApiError(409, "Cupom já existe.");
 
-  const created = await CouponModel.create({
-    code,
-    description: input.description.trim(),
-    type: input.type,
-    amount: input.type === "fixed" ? toCents(input.amount) : input.amount,
-    minSubtotalCents: input.minSubtotal ? toCents(input.minSubtotal) : undefined,
-    maxUses: input.maxUses,
-    startsAt: new Date(input.startsAt),
-    endsAt: new Date(input.endsAt),
-    active: input.active ?? true,
-  });
+  try {
+    const created = await prisma.coupon.create({
+      data: {
+        code,
+        description: input.description.trim(),
+        type: input.type,
+        amount: input.type === "fixed" ? toCents(input.amount) : input.amount,
+        minSubtotalCents: input.minSubtotal ? toCents(input.minSubtotal) : undefined,
+        maxUses: input.maxUses,
+        startsAt: new Date(input.startsAt),
+        endsAt: new Date(input.endsAt),
+        active: input.active ?? true,
+      },
+    });
 
-  return toCoupon(created);
+    return toCoupon(created);
+  } catch (error: any) {
+    if (error?.code === "P2002") {
+      throw new ApiError(409, "Cupom já existe.");
+    }
+    throw error;
+  }
 }
 
 export async function updateCoupon(
@@ -86,35 +94,49 @@ export async function updateCoupon(
     active: boolean;
   }>,
 ) {
-  const coupon = await CouponModel.findById(id);
+  const coupon = await prisma.coupon.findUnique({ where: { id } });
   if (!coupon) throw new ApiError(404, "Cupom não encontrado.");
 
-  if (input.description !== undefined) coupon.description = input.description.trim();
-  if (input.type !== undefined) coupon.type = input.type;
-  if (input.amount !== undefined) coupon.amount = coupon.type === "fixed" ? toCents(input.amount) : input.amount;
-  if (input.minSubtotal !== undefined) coupon.minSubtotalCents = input.minSubtotal ? toCents(input.minSubtotal) : undefined;
-  if (input.maxUses !== undefined) coupon.maxUses = input.maxUses;
-  if (input.startsAt !== undefined) coupon.startsAt = new Date(input.startsAt);
-  if (input.endsAt !== undefined) coupon.endsAt = new Date(input.endsAt);
-  if (input.active !== undefined) coupon.active = input.active;
+  const nextType = input.type ?? coupon.type;
 
-  await coupon.save();
-  return toCoupon(coupon);
+  const updated = await prisma.coupon.update({
+    where: { id },
+    data: {
+      ...(input.description !== undefined ? { description: input.description.trim() } : {}),
+      ...(input.type !== undefined ? { type: input.type } : {}),
+      ...(input.amount !== undefined
+        ? {
+            amount: nextType === "fixed" ? toCents(input.amount) : input.amount,
+          }
+        : {}),
+      ...(input.minSubtotal !== undefined
+        ? { minSubtotalCents: input.minSubtotal ? toCents(input.minSubtotal) : null }
+        : {}),
+      ...(input.maxUses !== undefined ? { maxUses: input.maxUses } : {}),
+      ...(input.startsAt !== undefined ? { startsAt: new Date(input.startsAt) } : {}),
+      ...(input.endsAt !== undefined ? { endsAt: new Date(input.endsAt) } : {}),
+      ...(input.active !== undefined ? { active: input.active } : {}),
+    },
+  });
+
+  return toCoupon(updated);
 }
 
 export async function toggleCoupon(id: string) {
-  const coupon = await CouponModel.findById(id);
+  const coupon = await prisma.coupon.findUnique({ where: { id } });
   if (!coupon) throw new ApiError(404, "Cupom não encontrado.");
 
-  coupon.active = !coupon.active;
-  await coupon.save();
+  const updated = await prisma.coupon.update({
+    where: { id },
+    data: { active: !coupon.active },
+  });
 
-  return toCoupon(coupon);
+  return toCoupon(updated);
 }
 
 export async function validateCoupon(code: string, subtotalCents: number) {
   const normalized = code.trim().toUpperCase();
-  const coupon = await CouponModel.findOne({ code: normalized, active: true });
+  const coupon = await prisma.coupon.findFirst({ where: { code: normalized, active: true } });
   if (!coupon) throw new ApiError(404, "Cupom não encontrado.");
 
   const now = new Date();
@@ -124,10 +146,10 @@ export async function validateCoupon(code: string, subtotalCents: number) {
 
   let discountCents = 0;
   if (coupon.type === "percent") discountCents = Math.round(subtotalCents * (coupon.amount / 100));
-  if (coupon.type === "fixed") discountCents = Math.min(subtotalCents, coupon.amount);
+  if (coupon.type === "fixed") discountCents = Math.min(subtotalCents, Math.floor(coupon.amount));
 
   return {
-    couponId: String(coupon._id),
+    couponId: String(coupon.id),
     code: coupon.code,
     type: coupon.type,
     discountCents,
@@ -140,18 +162,36 @@ export async function registerCouponRedemption(input: {
   customerId?: string;
   discountCents: number;
 }) {
-  const coupon = await CouponModel.findOne({ code: input.couponCode.toUpperCase() });
+  const coupon = await prisma.coupon.findUnique({ where: { code: input.couponCode.toUpperCase() } });
   if (!coupon) return;
 
-  coupon.uses += 1;
-  coupon.redemptions.push({
-    orderId: input.orderId as any,
-    customerId: input.customerId as any,
-    discountCents: input.discountCents,
-  });
+  const redemptions = Array.isArray(coupon.redemptions) ? coupon.redemptions : [];
 
-  await coupon.save();
+  await prisma.$transaction(async (tx) => {
+    await tx.coupon.update({
+      where: { id: coupon.id },
+      data: {
+        uses: { increment: 1 },
+        redemptions: [
+          ...redemptions,
+          {
+            orderId: input.orderId,
+            customerId: input.customerId,
+            discountCents: input.discountCents,
+          },
+        ],
+      },
+    });
+
+    await tx.couponRedemption.create({
+      data: {
+        couponId: coupon.id,
+        orderId: input.orderId,
+        customerId: input.customerId,
+        discountCents: input.discountCents,
+      },
+    });
+  });
 }
 
 export { toCoupon };
-

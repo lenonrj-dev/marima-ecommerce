@@ -1,6 +1,4 @@
-import { OrderModel } from "../models/Order";
-import { ProductModel } from "../models/Product";
-import { CustomerModel } from "../models/Customer";
+import { prisma } from "../lib/prisma";
 import { fromCents } from "../utils/money";
 
 function toCsv(rows: Array<Record<string, string | number>>) {
@@ -21,7 +19,11 @@ function toCsv(rows: Array<Record<string, string | number>>) {
 }
 
 export async function exportSalesCsv() {
-  const rows = await OrderModel.find().sort({ createdAt: -1 }).limit(5000);
+  const rows = await prisma.order.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 5000,
+  });
+
   const content = toCsv(
     rows.map((order) => ({
       code: order.code,
@@ -44,7 +46,11 @@ export async function exportSalesCsv() {
 }
 
 export async function exportProductsCsv() {
-  const rows = await ProductModel.find().sort({ updatedAt: -1 }).limit(5000);
+  const rows = await prisma.product.findMany({
+    orderBy: { updatedAt: "desc" },
+    take: 5000,
+  });
+
   const content = toCsv(
     rows.map((product) => ({
       sku: product.sku,
@@ -67,7 +73,11 @@ export async function exportProductsCsv() {
 }
 
 export async function exportCustomersCsv() {
-  const rows = await CustomerModel.find().sort({ createdAt: -1 }).limit(5000);
+  const rows = await prisma.customer.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 5000,
+  });
+
   const content = toCsv(
     rows.map((customer) => ({
       name: customer.name,

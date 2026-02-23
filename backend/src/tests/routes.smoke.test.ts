@@ -1,14 +1,9 @@
 import bcrypt from "bcryptjs";
 import request from "supertest";
-import { beforeAll, afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { app } from "../app";
 import { connectDb, disconnectDb } from "../config/db";
 import { prisma } from "../lib/prisma";
-import { AdminUserModel } from "../models/AdminUser";
-import { CategoryModel } from "../models/Category";
-import { CustomerModel } from "../models/Customer";
-import { PostModel } from "../models/Post";
-import { ProductModel } from "../models/Product";
 import { collectRouteInventory } from "./routeInventory";
 
 const ADMIN_EMAIL = "admin@exemplo.com";
@@ -24,92 +19,127 @@ let adminAgent: ReturnType<typeof request.agent>;
 let customerAgent: ReturnType<typeof request.agent>;
 
 async function resetDatabase() {
-  await prisma.document.deleteMany();
+  await prisma.supportMessage.deleteMany();
+  await prisma.supportTicket.deleteMany();
+  await prisma.paymentTransaction.deleteMany();
+  await prisma.couponRedemption.deleteMany();
+  await prisma.cashbackLedger.deleteMany();
+  await prisma.orderItem.deleteMany();
+  await prisma.order.deleteMany();
+  await prisma.inventoryMovement.deleteMany();
+  await prisma.favorite.deleteMany();
+  await prisma.review.deleteMany();
+  await prisma.sharedCart.deleteMany();
+  await prisma.savedCart.deleteMany();
+  await prisma.cart.deleteMany();
+  await prisma.customerAddress.deleteMany();
   await prisma.newsletterSubscriber.deleteMany();
+  await prisma.blogComment.deleteMany();
+  await prisma.post.deleteMany();
+  await prisma.product.deleteMany();
+  await prisma.category.deleteMany();
+  await prisma.coupon.deleteMany();
+  await prisma.cashbackRule.deleteMany();
+  await prisma.integrationConfig.deleteMany();
+  await prisma.storeSettings.deleteMany();
+  await prisma.customer.deleteMany();
+  await prisma.adminUser.deleteMany();
 }
 
 async function seedBaseData() {
   const adminHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
   const customerHash = await bcrypt.hash(CUSTOMER_PASSWORD, 10);
 
-  await AdminUserModel.create({
-    name: "Administrador",
-    email: ADMIN_EMAIL,
-    passwordHash: adminHash,
-    role: "admin",
-    active: true,
+  await prisma.adminUser.create({
+    data: {
+      name: "Administrador",
+      email: ADMIN_EMAIL,
+      passwordHash: adminHash,
+      role: "admin",
+      active: true,
+    },
   });
 
-  await CustomerModel.create({
-    name: "Cliente Exemplo",
-    email: CUSTOMER_EMAIL,
-    passwordHash: customerHash,
-    phone: "+55 21 99999-0001",
-    segment: "novo",
-    active: true,
+  await prisma.customer.create({
+    data: {
+      name: "Cliente Exemplo",
+      email: CUSTOMER_EMAIL,
+      passwordHash: customerHash,
+      phone: "+55 21 99999-0001",
+      segment: "novo",
+      active: true,
+    },
   });
 
-  const category = await CategoryModel.create({
-    name: "Fitness",
-    slug: "fitness",
-    active: true,
-    sortOrder: 1,
+  const category = await prisma.category.create({
+    data: {
+      name: "Fitness",
+      slug: "fitness",
+      active: true,
+      sortOrder: 1,
+    },
   });
 
-  const product = await ProductModel.create({
-    name: "Legging Teste",
-    slug: "legging-teste",
-    sku: "LEG-TEST-001",
-    category: "fitness",
-    categoryId: String(category._id),
-    size: "P, M, G",
-    sizeType: "roupas",
-    sizes: [
-      { label: "P", stock: 5, active: true },
-      { label: "M", stock: 7, active: true },
-      { label: "G", stock: 4, active: true },
-    ],
-    stock: 16,
-    priceCents: 15990,
-    shortDescription: "Legging de teste",
-    description: "Descrição completa do produto de teste",
-    additionalInfo: [{ label: "Tecido", value: "Tecnológico" }],
-    tags: ["teste"],
-    status: "padrao",
-    active: true,
-    images: ["https://example.com/image-1.jpg"],
+  const product = await prisma.product.create({
+    data: {
+      name: "Legging Teste",
+      slug: "legging-teste",
+      sku: "LEG-TEST-001",
+      category: "fitness",
+      categoryId: category.id,
+      size: "P, M, G",
+      sizeType: "roupas",
+      sizes: [
+        { label: "P", stock: 5, active: true },
+        { label: "M", stock: 7, active: true },
+        { label: "G", stock: 4, active: true },
+      ],
+      stock: 16,
+      priceCents: 15990,
+      shortDescription: "Legging de teste",
+      description: "Descricao completa do produto de teste",
+      additionalInfo: [{ label: "Tecido", value: "Tecnologico" }],
+      tags: ["teste"],
+      status: "padrao",
+      active: true,
+      images: ["https://example.com/image-1.jpg"],
+    },
   });
-  productId = String(product._id);
+  productId = product.id;
 
-  const publishedPost = await PostModel.create({
-    title: "Post Publicado",
-    slug: "post-publicado",
-    excerpt: "Resumo publicado",
-    content: "Conteúdo publicado para testes.",
-    coverImage: "https://example.com/post.jpg",
-    tags: ["teste"],
-    topic: "novidades",
-    featured: false,
-    published: true,
-    publishedAt: new Date(),
-    authorName: "Equipe Marima",
+  const publishedPost = await prisma.post.create({
+    data: {
+      title: "Post Publicado",
+      slug: "post-publicado",
+      excerpt: "Resumo publicado",
+      content: "Conteudo publicado para testes.",
+      coverImage: "https://example.com/post.jpg",
+      tags: ["teste"],
+      topic: "novidades",
+      featured: false,
+      published: true,
+      publishedAt: new Date(),
+      authorName: "Equipe Marima",
+    },
   });
-  postId = String(publishedPost._id);
-  postSlug = String(publishedPost.slug);
+  postId = publishedPost.id;
+  postSlug = publishedPost.slug;
 
-  const draftPost = await PostModel.create({
-    title: "Post Rascunho",
-    slug: "post-rascunho",
-    excerpt: "Resumo rascunho",
-    content: "Conteúdo rascunho para testes.",
-    coverImage: "https://example.com/post-draft.jpg",
-    tags: ["teste"],
-    topic: "novidades",
-    featured: false,
-    published: false,
-    authorName: "Equipe Marima",
+  const draftPost = await prisma.post.create({
+    data: {
+      title: "Post Rascunho",
+      slug: "post-rascunho",
+      excerpt: "Resumo rascunho",
+      content: "Conteudo rascunho para testes.",
+      coverImage: "https://example.com/post-draft.jpg",
+      tags: ["teste"],
+      topic: "novidades",
+      featured: false,
+      published: false,
+      authorName: "Equipe Marima",
+    },
   });
-  draftSlug = String(draftPost.slug);
+  draftSlug = draftPost.slug;
 }
 
 async function login(agent: ReturnType<typeof request.agent>, email: string, password: string, mode: "admin" | "customer") {
@@ -124,7 +154,7 @@ function fillPath(path: string) {
     if (key === "id") return postId || "caaaaaaaaaaaaaaaaaaaaaaaa";
     if (key === "slug") return postSlug || "post-publicado";
     if (key === "productId") return productId || "cbbbbbbbbbbbbbbbbbbbbbbbb";
-    if (key === "savedCartId") return "ccccccccccccccccccccccccc";
+    if (key === "savedCartId") return "saved-cart-smoke";
     if (key === "itemId") return "item-1";
     if (key === "token") return "token-smoke-1234";
     return `${key}-smoke`;
@@ -135,15 +165,9 @@ function bodyFixture(path: string) {
   if (path.includes("/auth/customer/register")) {
     return { name: "Cliente Novo", email: "novo@exemplo.com", password: "Cliente@123", phone: "+55 11 90000-0000" };
   }
-  if (path.includes("/auth/customer/login")) {
-    return { email: CUSTOMER_EMAIL, password: CUSTOMER_PASSWORD };
-  }
-  if (path.includes("/auth/admin/login")) {
-    return { email: ADMIN_EMAIL, password: ADMIN_PASSWORD };
-  }
-  if (path.includes("/store/coupons/validate")) {
-    return { code: "BEMVINDO10", subtotalCents: 15990 };
-  }
+  if (path.includes("/auth/customer/login")) return { email: CUSTOMER_EMAIL, password: CUSTOMER_PASSWORD };
+  if (path.includes("/auth/admin/login")) return { email: ADMIN_EMAIL, password: ADMIN_PASSWORD };
+  if (path.includes("/store/coupons/validate")) return { code: "BEMVINDO10", subtotalCents: 15990 };
   if (path.includes("/payments/mercadopago/checkout-pro")) {
     return {
       address: {
@@ -159,19 +183,15 @@ function bodyFixture(path: string) {
       },
     };
   }
-  if (path.includes("/payments/mercadopago/cancel")) {
-    return { orderId: "order-smoke" };
-  }
+  if (path.includes("/payments/mercadopago/cancel")) return { orderId: "order-smoke" };
   if (path.endsWith("/blog/posts")) {
     return {
       title: "Post Smoke",
-      content: "Conteúdo smoke do blog para validação.",
+      content: "Conteudo smoke do blog para validacao.",
       published: false,
     };
   }
-  if (path.match(/\/blog\/posts\/[^/]+$/)) {
-    return { published: true };
-  }
+  if (path.match(/\/blog\/posts\/[^/]+$/)) return { published: true };
   return {};
 }
 
@@ -205,10 +225,10 @@ describe.sequential("API v1 smoke routes", () => {
     await adminAgent.get("/api/v1/auth/me").expect(200);
   }, 20_000);
 
-  it("corrige fluxo do blog por id/slug e compatibilidade de métodos", async () => {
+  it("corrige fluxo do blog por id/slug e compatibilidade de metodos", async () => {
     const created = await adminAgent.post("/api/v1/blog/posts").send({
-      title: "Post Integração",
-      content: "Conteúdo de integração do post.",
+      title: "Post Integracao",
+      content: "Conteudo de integracao do post.",
       published: false,
     });
     expect(created.status).toBe(201);
@@ -217,7 +237,7 @@ describe.sequential("API v1 smoke routes", () => {
 
     await adminAgent.get(`/api/v1/blog/posts/${createdId}`).expect(200);
     await adminAgent.patch(`/api/v1/blog/posts/${createdId}`).send({ published: true }).expect(200);
-    await adminAgent.put(`/api/v1/blog/posts/${createdId}`).send({ title: "Post Integração Atualizado" }).expect(200);
+    await adminAgent.put(`/api/v1/blog/posts/${createdId}`).send({ title: "Post Integracao Atualizado" }).expect(200);
     await adminAgent.post(`/api/v1/blog/posts/${createdId}`).send({ featured: true }).expect(200);
 
     const missingId = `c${"z".repeat(24)}`;
@@ -227,30 +247,51 @@ describe.sequential("API v1 smoke routes", () => {
     await request(app).get(`/api/v1/blog/posts/${draftSlug}`).expect(404);
   }, 20_000);
 
-  it("processa inscricao de newsletter com validacao e deduplicacao", async () => {
+  it("processa comentarios e busca avancada do blog", async () => {
+    const listBefore = await request(app).get(`/api/v1/blog/posts/${postSlug}/comments?limit=20`);
+    expect(listBefore.status).toBe(200);
+
     await request(app)
-      .post("/api/v1/marketing/newsletter/subscribe")
-      .send({ email: "invalido", source: "blog" })
-      .expect(400);
+      .post(`/api/v1/blog/posts/${postSlug}/comments`)
+      .send({ content: "Comentário sem autenticação." })
+      .expect(401);
+
+    const created = await customerAgent.post(`/api/v1/blog/posts/${postSlug}/comments`).send({
+      content: "Excelente conteúdo sobre moda fitness!",
+    });
+    expect(created.status).toBe(201);
+    expect(created.body?.data?.content).toContain("Excelente conteúdo");
+
+    const listAfter = await request(app).get(`/api/v1/blog/posts/${postSlug}/comments?limit=20`);
+    expect(listAfter.status).toBe(200);
+    expect(Array.isArray(listAfter.body?.data?.items)).toBe(true);
+    expect(listAfter.body?.data?.items?.length).toBeGreaterThan(0);
+
+    const search = await request(app).get("/api/v1/blog/posts").query({
+      q: "publicado",
+      status: "published",
+      topic: "novidades",
+      tags: "teste",
+      page: 1,
+      limit: 10,
+    });
+    expect(search.status).toBe(200);
+    expect(Array.isArray(search.body?.data)).toBe(true);
+    expect(search.body?.data?.length).toBeGreaterThan(0);
+  }, 20_000);
+
+  it("processa inscricao de newsletter com validacao e deduplicacao", async () => {
+    await request(app).post("/api/v1/marketing/newsletter/subscribe").send({ email: "invalido", source: "blog" }).expect(400);
 
     const email = "newsletter.teste@exemplo.com";
-
-    const first = await request(app)
-      .post("/api/v1/marketing/newsletter/subscribe")
-      .send({ email, source: "blog" });
-
+    const first = await request(app).post("/api/v1/marketing/newsletter/subscribe").send({ email, source: "blog" });
     expect(first.status).toBe(201);
     expect(first.body?.data?.status).toBe("subscribed");
 
-    const stored = await prisma.newsletterSubscriber.findUnique({
-      where: { email },
-    });
+    const stored = await prisma.newsletterSubscriber.findUnique({ where: { email } });
     expect(stored?.email).toBe(email);
 
-    const second = await request(app)
-      .post("/api/v1/marketing/newsletter/subscribe")
-      .send({ email, source: "footer" });
-
+    const second = await request(app).post("/api/v1/marketing/newsletter/subscribe").send({ email, source: "footer" });
     expect(second.status).toBe(200);
     expect(second.body?.data?.status).toBe("already_subscribed");
   }, 20_000);

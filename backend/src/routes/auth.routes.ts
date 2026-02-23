@@ -63,6 +63,8 @@ router.post(
 );
 
 router.post("/logout", logoutHandler);
+router.post("/customer/logout", logoutHandler);
+router.post("/admin/logout", logoutHandler);
 router.post("/refresh", refreshHandler);
 router.get("/me", requireAuth, meHandler);
 router.get("/debug", optionalAuth, (req, res) => {

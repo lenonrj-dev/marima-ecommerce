@@ -1,12 +1,25 @@
-import { FilterQuery } from "../lib/dbCompat";
+import { prisma } from "../lib/prisma";
 import { bumpCacheVersion, delCache, getCacheVersion, getOrSetCache, hashCacheQuery } from "../lib/cache";
-import { ProductModel, ProductSizeType, ProductStatus } from "../models/Product";
-import { FavoriteModel } from "../models/Favorite";
 import { ApiError } from "../utils/apiError";
 import { normalizeColorVariantInput } from "../utils/colorVariants";
 import { fromCents, toCents } from "../utils/money";
 import { slugify } from "../utils/slug";
 import { buildMeta } from "../utils/pagination";
+
+type ProductStatus = "padrao" | "novo" | "destaque" | "oferta";
+type ProductSizeType = "roupas" | "numerico" | "unico" | "custom";
+
+type ProductSizeRow = {
+  label: string;
+  stock: number;
+  sku?: string;
+  active?: boolean;
+};
+
+type ProductAdditionalInfoRow = {
+  label: string;
+  value: string;
+};
 
 function statusToBadge(status: ProductStatus) {
   if (status === "novo") return "Novo";
@@ -25,18 +38,6 @@ const PRODUCTS_LIST_VERSION_KEY = "cache:v1:products:listVersion";
 const PRODUCTS_LIST_TTL_SECONDS = 60;
 const PRODUCT_ITEM_TTL_SECONDS = 60 * 15;
 const PRODUCT_STOCK_TTL_SECONDS = 20;
-
-type ProductSizeRow = {
-  label: string;
-  stock: number;
-  sku?: string;
-  active?: boolean;
-};
-
-type ProductAdditionalInfoRow = {
-  label: string;
-  value: string;
-};
 
 function normalizeSizes(input: unknown): ProductSizeRow[] {
   if (!Array.isArray(input)) return [];
@@ -111,7 +112,7 @@ function toAdmin(product: any) {
   const additionalInfo = normalizeAdditionalInfo(product.additionalInfo);
 
   return {
-    id: String(product._id),
+    id: String(product.id),
     name: product.name,
     sku: product.sku,
     groupKey: product.groupKey || undefined,
@@ -127,10 +128,10 @@ function toAdmin(product: any) {
     shortDescription: product.shortDescription,
     description: product.description,
     additionalInfo,
-    tags: product.tags,
+    tags: Array.isArray(product.tags) ? product.tags : [],
     status: product.status,
     active: product.active,
-    images: product.images,
+    images: Array.isArray(product.images) ? product.images : [],
     updatedAt: product.updatedAt?.toISOString(),
     slug: product.slug,
     createdAt: product.createdAt?.toISOString(),
@@ -145,19 +146,20 @@ function toStore(product: any) {
   const rating = Math.max(0, Math.min(5, Number(product.reviewAverage ?? 0)));
   const reviewCount = Math.max(0, Math.floor(Number(product.reviewCount ?? 0)));
 
-  const gallery = (product.images || []).map((src: string, index: number) => ({ src, alt: `${product.name} ${index + 1}` }));
+  const rawImages = Array.isArray(product.images) ? product.images : [];
+  const gallery = rawImages.map((src: string, index: number) => ({ src, alt: `${product.name} ${index + 1}` }));
   return {
-    id: String(product._id),
+    id: String(product.id),
     slug: product.slug,
     title: product.name,
     price: fromCents(product.priceCents),
     compareAtPrice: product.compareAtPriceCents ? fromCents(product.compareAtPriceCents) : undefined,
-    image: product.images?.[0] || "",
+    image: rawImages[0] || "",
     category: canonicalCategory(product.category),
     groupKey: product.groupKey || undefined,
     colorName: product.colorName || undefined,
     colorHex: product.colorHex || undefined,
-    tags: product.tags || [],
+    tags: Array.isArray(product.tags) ? product.tags : [],
     stock: Math.max(0, Math.floor(Number(totalStock ?? 0))),
     variants: [],
     badge: statusToBadge(product.status),
@@ -214,7 +216,10 @@ function mergeStoreProductStock<T extends { stock: number; sizes: string[]; size
 async function getCachedStockByProductId(productId: string) {
   const key = `cache:v1:stock:${productId}`;
   return getOrSetCache(key, PRODUCT_STOCK_TTL_SECONDS, async () => {
-    const product = await ProductModel.findById(productId).select("stock sizes sizeType active");
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { stock: true, sizes: true, sizeType: true, active: true },
+    });
     if (!product || !product.active) {
       return { stock: 0, sizes: [], sizesDetailed: [] } as ProductStockSnapshot;
     }
@@ -265,40 +270,45 @@ export async function listAdminProducts(input: {
   active?: boolean;
   sort?: string;
 }) {
-  const query: FilterQuery<any> = {};
+  const where: any = {};
 
   if (input.q) {
-    query.$or = [
-      { name: { $regex: input.q, $options: "i" } },
-      { sku: { $regex: input.q, $options: "i" } },
-      { shortDescription: { $regex: input.q, $options: "i" } },
-      { tags: { $elemMatch: { $regex: input.q, $options: "i" } } },
+    where.OR = [
+      { name: { contains: input.q, mode: "insensitive" } },
+      { sku: { contains: input.q, mode: "insensitive" } },
+      { shortDescription: { contains: input.q, mode: "insensitive" } },
     ];
   }
 
   if (input.category) {
     const key = canonicalCategory(input.category);
     if (key === "casual") {
-      query.category = { $in: ["casual", "acessorios"] };
+      where.category = { in: ["casual", "acessorios"] };
     } else {
-      query.category = input.category;
+      where.category = input.category;
     }
   }
 
   if (input.groupKey) {
-    query.groupKey = slugify(String(input.groupKey || "").trim());
+    where.groupKey = slugify(String(input.groupKey || "").trim());
   }
-  if (input.status && input.status !== "all") query.status = input.status;
-  if (typeof input.active === "boolean") query.active = input.active;
+  if (input.status && input.status !== "all") where.status = input.status;
+  if (typeof input.active === "boolean") where.active = input.active;
 
   const sort = input.sort || "-updatedAt";
+  let orderBy: any = { updatedAt: "desc" };
+  if (sort === "price_asc") orderBy = { priceCents: "asc" };
+  if (sort === "price_desc") orderBy = { priceCents: "desc" };
+  if (sort === "newest") orderBy = { createdAt: "desc" };
 
   const [rows, total] = await Promise.all([
-    ProductModel.find(query)
-      .sort(sort)
-      .skip((input.page - 1) * input.limit)
-      .limit(input.limit),
-    ProductModel.countDocuments(query),
+    prisma.product.findMany({
+      where,
+      orderBy,
+      skip: (input.page - 1) * input.limit,
+      take: input.limit,
+    }),
+    prisma.product.count({ where }),
   ]);
 
   return {
@@ -308,7 +318,7 @@ export async function listAdminProducts(input: {
 }
 
 export async function getAdminProductById(id: string) {
-  const product = await ProductModel.findById(id);
+  const product = await prisma.product.findUnique({ where: { id } });
   if (!product) throw new ApiError(404, "Produto não encontrado.");
   return toAdmin(product);
 }
@@ -335,7 +345,7 @@ export async function createProduct(input: {
   images: string[];
 }) {
   const sku = input.sku.trim().toUpperCase();
-  const exists = await ProductModel.findOne({ sku });
+  const exists = await prisma.product.findUnique({ where: { sku } });
   if (exists) throw new ApiError(409, "SKU já existente.");
 
   const slug = slugify(`${input.name}-${sku}`);
@@ -365,32 +375,34 @@ export async function createProduct(input: {
     category: input.category,
   });
 
-  const created = await ProductModel.create({
-    name: input.name.trim(),
-    slug,
-    sku,
-    groupKey: normalizedColors.groupKey,
-    colorName: normalizedColors.colorName,
-    colorHex: normalizedColors.colorHex,
-    category: canonicalCategory(input.category),
-    size: sizeText,
-    sizeType: nextSizeType,
-    sizes: usesSizes ? normalizedSizes : [],
-    stock: totalStock,
-    priceCents: toCents(input.price),
-    compareAtPriceCents:
-      input.compareAtPrice !== undefined && input.compareAtPrice > 0 ? toCents(input.compareAtPrice) : undefined,
-    shortDescription: input.shortDescription.trim(),
-    description: input.description.trim(),
-    additionalInfo: normalizeAdditionalInfo(input.additionalInfo),
-    tags: input.tags || [],
-    status: input.status,
-    active: input.active,
-    images: input.images,
+  const created = await prisma.product.create({
+    data: {
+      name: input.name.trim(),
+      slug,
+      sku,
+      groupKey: normalizedColors.groupKey,
+      colorName: normalizedColors.colorName,
+      colorHex: normalizedColors.colorHex,
+      category: canonicalCategory(input.category),
+      size: sizeText,
+      sizeType: nextSizeType,
+      sizes: usesSizes ? (normalizedSizes as any) : ([] as any),
+      stock: totalStock,
+      priceCents: toCents(input.price),
+      compareAtPriceCents:
+        input.compareAtPrice !== undefined && input.compareAtPrice > 0 ? toCents(input.compareAtPrice) : undefined,
+      shortDescription: input.shortDescription.trim(),
+      description: input.description.trim(),
+      additionalInfo: normalizeAdditionalInfo(input.additionalInfo) as any,
+      tags: (input.tags || []) as any,
+      status: input.status,
+      active: input.active,
+      images: input.images as any,
+    },
   });
 
   await invalidateProductCacheByIdentity({
-    id: String(created._id),
+    id: String(created.id),
     slug: created.slug,
   });
 
@@ -421,38 +433,43 @@ export async function updateProduct(
     images: string[];
   }>,
 ) {
-  const product = await ProductModel.findById(id);
+  const product = await prisma.product.findUnique({ where: { id } });
   if (!product) throw new ApiError(404, "Produto não encontrado.");
   const previousSlug = String(product.slug || "");
 
-  if (input.name !== undefined) product.name = input.name.trim();
-  if (input.sku !== undefined) product.sku = input.sku.trim().toUpperCase();
-  if (input.category !== undefined) product.category = canonicalCategory(input.category);
+  const current: any = {
+    ...product,
+    sizes: normalizeSizes(product.sizes),
+  };
+
+  if (input.name !== undefined) current.name = input.name.trim();
+  if (input.sku !== undefined) current.sku = input.sku.trim().toUpperCase();
+  if (input.category !== undefined) current.category = canonicalCategory(input.category);
 
   const normalizedColors = normalizeColorVariantInput({
     groupKey: input.groupKey,
     colorName: input.colorName,
     colorHex: input.colorHex,
-    productName: product.name,
-    category: product.category,
+    productName: current.name,
+    category: current.category,
   });
 
-  if (input.groupKey !== undefined) product.groupKey = normalizedColors.groupKey;
-  if (input.colorName !== undefined) product.colorName = normalizedColors.colorName;
-  if (input.colorHex !== undefined) product.colorHex = normalizedColors.colorHex;
+  if (input.groupKey !== undefined) current.groupKey = normalizedColors.groupKey;
+  if (input.colorName !== undefined) current.colorName = normalizedColors.colorName;
+  if (input.colorHex !== undefined) current.colorHex = normalizedColors.colorHex;
 
   if (
     input.groupKey === undefined &&
     input.colorName === undefined &&
     input.colorHex === undefined &&
-    !product.groupKey &&
-    !product.colorName &&
+    !current.groupKey &&
+    !current.colorName &&
     normalizedColors.inferred?.groupKey &&
     normalizedColors.inferred?.colorName
   ) {
-    product.groupKey = normalizedColors.inferred.groupKey;
-    product.colorName = normalizedColors.inferred.colorName;
-    product.colorHex = normalizedColors.inferred.colorHex;
+    current.groupKey = normalizedColors.inferred.groupKey;
+    current.colorName = normalizedColors.inferred.colorName;
+    current.colorHex = normalizedColors.inferred.colorHex;
   }
 
   const explicitSizeType = input.sizeType;
@@ -463,10 +480,10 @@ export async function updateProduct(
       throw new ApiError(400, "Tipo de tamanho inválido.");
     }
 
-    product.sizeType = explicitSizeType;
+    current.sizeType = explicitSizeType;
 
     if (explicitSizeType === "unico") {
-      product.sizes = [];
+      current.sizes = [];
     }
   }
 
@@ -476,65 +493,93 @@ export async function updateProduct(
     }
 
     if (sizesInput.length === 0) {
-      product.sizeType = "unico";
-      product.sizes = [];
+      current.sizeType = "unico";
+      current.sizes = [];
     } else {
-      product.sizes = sizesInput;
-      if (inferSizeType(product) === "unico") {
-        product.sizeType = "custom";
+      current.sizes = sizesInput;
+      if (inferSizeType(current) === "unico") {
+        current.sizeType = "custom";
       }
     }
   }
 
-  const finalSizeType = inferSizeType(product);
+  const finalSizeType = inferSizeType(current);
   if (finalSizeType !== "unico") {
-    const normalizedSizes = normalizeSizes(product.sizes);
+    const normalizedSizes = normalizeSizes(current.sizes);
     if (!normalizedSizes.length) throw new ApiError(400, "Informe ao menos um tamanho.");
 
-    product.sizes = normalizedSizes;
-    product.size = normalizedSizes.map((row) => row.label).join(", ");
-    product.stock = sumActiveSizeStock(normalizedSizes);
+    current.sizes = normalizedSizes;
+    current.size = normalizedSizes.map((row) => row.label).join(", ");
+    current.stock = sumActiveSizeStock(normalizedSizes);
   } else {
-    if (input.size !== undefined) product.size = input.size?.trim() || undefined;
-    if (input.stock !== undefined) product.stock = Math.max(0, Math.floor(input.stock));
+    if (input.size !== undefined) current.size = input.size?.trim() || undefined;
+    if (input.stock !== undefined) current.stock = Math.max(0, Math.floor(input.stock));
   }
 
-  if (input.price !== undefined) product.priceCents = toCents(input.price);
+  if (input.price !== undefined) current.priceCents = toCents(input.price);
   if (input.compareAtPrice !== undefined) {
-    product.compareAtPriceCents = input.compareAtPrice > 0 ? toCents(input.compareAtPrice) : undefined;
+    current.compareAtPriceCents = input.compareAtPrice > 0 ? toCents(input.compareAtPrice) : undefined;
   }
-  if (input.shortDescription !== undefined) product.shortDescription = input.shortDescription.trim();
-  if (input.description !== undefined) product.description = input.description.trim();
-  if (input.additionalInfo !== undefined) product.additionalInfo = normalizeAdditionalInfo(input.additionalInfo);
-  if (input.tags !== undefined) product.tags = input.tags;
-  if (input.status !== undefined) product.status = input.status;
-  if (input.active !== undefined) product.active = input.active;
-  if (input.images !== undefined) product.images = input.images;
+  if (input.shortDescription !== undefined) current.shortDescription = input.shortDescription.trim();
+  if (input.description !== undefined) current.description = input.description.trim();
+  if (input.additionalInfo !== undefined) current.additionalInfo = normalizeAdditionalInfo(input.additionalInfo);
+  if (input.tags !== undefined) current.tags = input.tags;
+  if (input.status !== undefined) current.status = input.status;
+  if (input.active !== undefined) current.active = input.active;
+  if (input.images !== undefined) current.images = input.images;
 
-  product.slug = slugify(`${product.name}-${product.sku}`);
+  current.slug = slugify(`${current.name}-${current.sku}`);
 
-  await product.save();
+  const updated = await prisma.product.update({
+    where: { id },
+    data: {
+      name: current.name,
+      slug: current.slug,
+      sku: current.sku,
+      groupKey: current.groupKey,
+      colorName: current.colorName,
+      colorHex: current.colorHex,
+      category: current.category,
+      size: current.size,
+      sizeType: current.sizeType,
+      sizes: current.sizes as any,
+      stock: current.stock,
+      priceCents: current.priceCents,
+      compareAtPriceCents: current.compareAtPriceCents,
+      shortDescription: current.shortDescription,
+      description: current.description,
+      additionalInfo: normalizeAdditionalInfo(current.additionalInfo) as any,
+      tags: (current.tags || []) as any,
+      status: current.status,
+      active: current.active,
+      images: (current.images || []) as any,
+    },
+  });
+
   await invalidateProductCacheByIdentity({
-    id: String(product._id),
-    slug: product.slug,
+    id: String(updated.id),
+    slug: updated.slug,
     previousSlug,
   });
 
-  return toAdmin(product);
+  return toAdmin(updated);
 }
 
 export async function toggleProductActivation(id: string, active: boolean) {
-  const product = await ProductModel.findById(id);
+  const product = await prisma.product.findUnique({ where: { id } });
   if (!product) throw new ApiError(404, "Produto não encontrado.");
 
-  product.active = active;
-  await product.save();
-  await invalidateProductCacheByIdentity({
-    id: String(product._id),
-    slug: product.slug,
+  const updated = await prisma.product.update({
+    where: { id },
+    data: { active },
   });
 
-  return toAdmin(product);
+  await invalidateProductCacheByIdentity({
+    id: String(updated.id),
+    slug: updated.slug,
+  });
+
+  return toAdmin(updated);
 }
 
 export async function listStoreProducts(input: {
@@ -567,45 +612,41 @@ export async function listStoreProducts(input: {
   const cacheKey = `cache:v1:products:list:v${version}:${listHash}`;
 
   return getOrSetCache(cacheKey, PRODUCTS_LIST_TTL_SECONDS, async () => {
-    const query: FilterQuery<any> = {};
+    const where: any = {};
 
     if (input.q) {
-      query.$or = [
-        { name: { $regex: input.q, $options: "i" } },
-        { category: { $regex: input.q, $options: "i" } },
-        { tags: { $elemMatch: { $regex: input.q, $options: "i" } } },
+      where.OR = [
+        { name: { contains: input.q, mode: "insensitive" } },
+        { category: { contains: input.q, mode: "insensitive" } },
       ];
     }
 
     if (input.category) {
       const key = canonicalCategory(input.category);
       if (key === "casual") {
-        query.category = { $in: ["casual", "acessorios"] };
+        where.category = { in: ["casual", "acessorios"] };
       } else {
-        query.category = canonicalCategory(input.category);
+        where.category = canonicalCategory(input.category);
       }
     }
-    if (input.status && input.status !== "all") query.status = input.status;
-    query.active = input.active ?? true;
-    query.stock = { $gt: 0 };
+    if (input.status && input.status !== "all") where.status = input.status;
+    where.active = input.active ?? true;
+    where.stock = { gt: 0 };
 
     if (input.maxPrice && Number.isFinite(input.maxPrice)) {
-      query.priceCents = { $lte: toCents(input.maxPrice) };
+      where.priceCents = { lte: toCents(input.maxPrice) };
     }
 
-    let sort: Record<string, 1 | -1> = { createdAt: -1, _id: -1 };
-    if (input.sort === "price_asc") sort = { priceCents: 1, _id: 1 };
-    if (input.sort === "price_desc") sort = { priceCents: -1, _id: -1 };
-    if (input.sort === "newest") sort = { createdAt: -1, _id: -1 };
+    let orderBy: any = [{ createdAt: "desc" }, { id: "desc" }];
+    if (input.sort === "price_asc") orderBy = [{ priceCents: "asc" }, { id: "asc" }];
+    if (input.sort === "price_desc") orderBy = [{ priceCents: "desc" }, { id: "desc" }];
+    if (input.sort === "newest") orderBy = [{ createdAt: "desc" }, { id: "desc" }];
 
     const skip = (page - 1) * limit;
 
     const [rows, total] = await Promise.all([
-      ProductModel.find(query)
-        .sort(sort)
-        .skip(skip)
-        .limit(limit),
-      ProductModel.countDocuments(query),
+      prisma.product.findMany({ where, orderBy, skip, take: limit }),
+      prisma.product.count({ where }),
     ]);
 
     const base = rows.map(toStore);
@@ -632,10 +673,19 @@ export async function listStoreProducts(input: {
       };
     }
 
-    const variantDocs = await ProductModel.find(
-      { groupKey: { $in: groupKeys } },
-      { _id: 1, groupKey: 1, slug: 1, colorName: 1, colorHex: 1, active: 1, stock: 1 },
-    ).sort({ groupKey: 1, colorName: 1, slug: 1 });
+    const variantDocs = await prisma.product.findMany({
+      where: { groupKey: { in: groupKeys } },
+      select: {
+        id: true,
+        groupKey: true,
+        slug: true,
+        colorName: true,
+        colorHex: true,
+        active: true,
+        stock: true,
+      },
+      orderBy: [{ groupKey: "asc" }, { colorName: "asc" }, { slug: "asc" }],
+    });
 
     const variantsByGroup = new Map<
       string,
@@ -653,7 +703,7 @@ export async function listStoreProducts(input: {
       if (!groupKey) continue;
 
       const mapped = {
-        id: String(doc._id),
+        id: String(doc.id),
         slug: doc.slug,
         colorName: doc.colorName || undefined,
         colorHex: doc.colorHex || undefined,
@@ -691,7 +741,7 @@ export async function listStoreProducts(input: {
 export async function getStoreProductBySlug(slug: string) {
   const key = `cache:v1:products:item:${slug}`;
   const cached = await getOrSetCache(key, PRODUCT_ITEM_TTL_SECONDS, async () => {
-    const product = await ProductModel.findOne({ slug, active: true, stock: { $gt: 0 } });
+    const product = await prisma.product.findFirst({ where: { slug, active: true, stock: { gt: 0 } } });
     if (!product) throw new ApiError(404, "Produto não encontrado.");
     return toStore(product);
   });
@@ -705,7 +755,7 @@ export async function getStoreProductBySlug(slug: string) {
 export async function getStoreProductVariantsBySlug(slug: string) {
   const key = `cache:v1:products:item:${slug}:variants`;
   return getOrSetCache(key, PRODUCTS_LIST_TTL_SECONDS, async () => {
-    const product = await ProductModel.findOne({ slug, active: true, stock: { $gt: 0 } });
+    const product = await prisma.product.findFirst({ where: { slug, active: true, stock: { gt: 0 } } });
     if (!product) throw new ApiError(404, "Produto não encontrado.");
 
     const groupKey = typeof product.groupKey === "string" ? product.groupKey.trim() : "";
@@ -713,7 +763,7 @@ export async function getStoreProductVariantsBySlug(slug: string) {
       return {
         groupKey: "",
         current: {
-          id: String(product._id),
+          id: String(product.id),
           slug: product.slug,
           colorName: product.colorName || undefined,
           colorHex: product.colorHex || undefined,
@@ -725,12 +775,15 @@ export async function getStoreProductVariantsBySlug(slug: string) {
       };
     }
 
-    const variants = await ProductModel.find({ groupKey }).sort({ colorName: 1, slug: 1 });
+    const variants = await prisma.product.findMany({
+      where: { groupKey },
+      orderBy: [{ colorName: "asc" }, { slug: "asc" }],
+    });
 
     const current = variants.find((item) => item.slug === product.slug) ?? product;
 
     const mapped = variants.map((variant) => ({
-      id: String(variant._id),
+      id: String(variant.id),
       slug: variant.slug,
       colorName: variant.colorName || undefined,
       colorHex: variant.colorHex || undefined,
@@ -742,7 +795,7 @@ export async function getStoreProductVariantsBySlug(slug: string) {
     return {
       groupKey,
       current: {
-        id: String(current._id),
+        id: String(current.id),
         slug: current.slug,
         colorName: current.colorName || undefined,
         colorHex: current.colorHex || undefined,
@@ -756,29 +809,35 @@ export async function getStoreProductVariantsBySlug(slug: string) {
 }
 
 export async function listLowStockProducts(limit = 10) {
-  const rows = await ProductModel.find({ stock: { $lte: 5 } }).sort({ stock: 1 }).limit(limit);
+  const rows = await prisma.product.findMany({
+    where: { stock: { lte: 5 } },
+    orderBy: { stock: "asc" },
+    take: limit,
+  });
   return rows.map(toAdmin);
 }
 
 export async function getProductByIdOrFail(id: string) {
-  const product = await ProductModel.findById(id);
+  const product = await prisma.product.findUnique({ where: { id } });
   if (!product) throw new ApiError(404, "Produto não encontrado.");
   return product;
 }
 
 export async function deleteProduct(id: string) {
-  const product = await ProductModel.findById(id);
+  const product = await prisma.product.findUnique({ where: { id } });
   if (!product) throw new ApiError(404, "Produto não encontrado.");
 
   const slug = String(product.slug || "");
-  await Promise.all([FavoriteModel.deleteMany({ productId: product._id })]);
-  await product.deleteOne();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.favorite.deleteMany({ where: { productId: product.id } });
+    await tx.product.delete({ where: { id: product.id } });
+  });
+
   await invalidateProductCacheByIdentity({
-    id: String(product._id),
+    id: String(product.id),
     slug,
   });
 
   return { success: true };
 }
-
-

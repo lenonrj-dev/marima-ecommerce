@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.mercadoPagoPaymentDebugHandler = exports.mercadoPagoCancelHandler = exports.mercadoPagoVerifyHandler = exports.mercadoPagoCheckoutProHandler = void 0;
+exports.mercadoPagoWebhookHandler = exports.mercadoPagoPaymentDebugHandler = exports.mercadoPagoCancelHandler = exports.mercadoPagoVerifyHandler = exports.mercadoPagoCheckoutProHandler = void 0;
 const notFound_1 = require("../middlewares/notFound");
 const rbac_1 = require("../middlewares/rbac");
 const auth_1 = require("../middlewares/auth");
@@ -64,3 +64,31 @@ exports.mercadoPagoPaymentDebugHandler = [
         res.json({ data });
     }),
 ];
+exports.mercadoPagoWebhookHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
+    const body = (req.body || {});
+    const query = req.query;
+    const paymentIdRaw = (body?.data && typeof body.data === "object" ? body.data.id : undefined) ||
+        query["data.id"] ||
+        query.id ||
+        query.payment_id;
+    const paymentId = String(paymentIdRaw || "").trim();
+    if (!paymentId) {
+        res.status(200).json({ data: { ok: true } });
+        return;
+    }
+    try {
+        await (0, mercadopago_service_1.verifyMercadoPagoPayment)({
+            paymentId,
+            externalReference: query.external_reference ? String(query.external_reference).trim() : undefined,
+            merchantOrderId: query.merchant_order_id ? String(query.merchant_order_id).trim() : undefined,
+        });
+    }
+    catch (error) {
+        // O webhook deve sempre responder 200 para evitar retries desnecessários em loop.
+        console.error("[MP webhook] Falha ao processar pagamento", {
+            paymentId,
+            error: error instanceof Error ? error.message : String(error),
+        });
+    }
+    res.status(200).json({ data: { ok: true } });
+});

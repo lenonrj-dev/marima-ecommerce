@@ -117,6 +117,12 @@ enum SupportTicketPriority {
   alta
 }
 
+enum CommentStatus {
+  published
+  hidden
+  pending
+}
+
 model AdminUser {
   id           String    @id @default(cuid())
   name         String
@@ -155,6 +161,7 @@ model Customer {
   supportTickets SupportTicket[]
   sharedCarts    SharedCart[]      @relation("SharedCartSourceCustomer")
   couponRedemptions CouponRedemption[]
+  blogComments   BlogComment[]
 }
 
 model Category {
@@ -555,11 +562,33 @@ model Post {
   authorName    String   @default("")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  comments      BlogComment[]
 
   @@index([title])
   @@index([featured])
   @@index([published])
   @@index([publishedAt])
+}
+
+model BlogComment {
+  id         String        @id @default(cuid())
+  postId     String
+  customerId String
+  content    String
+  status     CommentStatus @default(published)
+  parentId   String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  post       Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  customer   Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  parent     BlogComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies    BlogComment[] @relation("CommentReplies")
+
+  @@index([postId, createdAt])
+  @@index([customerId])
+  @@index([status])
+  @@index([parentId])
 }
 
 model NewsletterSubscriber {
@@ -615,14 +644,4 @@ model SupportMessage {
   ticket       SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([ticketId])
-}
-
-model Document {
-  id         String   @id @default(cuid())
-  collection String
-  data       Json
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([collection])
 }

@@ -10,15 +10,13 @@ exports.redeemCashback = redeemCashback;
 exports.getCustomerCashbackBalance = getCustomerCashbackBalance;
 exports.toRule = toRule;
 exports.toLedger = toLedger;
-const dbCompat_1 = require("../lib/dbCompat");
-const CashbackLedger_1 = require("../models/CashbackLedger");
-const CashbackRule_1 = require("../models/CashbackRule");
+const prisma_1 = require("../lib/prisma");
 const apiError_1 = require("../utils/apiError");
 const pagination_1 = require("../utils/pagination");
 const money_1 = require("../utils/money");
 function toRule(rule) {
     return {
-        id: String(rule._id),
+        id: String(rule.id),
         name: rule.name,
         percent: rule.percent,
         validDays: rule.validDays,
@@ -31,7 +29,7 @@ function toRule(rule) {
 }
 function toLedger(row) {
     return {
-        id: String(row._id),
+        id: String(row.id),
         customerId: String(row.customerId),
         orderId: row.orderId ? String(row.orderId) : undefined,
         type: row.type,
@@ -43,68 +41,86 @@ function toLedger(row) {
     };
 }
 async function getCurrentBalanceCents(customerId) {
-    const last = await CashbackLedger_1.CashbackLedgerModel.findOne({ customerId }).sort({ createdAt: -1 });
+    const last = await prisma_1.prisma.cashbackLedger.findFirst({
+        where: { customerId },
+        orderBy: { createdAt: "desc" },
+        select: { balanceAfterCents: true },
+    });
     return last?.balanceAfterCents || 0;
 }
 async function listCashbackRules(input) {
     const [rows, total] = await Promise.all([
-        CashbackRule_1.CashbackRuleModel.find().sort({ createdAt: -1 }).skip((input.page - 1) * input.limit).limit(input.limit),
-        CashbackRule_1.CashbackRuleModel.countDocuments(),
+        prisma_1.prisma.cashbackRule.findMany({
+            orderBy: { createdAt: "desc" },
+            skip: (input.page - 1) * input.limit,
+            take: input.limit,
+        }),
+        prisma_1.prisma.cashbackRule.count(),
     ]);
     return { data: rows.map(toRule), meta: (0, pagination_1.buildMeta)(total, input.page, input.limit) };
 }
 async function createCashbackRule(input) {
-    const created = await CashbackRule_1.CashbackRuleModel.create({
-        name: input.name,
-        percent: input.percent,
-        validDays: input.validDays,
-        minSubtotalCents: (0, money_1.toCents)(input.minSubtotal),
-        maxCashbackCents: (0, money_1.toCents)(input.maxCashback),
-        active: input.active ?? true,
+    const created = await prisma_1.prisma.cashbackRule.create({
+        data: {
+            name: input.name,
+            percent: input.percent,
+            validDays: input.validDays,
+            minSubtotalCents: (0, money_1.toCents)(input.minSubtotal),
+            maxCashbackCents: (0, money_1.toCents)(input.maxCashback),
+            active: input.active ?? true,
+        },
     });
     return toRule(created);
 }
 async function updateCashbackRule(id, input) {
-    const rule = await CashbackRule_1.CashbackRuleModel.findById(id);
+    const rule = await prisma_1.prisma.cashbackRule.findUnique({ where: { id } });
     if (!rule)
         throw new apiError_1.ApiError(404, "Regra de cashback n�o encontrada.");
-    if (input.name !== undefined)
-        rule.name = input.name;
-    if (input.percent !== undefined)
-        rule.percent = input.percent;
-    if (input.validDays !== undefined)
-        rule.validDays = input.validDays;
-    if (input.minSubtotal !== undefined)
-        rule.minSubtotalCents = (0, money_1.toCents)(input.minSubtotal);
-    if (input.maxCashback !== undefined)
-        rule.maxCashbackCents = (0, money_1.toCents)(input.maxCashback);
-    if (input.active !== undefined)
-        rule.active = input.active;
-    await rule.save();
-    return toRule(rule);
+    const updated = await prisma_1.prisma.cashbackRule.update({
+        where: { id },
+        data: {
+            ...(input.name !== undefined ? { name: input.name } : {}),
+            ...(input.percent !== undefined ? { percent: input.percent } : {}),
+            ...(input.validDays !== undefined ? { validDays: input.validDays } : {}),
+            ...(input.minSubtotal !== undefined ? { minSubtotalCents: (0, money_1.toCents)(input.minSubtotal) } : {}),
+            ...(input.maxCashback !== undefined ? { maxCashbackCents: (0, money_1.toCents)(input.maxCashback) } : {}),
+            ...(input.active !== undefined ? { active: input.active } : {}),
+        },
+    });
+    return toRule(updated);
 }
 async function toggleCashbackRule(id) {
-    const rule = await CashbackRule_1.CashbackRuleModel.findById(id);
+    const rule = await prisma_1.prisma.cashbackRule.findUnique({ where: { id } });
     if (!rule)
         throw new apiError_1.ApiError(404, "Regra de cashback n�o encontrada.");
-    rule.active = !rule.active;
-    await rule.save();
-    return toRule(rule);
+    const updated = await prisma_1.prisma.cashbackRule.update({
+        where: { id },
+        data: { active: !rule.active },
+    });
+    return toRule(updated);
 }
 async function listCashbackLedger(input) {
-    const query = {};
+    const where = {};
     if (input.customerId)
-        query.customerId = input.customerId;
+        where.customerId = input.customerId;
     const [rows, total] = await Promise.all([
-        CashbackLedger_1.CashbackLedgerModel.find(query).sort({ createdAt: -1 }).skip((input.page - 1) * input.limit).limit(input.limit),
-        CashbackLedger_1.CashbackLedgerModel.countDocuments(query),
+        prisma_1.prisma.cashbackLedger.findMany({
+            where,
+            orderBy: { createdAt: "desc" },
+            skip: (input.page - 1) * input.limit,
+            take: input.limit,
+        }),
+        prisma_1.prisma.cashbackLedger.count({ where }),
     ]);
     return { data: rows.map(toLedger), meta: (0, pagination_1.buildMeta)(total, input.page, input.limit) };
 }
 async function grantCashbackForOrder(input) {
     if (!input.customerId)
         return { grantedCents: 0 };
-    const rule = await CashbackRule_1.CashbackRuleModel.findOne({ active: true }).sort({ percent: -1, createdAt: -1 });
+    const rule = await prisma_1.prisma.cashbackRule.findFirst({
+        where: { active: true },
+        orderBy: [{ percent: "desc" }, { createdAt: "desc" }],
+    });
     if (!rule)
         return { grantedCents: 0 };
     if (input.subtotalCents < rule.minSubtotalCents)
@@ -116,14 +132,16 @@ async function grantCashbackForOrder(input) {
     const current = await getCurrentBalanceCents(input.customerId);
     const balanceAfter = current + grantedCents;
     const expiresAt = new Date(Date.now() + rule.validDays * 24 * 60 * 60 * 1000);
-    await CashbackLedger_1.CashbackLedgerModel.create({
-        customerId: input.customerId,
-        orderId: input.orderId,
-        type: "credit",
-        amountCents: grantedCents,
-        balanceAfterCents: balanceAfter,
-        expiresAt,
-        note: `Cashback do pedido ${input.orderId}`,
+    await prisma_1.prisma.cashbackLedger.create({
+        data: {
+            customerId: input.customerId,
+            orderId: input.orderId,
+            type: "credit",
+            amountCents: grantedCents,
+            balanceAfterCents: balanceAfter,
+            expiresAt,
+            note: `Cashback do pedido ${input.orderId}`,
+        },
     });
     return { grantedCents };
 }
@@ -135,13 +153,15 @@ async function redeemCashback(input) {
     if (current < amountCents)
         throw new apiError_1.ApiError(400, "Saldo de cashback insuficiente.");
     const balanceAfter = current - amountCents;
-    await CashbackLedger_1.CashbackLedgerModel.create({
-        customerId: input.customerId,
-        orderId: input.orderId ? new dbCompat_1.Types.ObjectId(input.orderId) : undefined,
-        type: "debit",
-        amountCents: -amountCents,
-        balanceAfterCents: balanceAfter,
-        note: "Resgate de cashback",
+    await prisma_1.prisma.cashbackLedger.create({
+        data: {
+            customerId: input.customerId,
+            orderId: input.orderId,
+            type: "debit",
+            amountCents: -amountCents,
+            balanceAfterCents: balanceAfter,
+            note: "Resgate de cashback",
+        },
     });
     return {
         usedCents: amountCents,

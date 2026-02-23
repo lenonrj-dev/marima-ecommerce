@@ -40,6 +40,8 @@ router.post("/admin/login", authLimiter, (0, validate_1.validate)({
     }),
 }), auth_controller_1.loginAdminHandler);
 router.post("/logout", auth_controller_1.logoutHandler);
+router.post("/customer/logout", auth_controller_1.logoutHandler);
+router.post("/admin/logout", auth_controller_1.logoutHandler);
 router.post("/refresh", auth_controller_1.refreshHandler);
 router.get("/me", auth_1.requireAuth, auth_controller_1.meHandler);
 router.get("/debug", auth_1.optionalAuth, (req, res) => {

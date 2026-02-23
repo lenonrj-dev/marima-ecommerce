@@ -5,23 +5,23 @@ exports.verifyMercadoPagoPayment = verifyMercadoPagoPayment;
 exports.cancelMercadoPagoOrder = cancelMercadoPagoOrder;
 exports.getMercadoPagoPaymentDebug = getMercadoPagoPaymentDebug;
 const crypto_1 = require("crypto");
-const dbCompat_1 = require("../lib/dbCompat");
 const mercadopago_1 = require("mercadopago");
+const prisma_1 = require("../lib/prisma");
 const env_1 = require("../config/env");
-const Cart_1 = require("../models/Cart");
-const Order_1 = require("../models/Order");
-const PaymentTransaction_1 = require("../models/PaymentTransaction");
-const Product_1 = require("../models/Product");
-const InventoryMovement_1 = require("../models/InventoryMovement");
 const apiError_1 = require("../utils/apiError");
 const money_1 = require("../utils/money");
 const url_1 = require("../utils/url");
 const orders_service_1 = require("./orders.service");
-const coupons_service_1 = require("./coupons.service");
 const cashback_service_1 = require("./cashback.service");
 const customers_service_1 = require("./customers.service");
-const Coupon_1 = require("../models/Coupon");
-const CashbackLedger_1 = require("../models/CashbackLedger");
+const coupons_service_1 = require("./coupons.service");
+const products_service_1 = require("./products.service");
+function asArray(value) {
+    return Array.isArray(value) ? value : [];
+}
+function asObj(value) {
+    return value && typeof value === "object" ? value : null;
+}
 function requireMercadoPagoAccessToken() {
     const token = env_1.env.MERCADO_PAGO_ACCESS_TOKEN;
     if (!token) {
@@ -36,28 +36,52 @@ function requireStoreUrl() {
     }
     return (0, url_1.buildStoreRedirectUrls)(storeUrl);
 }
+function resolveNotificationUrl() {
+    const rawBase = String(env_1.env.API_PUBLIC_URL || "").trim();
+    if (!rawBase)
+        return undefined;
+    try {
+        const base = (0, url_1.normalizeBaseUrl)(rawBase, "API_PUBLIC_URL");
+        const host = new URL(base).hostname.toLowerCase();
+        if ((host === "localhost" || host === "127.0.0.1") && env_1.env.NODE_ENV !== "production")
+            return undefined;
+        return `${base}/api/v1/payments/mercadopago/webhook`;
+    }
+    catch {
+        return undefined;
+    }
+}
 function mpClient() {
     return new mercadopago_1.MercadoPagoConfig({ accessToken: requireMercadoPagoAccessToken() });
 }
+function parseOrderItems(order) {
+    return asArray(order.items).map((row, index) => {
+        const item = asObj(row) || {};
+        return {
+            id: String(item.productId || item.id || `item-${index}`),
+            name: String(item.name || "Produto"),
+            qty: Math.max(1, Math.floor(Number(item.qty || 1))),
+            unitPriceCents: Math.max(0, Math.floor(Number(item.unitPriceCents || 0))),
+            totalCents: Math.max(0, Math.floor(Number(item.totalCents || 0))),
+            sizeLabel: item.sizeLabel ? String(item.sizeLabel) : undefined,
+        };
+    });
+}
 function buildPreferenceItemsFromOrder(order) {
-    const subtotalCents = Math.max(0, Math.floor(Number(order.subtotalCents ?? 0)));
-    const discountCents = Math.max(0, Math.floor(Number(order.discountCents ?? 0)));
-    const shippingCents = Math.max(0, Math.floor(Number(order.shippingCents ?? 0)));
-    const taxCents = Math.max(0, Math.floor(Number(order.taxCents ?? 0)));
+    const subtotalCents = Math.max(0, Math.floor(Number(order.subtotalCents || 0)));
+    const discountCents = Math.max(0, Math.floor(Number(order.discountCents || 0)));
+    const shippingCents = Math.max(0, Math.floor(Number(order.shippingCents || 0)));
+    const taxCents = Math.max(0, Math.floor(Number(order.taxCents || 0)));
     const taxableCents = Math.max(0, subtotalCents - discountCents);
-    const baseLines = (order.items || []).map((item) => ({
-        item,
-        qty: Math.max(1, Math.floor(Number(item.qty ?? 1))),
-        baseTotalCents: Math.max(0, Math.floor(Number(item.totalCents ?? 0))),
-    }));
+    const lines = parseOrderItems(order).map((item) => ({ item, qty: item.qty, baseTotalCents: item.totalCents }));
     const allocatedTotals = [];
     if (subtotalCents <= 0 || discountCents <= 0) {
-        for (const line of baseLines)
+        for (const line of lines)
             allocatedTotals.push(line.baseTotalCents);
     }
     else {
         let sum = 0;
-        for (const line of baseLines) {
+        for (const line of lines) {
             const value = Math.floor((line.baseTotalCents * taxableCents) / subtotalCents);
             allocatedTotals.push(value);
             sum += value;
@@ -69,23 +93,17 @@ function buildPreferenceItemsFromOrder(order) {
         }
     }
     const items = [];
-    for (let index = 0; index < baseLines.length; index += 1) {
-        const line = baseLines[index];
+    for (let index = 0; index < lines.length; index += 1) {
+        const line = lines[index];
         const lineTotalCents = Math.max(0, Math.floor(Number(allocatedTotals[index] ?? 0)));
-        const titleParts = [String(line.item?.name || "Produto").trim()];
-        const sizeLabel = line.item?.sizeLabel ? String(line.item.sizeLabel).trim() : "";
-        if (sizeLabel)
-            titleParts.push(`(${sizeLabel})`);
-        const title = titleParts.join(" ").trim();
+        const title = line.item.sizeLabel ? `${line.item.name} (${line.item.sizeLabel})` : line.item.name;
         const qty = line.qty;
         const unitBaseCents = Math.floor(lineTotalCents / qty);
         const remainder = lineTotalCents - unitBaseCents * qty;
         const baseQty = qty - remainder;
-        const productId = line.item?.productId ? String(line.item.productId) : "";
-        const baseId = productId || (line.item?._id ? `item-${String(line.item._id)}` : `item-${index}`);
         if (baseQty > 0 && unitBaseCents > 0) {
             items.push({
-                id: baseId,
+                id: line.item.id,
                 title,
                 quantity: baseQty,
                 unit_price: (0, money_1.fromCents)(unitBaseCents),
@@ -94,7 +112,7 @@ function buildPreferenceItemsFromOrder(order) {
         }
         if (remainder > 0) {
             items.push({
-                id: baseId,
+                id: line.item.id,
                 title,
                 quantity: remainder,
                 unit_price: (0, money_1.fromCents)(unitBaseCents + 1),
@@ -116,109 +134,164 @@ function buildPreferenceItemsFromOrder(order) {
     return items;
 }
 async function getActiveCart(identity) {
-    const query = { status: "active" };
-    if (identity.customerId)
-        query.customerId = new dbCompat_1.Types.ObjectId(identity.customerId);
-    else if (identity.guestToken)
-        query.guestToken = identity.guestToken;
-    else
+    if (!identity.customerId && !identity.guestToken) {
         throw new apiError_1.ApiError(401, "Carrinho não identificado.", "AUTH_REQUIRED");
-    const cart = await Cart_1.CartModel.findOne(query);
-    if (!cart || !cart.items.length)
+    }
+    const cart = await prisma_1.prisma.cart.findFirst({
+        where: {
+            status: "active",
+            ...(identity.customerId ? { customerId: identity.customerId } : { guestToken: identity.guestToken }),
+        },
+        orderBy: { updatedAt: "desc" },
+    });
+    if (!cart || !asArray(cart.items).length) {
         throw new apiError_1.ApiError(400, "Carrinho sem itens.");
+    }
     return cart;
 }
+function parseProductSizes(product) {
+    return asArray(product.sizes)
+        .map((entry) => {
+        const row = asObj(entry);
+        if (!row)
+            return null;
+        const label = String(row.label || "").trim();
+        if (!label)
+            return null;
+        return {
+            label,
+            stock: Math.max(0, Math.floor(Number(row.stock ?? 0))),
+            active: row.active === undefined ? true : Boolean(row.active),
+        };
+    })
+        .filter((row) => row !== null);
+}
 async function revertOrderStock(order) {
-    for (const item of order.items || []) {
-        const productId = String(item.productId || "");
-        if (!dbCompat_1.Types.ObjectId.isValid(productId))
-            continue;
-        const product = await Product_1.ProductModel.findById(productId);
-        if (!product)
-            continue;
-        const qty = Math.max(1, Math.floor(Number(item.qty || 1)));
-        const sizeLabel = item.sizeLabel ? String(item.sizeLabel).trim() : undefined;
-        if (sizeLabel && Array.isArray(product.sizes) && product.sizes.length > 0) {
-            const normalized = sizeLabel.toLocaleLowerCase("pt-BR");
-            const idx = product.sizes.findIndex((entry) => String(entry?.label || "").trim().toLocaleLowerCase("pt-BR") === normalized);
-            if (idx >= 0) {
-                const current = Math.max(0, Math.floor(Number(product.sizes[idx]?.stock ?? 0)));
-                product.sizes[idx].stock = current + qty;
+    const touched = new Map();
+    const rows = parseOrderItems(order);
+    await prisma_1.prisma.$transaction(async (tx) => {
+        for (const item of rows) {
+            const productId = String(item.id || "").trim();
+            if (!productId)
+                continue;
+            const product = await tx.product.findUnique({ where: { id: productId } });
+            if (!product)
+                continue;
+            const qty = Math.max(1, Math.floor(Number(item.qty || 1)));
+            const rawSizeLabel = item.sizeLabel ? String(item.sizeLabel).trim() : "";
+            const sizes = parseProductSizes(product);
+            let nextStock = Math.max(0, Math.floor(Number(product.stock || 0))) + qty;
+            let nextSizes = product.sizes;
+            if (rawSizeLabel && sizes.length) {
+                const normalized = rawSizeLabel.toLocaleLowerCase("pt-BR");
+                const idx = sizes.findIndex((entry) => entry.label.toLocaleLowerCase("pt-BR") === normalized);
+                if (idx >= 0) {
+                    sizes[idx] = { ...sizes[idx], stock: Math.max(0, sizes[idx].stock) + qty };
+                }
+                nextSizes = sizes;
+                nextStock = sizes.reduce((acc, entry) => acc + (entry.active ? Math.max(0, entry.stock) : 0), 0);
             }
-            product.stock = product.sizes.reduce((acc, entry) => {
-                const isActive = entry?.active === undefined ? true : Boolean(entry.active);
-                const value = Math.max(0, Math.floor(Number(entry?.stock ?? 0)));
-                return acc + (isActive ? value : 0);
-            }, 0);
+            await tx.product.update({
+                where: { id: product.id },
+                data: { stock: nextStock, sizes: nextSizes },
+            });
+            await tx.inventoryMovement.create({
+                data: {
+                    productId: product.id,
+                    type: "liberacao",
+                    quantity: qty,
+                    reason: `Cancelamento do pedido ${order.code}`,
+                    createdBy: "sistema",
+                    sizeLabel: rawSizeLabel || undefined,
+                },
+            });
+            touched.set(String(product.id), String(product.slug || ""));
         }
-        else {
-            product.stock = Math.max(0, Math.floor(Number(product.stock ?? 0))) + qty;
-        }
-        await product.save();
-        await InventoryMovement_1.InventoryMovementModel.create({
-            productId: product._id,
-            type: "liberacao",
-            quantity: qty,
-            reason: `Cancelamento do pedido ${order.code}`,
-            createdBy: "sistema",
-            sizeLabel,
-        });
+    });
+    if (touched.size > 0) {
+        await Promise.all(Array.from(touched.entries()).map(([id, slug]) => (0, products_service_1.invalidateProductCacheByIdentity)({ id, slug, bumpListVersion: false })));
+        await (0, products_service_1.bumpProductsListVersion)();
     }
 }
 async function revertCouponRedemption(order) {
-    const couponCode = order.couponCode ? String(order.couponCode).trim().toUpperCase() : "";
-    if (!couponCode)
+    const redemptions = await prisma_1.prisma.couponRedemption.findMany({
+        where: { orderId: String(order.id) },
+    });
+    if (!redemptions.length)
         return;
-    const coupon = await Coupon_1.CouponModel.findOne({ code: couponCode });
-    if (!coupon)
-        return;
-    const orderId = String(order._id);
-    const before = coupon.redemptions.length;
-    coupon.redemptions = coupon.redemptions.filter((row) => String(row.orderId) !== orderId);
-    const removed = before - coupon.redemptions.length;
-    if (removed > 0) {
-        coupon.uses = Math.max(0, Math.floor(Number(coupon.uses || 0)) - removed);
-        await coupon.save();
+    const grouped = new Map();
+    for (const row of redemptions) {
+        const key = String(row.couponId);
+        grouped.set(key, (grouped.get(key) || 0) + 1);
     }
+    await prisma_1.prisma.$transaction(async (tx) => {
+        await tx.couponRedemption.deleteMany({ where: { orderId: String(order.id) } });
+        for (const [couponId, count] of grouped.entries()) {
+            const coupon = await tx.coupon.findUnique({ where: { id: couponId } });
+            if (!coupon)
+                continue;
+            const redemptionsJson = asArray(coupon.redemptions).filter((entry) => {
+                const row = asObj(entry);
+                return String(row?.orderId || "") !== String(order.id);
+            });
+            await tx.coupon.update({
+                where: { id: coupon.id },
+                data: {
+                    uses: Math.max(0, Number(coupon.uses || 0) - count),
+                    redemptions: redemptionsJson,
+                },
+            });
+        }
+    });
 }
 async function revertCashbackGrant(order) {
     const customerId = order.customerId ? String(order.customerId) : "";
     const granted = Math.max(0, Math.floor(Number(order.cashbackGrantedCents || 0)));
     if (!customerId || granted <= 0)
         return;
-    const exists = await CashbackLedger_1.CashbackLedgerModel.findOne({ customerId, orderId: order._id, type: "credit" });
-    if (!exists)
-        return;
-    const last = await CashbackLedger_1.CashbackLedgerModel.findOne({ customerId }).sort({ createdAt: -1 });
-    const current = last?.balanceAfterCents || 0;
-    const balanceAfter = Math.max(0, current - granted);
-    await CashbackLedger_1.CashbackLedgerModel.create({
-        customerId: new dbCompat_1.Types.ObjectId(customerId),
-        orderId: order._id,
-        type: "debit",
-        amountCents: -granted,
-        balanceAfterCents: balanceAfter,
-        note: `Reversão de cashback do pedido ${order.code}`,
+    const credit = await prisma_1.prisma.cashbackLedger.findFirst({
+        where: { customerId, orderId: String(order.id), type: "credit" },
     });
-    order.cashbackGrantedCents = 0;
+    if (!credit)
+        return;
+    const last = await prisma_1.prisma.cashbackLedger.findFirst({
+        where: { customerId },
+        orderBy: { createdAt: "desc" },
+        select: { balanceAfterCents: true },
+    });
+    const current = Number(last?.balanceAfterCents || 0);
+    const balanceAfter = Math.max(0, current - granted);
+    await prisma_1.prisma.$transaction([
+        prisma_1.prisma.cashbackLedger.create({
+            data: {
+                customerId,
+                orderId: String(order.id),
+                type: "debit",
+                amountCents: -granted,
+                balanceAfterCents: balanceAfter,
+                note: `Reversão de cashback do pedido ${order.code}`,
+            },
+        }),
+        prisma_1.prisma.order.update({
+            where: { id: String(order.id) },
+            data: { cashbackGrantedCents: 0 },
+        }),
+    ]);
 }
 async function ensureCouponRegisteredForPaidOrder(order) {
     const couponCode = order.couponCode ? String(order.couponCode).trim().toUpperCase() : "";
-    if (!couponCode)
-        return;
     const discountCents = Math.max(0, Math.floor(Number(order.discountCents || 0)));
-    if (discountCents <= 0)
+    if (!couponCode || discountCents <= 0)
         return;
-    const coupon = await Coupon_1.CouponModel.findOne({ code: couponCode });
-    if (!coupon)
-        return;
-    const orderId = String(order._id);
-    const already = coupon.redemptions.some((row) => String(row.orderId) === orderId);
-    if (already)
+    const exists = await prisma_1.prisma.couponRedemption.findFirst({
+        where: { orderId: String(order.id) },
+        select: { id: true },
+    });
+    if (exists)
         return;
     await (0, coupons_service_1.registerCouponRedemption)({
         couponCode,
-        orderId,
+        orderId: String(order.id),
         customerId: order.customerId ? String(order.customerId) : undefined,
         discountCents,
     });
@@ -226,52 +299,78 @@ async function ensureCouponRegisteredForPaidOrder(order) {
 async function ensureCashbackGrantedForPaidOrder(order) {
     if (!order.customerId)
         return;
-    const already = await CashbackLedger_1.CashbackLedgerModel.findOne({ customerId: order.customerId, orderId: order._id, type: "credit" });
-    if (already)
+    const customerId = String(order.customerId);
+    const exists = await prisma_1.prisma.cashbackLedger.findFirst({
+        where: { customerId, orderId: String(order.id), type: "credit" },
+        select: { id: true },
+    });
+    if (exists)
         return;
     const result = await (0, cashback_service_1.grantCashbackForOrder)({
-        customerId: String(order.customerId),
-        orderId: String(order._id),
-        subtotalCents: order.subtotalCents,
+        customerId,
+        orderId: String(order.id),
+        subtotalCents: Number(order.subtotalCents || 0),
     });
     if (result.grantedCents > 0) {
-        order.cashbackGrantedCents = result.grantedCents;
+        await prisma_1.prisma.order.update({
+            where: { id: String(order.id) },
+            data: { cashbackGrantedCents: result.grantedCents },
+        });
+    }
+}
+async function cancelPendingOrderAndRevert(order, paymentStatus) {
+    await prisma_1.prisma.order.update({
+        where: { id: String(order.id) },
+        data: {
+            status: "cancelado",
+            paymentStatus,
+            cancelledAt: new Date(),
+        },
+    });
+    await revertOrderStock(order);
+    await revertCouponRedemption(order);
+    await revertCashbackGrant(order);
+    if (order.customerId) {
+        await (0, customers_service_1.refreshCustomerMetrics)(String(order.customerId));
     }
 }
 async function createMercadoPagoCheckoutPro(input) {
     const store = requireStoreUrl();
     const requestedOrderId = String(input.orderId || "").trim();
-    let order = requestedOrderId && dbCompat_1.Types.ObjectId.isValid(requestedOrderId) ? await Order_1.OrderModel.findById(requestedOrderId) : null;
-    if (order && input.identity.customerId) {
-        if (!order.customerId || String(order.customerId) !== String(input.identity.customerId)) {
-            order = null;
-        }
+    let order = requestedOrderId ? await prisma_1.prisma.order.findUnique({ where: { id: requestedOrderId } }) : null;
+    if (order && input.identity.customerId && String(order.customerId || "") !== String(input.identity.customerId)) {
+        order = null;
     }
     if (order) {
         if (order.status !== "pendente") {
             throw new apiError_1.ApiError(400, "Este pedido não está pendente para pagamento.", "VALIDATION_ERROR");
         }
         if (order.paymentProvider === "mercadopago" && order.paymentPreferenceId) {
-            const tx = await PaymentTransaction_1.PaymentTransactionModel.findOne({ provider: "mercadopago", orderId: order._id }).sort({ createdAt: -1 });
+            const tx = await prisma_1.prisma.paymentTransaction.findFirst({
+                where: { provider: "mercadopago", orderId: order.id },
+                orderBy: { createdAt: "desc" },
+            });
             return {
                 preferenceId: String(order.paymentPreferenceId),
-                orderId: String(order._id),
+                orderId: String(order.id),
                 cancelToken: tx?.cancelToken ? String(tx.cancelToken) : undefined,
             };
         }
     }
     else {
         const cart = await getActiveCart(input.identity);
-        const items = cart.items.map((item) => ({
-            id: String(item.productId),
-            qty: Number(item.qty || 1),
-            variant: item.variant,
-            sizeLabel: item.sizeLabel,
-        }));
+        const items = asArray(cart.items).map((entry) => {
+            const row = asObj(entry) || {};
+            return {
+                id: String(row.productId || ""),
+                qty: Math.max(1, Math.floor(Number(row.qty || 1))),
+                variant: row.variant ? String(row.variant) : undefined,
+                sizeLabel: row.sizeLabel ? String(row.sizeLabel) : undefined,
+            };
+        });
         const couponCode = input.couponCode || cart.couponCode || undefined;
-        const orderOutput = await (0, orders_service_1.createStoreOrder)({
+        const created = await (0, orders_service_1.createStoreOrder)({
             customerId: input.identity.customerId,
-            // Não converter o carrinho agora; o usuário pode voltar e tentar novamente.
             cartId: undefined,
             channel: "Site",
             shippingMethod: input.shippingMethodId || input.shippingMethod || "sul-fluminense",
@@ -282,38 +381,27 @@ async function createMercadoPagoCheckoutPro(input) {
             address: input.address,
             finalize: false,
         });
-        order = await Order_1.OrderModel.findById(orderOutput.id);
-        if (!order)
-            throw new apiError_1.ApiError(500, "Falha ao criar pedido.");
+        order = await prisma_1.prisma.order.findUnique({ where: { id: created.id } });
     }
     if (!order)
         throw new apiError_1.ApiError(500, "Falha ao preparar pedido.");
-    // Valida cupom novamente para garantir consistência de desconto (sem registrar uso ainda).
-    if (order.couponCode && order.discountCents > 0) {
-        await (0, coupons_service_1.validateCoupon)(order.couponCode, order.subtotalCents);
+    if (order.couponCode && Number(order.discountCents || 0) > 0) {
+        await (0, coupons_service_1.validateCoupon)(String(order.couponCode), Number(order.subtotalCents || 0));
     }
     const cancelToken = (0, crypto_1.randomUUID)();
+    const notificationUrl = resolveNotificationUrl();
     const preference = new mercadopago_1.Preference(mpClient());
+    const mpItems = buildPreferenceItemsFromOrder(order);
+    if (!mpItems.length) {
+        throw new apiError_1.ApiError(400, "Pedido sem valor para pagamento.", "VALIDATION_ERROR");
+    }
     let preferenceResult;
     try {
-        console.log(`[URLS] STORE_URL=${store.base}`);
-        console.log(`[URLS] MP back_urls: success=${store.success} failure=${store.failure} pending=${store.pending}`);
-        const mpItems = buildPreferenceItemsFromOrder(order);
-        if (!mpItems.length) {
-            throw new apiError_1.ApiError(400, "Pedido sem valor para pagamento.", "VALIDATION_ERROR");
-        }
-        console.log("[MP] Criando preference", {
-            items: mpItems.map((item) => ({ title: item.title, quantity: item.quantity, unit_price: item.unit_price })),
-            external_reference: String(order._id),
-            payer: { email: order.email },
-        });
         preferenceResult = await preference.create({
             body: {
                 items: mpItems,
-                payer: {
-                    email: order.email,
-                },
-                external_reference: String(order._id),
+                payer: { email: order.email },
+                external_reference: String(order.id),
                 back_urls: {
                     success: store.success,
                     failure: store.failure,
@@ -321,60 +409,43 @@ async function createMercadoPagoCheckoutPro(input) {
                 },
                 auto_return: "approved",
                 metadata: {
-                    orderId: String(order._id),
+                    orderId: String(order.id),
                     orderCode: order.code,
                 },
+                ...(notificationUrl ? { notification_url: notificationUrl } : {}),
             },
         });
     }
-    catch (error) {
-        const err = error;
-        const status = err?.status ?? err?.response?.status;
-        const requestId = err?.requestId ?? err?.response?.headers?.["x-request-id"] ?? err?.response?.headers?.["X-Request-Id"];
-        const data = err?.response?.data ?? err?.cause ?? err?.message ?? err;
-        console.error("[MP] Falha ao criar preference", {
-            status,
-            requestId,
-            data,
-            storeUrl: store.base,
-            backUrls: { success: store.success, failure: store.failure, pending: store.pending },
-            payload: {
-                items: buildPreferenceItemsFromOrder(order).map((item) => ({
-                    title: item.title,
-                    quantity: item.quantity,
-                    unit_price: item.unit_price,
-                })),
-                external_reference: String(order._id),
-                payer: { email: order.email },
-            },
-        });
-        order.status = "cancelado";
-        order.paymentStatus = "cancelled";
-        order.cancelledAt = new Date();
-        await revertOrderStock(order);
-        await order.save();
+    catch {
+        if (order.status === "pendente") {
+            await cancelPendingOrderAndRevert(order, "cancelled");
+        }
         throw new apiError_1.ApiError(502, "Não foi possível iniciar o Checkout Pro do Mercado Pago.", "MERCADOPAGO_PREFERENCE_FAILED");
     }
     const preferenceId = preferenceResult?.id;
     if (!preferenceId) {
         throw new apiError_1.ApiError(502, "Não foi possível iniciar o Checkout Pro do Mercado Pago.", "MERCADOPAGO_PREFERENCE_FAILED");
     }
-    await PaymentTransaction_1.PaymentTransactionModel.create({
-        provider: "mercadopago",
-        orderId: order._id,
-        preferenceId,
-        status: "initiated",
-        cancelToken,
-    });
-    order.paymentProvider = "mercadopago";
-    order.paymentPreferenceId = preferenceId;
-    order.paymentStatus = "initiated";
-    await order.save();
-    return {
-        preferenceId,
-        orderId: String(order._id),
-        cancelToken,
-    };
+    await prisma_1.prisma.$transaction([
+        prisma_1.prisma.paymentTransaction.create({
+            data: {
+                provider: "mercadopago",
+                orderId: order.id,
+                preferenceId,
+                status: "initiated",
+                cancelToken,
+            },
+        }),
+        prisma_1.prisma.order.update({
+            where: { id: order.id },
+            data: {
+                paymentProvider: "mercadopago",
+                paymentPreferenceId: preferenceId,
+                paymentStatus: "initiated",
+            },
+        }),
+    ]);
+    return { preferenceId, orderId: String(order.id), cancelToken };
 }
 async function verifyMercadoPagoPayment(input) {
     const paymentId = String(input.paymentId || "").trim();
@@ -385,104 +456,100 @@ async function verifyMercadoPagoPayment(input) {
     const payment = paymentResult || {};
     const status = String(payment.status || "").trim() || "unknown";
     const externalReference = String(payment.external_reference || input.externalReference || "").trim();
-    if (!externalReference || !dbCompat_1.Types.ObjectId.isValid(externalReference)) {
+    if (!externalReference)
         throw new apiError_1.ApiError(400, "external_reference inválido.", "VALIDATION_ERROR");
-    }
-    const order = await Order_1.OrderModel.findById(externalReference);
+    const order = await prisma_1.prisma.order.findUnique({ where: { id: externalReference } });
     if (!order)
         throw new apiError_1.ApiError(404, "Pedido não encontrado.");
-    // Segurança: se o retorno trouxe external_reference diferente do esperado, bloqueia.
-    if (input.externalReference && String(input.externalReference).trim() !== String(order._id)) {
+    if (input.externalReference && String(input.externalReference).trim() !== String(order.id)) {
         throw new apiError_1.ApiError(400, "external_reference não confere com o pedido.", "VALIDATION_ERROR");
     }
-    const tx = await PaymentTransaction_1.PaymentTransactionModel.findOne({ provider: "mercadopago", orderId: order._id }).sort({ createdAt: -1 });
+    const tx = await prisma_1.prisma.paymentTransaction.findFirst({
+        where: { provider: "mercadopago", orderId: order.id },
+        orderBy: { createdAt: "desc" },
+    });
     if (tx) {
-        tx.paymentId = paymentId;
-        if (input.merchantOrderId)
-            tx.merchantOrderId = input.merchantOrderId;
-        tx.raw = payment;
-        tx.status =
-            status === "approved"
-                ? "approved"
-                : status === "pending"
-                    ? "pending"
-                    : status === "rejected" || status === "cancelled"
-                        ? "rejected"
-                        : tx.status;
-        await tx.save();
+        await prisma_1.prisma.paymentTransaction.update({
+            where: { id: tx.id },
+            data: {
+                paymentId,
+                merchantOrderId: input.merchantOrderId || tx.merchantOrderId,
+                raw: payment,
+                status: status === "approved"
+                    ? "approved"
+                    : status === "pending"
+                        ? "pending"
+                        : status === "rejected" || status === "cancelled"
+                            ? "rejected"
+                            : tx.status,
+            },
+        });
     }
-    order.paymentProvider = "mercadopago";
-    order.paymentId = paymentId;
-    order.paymentStatus = status;
+    let nextOrderStatus = order.status;
+    let paidAt = order.paidAt;
+    if (status === "approved" && !["pago", "separacao", "enviado", "entregue"].includes(order.status)) {
+        nextOrderStatus = "pago";
+        paidAt = payment.date_approved ? new Date(payment.date_approved) : new Date();
+    }
+    await prisma_1.prisma.order.update({
+        where: { id: order.id },
+        data: {
+            paymentProvider: "mercadopago",
+            paymentId,
+            paymentStatus: status,
+            status: nextOrderStatus,
+            paidAt,
+        },
+    });
     if (status === "approved") {
-        const wasPaid = order.status === "pago" || order.status === "separacao" || order.status === "enviado" || order.status === "entregue";
-        if (!wasPaid) {
-            order.status = "pago";
-            order.paidAt = payment.date_approved ? new Date(payment.date_approved) : new Date();
-        }
-        await ensureCouponRegisteredForPaidOrder(order);
-        await ensureCashbackGrantedForPaidOrder(order);
-        if (order.customerId) {
-            await (0, customers_service_1.refreshCustomerMetrics)(String(order.customerId));
+        const freshOrder = await prisma_1.prisma.order.findUnique({ where: { id: order.id } });
+        if (!freshOrder)
+            throw new apiError_1.ApiError(404, "Pedido não encontrado.");
+        await ensureCouponRegisteredForPaidOrder(freshOrder);
+        await ensureCashbackGrantedForPaidOrder(freshOrder);
+        if (freshOrder.customerId)
+            await (0, customers_service_1.refreshCustomerMetrics)(String(freshOrder.customerId));
+    }
+    else if ((status === "rejected" || status === "cancelled") && order.status === "pendente") {
+        await cancelPendingOrderAndRevert(order, status === "rejected" ? "rejected" : "cancelled");
+        if (tx) {
+            await prisma_1.prisma.paymentTransaction.update({
+                where: { id: tx.id },
+                data: { status: status === "rejected" ? "rejected" : "cancelled" },
+            });
         }
     }
-    else if (status === "rejected" || status === "cancelled") {
-        if (order.status === "pendente") {
-            order.status = "cancelado";
-            order.paymentStatus = status;
-            order.cancelledAt = new Date();
-            if (tx) {
-                tx.status = status === "rejected" ? "rejected" : "cancelled";
-                await tx.save();
-            }
-            await revertOrderStock(order);
-            await revertCouponRedemption(order);
-            await revertCashbackGrant(order);
-            if (order.customerId) {
-                await (0, customers_service_1.refreshCustomerMetrics)(String(order.customerId));
-            }
-        }
-    }
-    await order.save();
+    const refreshed = await prisma_1.prisma.order.findUnique({ where: { id: order.id } });
     return {
         ok: true,
-        orderId: String(order._id),
-        orderStatus: order.status,
+        orderId: String(order.id),
+        orderStatus: refreshed?.status || order.status,
         paymentStatus: status,
     };
 }
 async function cancelMercadoPagoOrder(input) {
     const orderId = String(input.orderId || "").trim();
     const cancelToken = String(input.cancelToken || "").trim();
-    if (!dbCompat_1.Types.ObjectId.isValid(orderId))
+    if (!orderId)
         throw new apiError_1.ApiError(400, "orderId inválido.", "VALIDATION_ERROR");
     if (!cancelToken)
         throw new apiError_1.ApiError(400, "cancelToken inválido.", "VALIDATION_ERROR");
-    const tx = await PaymentTransaction_1.PaymentTransactionModel.findOne({
-        provider: "mercadopago",
-        orderId: new dbCompat_1.Types.ObjectId(orderId),
-        cancelToken,
-    }).sort({ createdAt: -1 });
+    const tx = await prisma_1.prisma.paymentTransaction.findFirst({
+        where: { provider: "mercadopago", orderId, cancelToken },
+        orderBy: { createdAt: "desc" },
+    });
     if (!tx)
         throw new apiError_1.ApiError(403, "Sem permissão para cancelar este pedido.", "FORBIDDEN");
-    const order = await Order_1.OrderModel.findById(orderId);
+    const order = await prisma_1.prisma.order.findUnique({ where: { id: orderId } });
     if (!order)
         throw new apiError_1.ApiError(404, "Pedido não encontrado.");
-    if (order.status !== "pendente") {
+    if (order.status !== "pendente")
         return { ok: true };
-    }
-    order.status = "cancelado";
-    order.paymentStatus = "cancelled";
-    order.cancelledAt = new Date();
-    tx.status = "cancelled";
-    await tx.save();
-    await revertOrderStock(order);
-    await revertCouponRedemption(order);
-    await revertCashbackGrant(order);
-    if (order.customerId) {
-        await (0, customers_service_1.refreshCustomerMetrics)(String(order.customerId));
-    }
-    await order.save();
+    await prisma_1.prisma.paymentTransaction.update({
+        where: { id: tx.id },
+        data: { status: "cancelled" },
+    });
+    await cancelPendingOrderAndRevert(order, "cancelled");
     return { ok: true };
 }
 async function getMercadoPagoPaymentDebug(paymentId) {
@@ -490,6 +557,5 @@ async function getMercadoPagoPaymentDebug(paymentId) {
     if (!id)
         throw new apiError_1.ApiError(400, "paymentId inválido.", "VALIDATION_ERROR");
     const paymentClient = new mercadopago_1.Payment(mpClient());
-    const paymentResult = await paymentClient.get({ id });
-    return paymentResult;
+    return (await paymentClient.get({ id }));
 }

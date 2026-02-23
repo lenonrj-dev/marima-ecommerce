@@ -1,11 +1,11 @@
-import { Role } from "../models/AdminUser";
+import { type AdminRole } from "@prisma/client";
 
 declare global {
   namespace Express {
     interface Request {
       auth?: {
         sub: string;
-        role: Role | "customer";
+        role: AdminRole | "customer";
         type: "admin" | "customer";
       };
     }

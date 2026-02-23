@@ -1,9 +1,7 @@
-import { OrderModel } from "../models/Order";
-import { ProductModel } from "../models/Product";
-import { CustomerModel } from "../models/Customer";
+import { prisma } from "../lib/prisma";
 import { fromCents } from "../utils/money";
 
-const REVENUE_STATUSES = ["pago", "separacao", "enviado", "entregue"];
+const REVENUE_STATUSES = ["pago", "separacao", "enviado", "entregue"] as const;
 
 function periodStart(days: number) {
   const date = new Date();
@@ -16,21 +14,19 @@ export async function getOverview(periodDays = 30) {
   const start = periodStart(periodDays);
 
   const [ordersAgg, ordersCount, customersCount, lowStock] = await Promise.all([
-    OrderModel.aggregate([
-      { $match: { createdAt: { $gte: start }, status: { $in: REVENUE_STATUSES } } },
-      {
-        $group: {
-          _id: null,
-          revenue: { $sum: "$totalCents" },
-        },
+    prisma.order.aggregate({
+      where: {
+        createdAt: { gte: start },
+        status: { in: [...REVENUE_STATUSES] as any },
       },
-    ]),
-    OrderModel.countDocuments({ createdAt: { $gte: start } }),
-    CustomerModel.countDocuments(),
-    ProductModel.countDocuments({ stock: { $lte: 5 } }),
+      _sum: { totalCents: true },
+    }),
+    prisma.order.count({ where: { createdAt: { gte: start } } }),
+    prisma.customer.count(),
+    prisma.product.count({ where: { stock: { lte: 5 } } }),
   ]);
 
-  const revenueCents = ordersAgg[0]?.revenue || 0;
+  const revenueCents = ordersAgg._sum.totalCents || 0;
   const avgOrderValue = ordersCount ? revenueCents / ordersCount : 0;
   const conversionRate = customersCount ? Math.min(1, ordersCount / Math.max(customersCount, 1)) : 0;
 
@@ -49,31 +45,22 @@ export async function getOverview(periodDays = 30) {
 export async function getRevenueSeries(days = 14) {
   const start = periodStart(days);
 
-  const rows = await OrderModel.aggregate([
-    {
-      $match: {
-        createdAt: { $gte: start },
-        status: { $in: REVENUE_STATUSES },
-      },
-    },
-    {
-      $group: {
-        _id: {
-          year: { $year: "$createdAt" },
-          month: { $month: "$createdAt" },
-          day: { $dayOfMonth: "$createdAt" },
-        },
-        value: { $sum: "$totalCents" },
-      },
-    },
-    { $sort: { "_id.year": 1, "_id.month": 1, "_id.day": 1 } },
-  ]);
+  const rows = (await prisma.$queryRaw`
+    SELECT
+      date_trunc('day', "createdAt") AS day,
+      COALESCE(SUM("totalCents"), 0)::bigint AS value
+    FROM "Order"
+    WHERE "createdAt" >= ${start}
+      AND "status" IN ('pago','separacao','enviado','entregue')
+    GROUP BY day
+    ORDER BY day ASC
+  `) as Array<{ day: Date; value: bigint | number | string }>;
 
   const map = new Map<string, number>();
   for (const row of rows) {
-    const date = new Date(Date.UTC(row._id.year, row._id.month - 1, row._id.day));
+    const date = new Date(row.day);
     const key = date.toISOString().slice(0, 10);
-    map.set(key, row.value);
+    map.set(key, Number(row.value || 0));
   }
 
   const result: Array<{ date: string; value: number }> = [];

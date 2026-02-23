@@ -3,9 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.exportSalesCsv = exportSalesCsv;
 exports.exportProductsCsv = exportProductsCsv;
 exports.exportCustomersCsv = exportCustomersCsv;
-const Order_1 = require("../models/Order");
-const Product_1 = require("../models/Product");
-const Customer_1 = require("../models/Customer");
+const prisma_1 = require("../lib/prisma");
 const money_1 = require("../utils/money");
 function toCsv(rows) {
     if (!rows.length)
@@ -23,7 +21,10 @@ function toCsv(rows) {
     return lines.join("\n");
 }
 async function exportSalesCsv() {
-    const rows = await Order_1.OrderModel.find().sort({ createdAt: -1 }).limit(5000);
+    const rows = await prisma_1.prisma.order.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 5000,
+    });
     const content = toCsv(rows.map((order) => ({
         code: order.code,
         customerName: order.customerName,
@@ -42,7 +43,10 @@ async function exportSalesCsv() {
     };
 }
 async function exportProductsCsv() {
-    const rows = await Product_1.ProductModel.find().sort({ updatedAt: -1 }).limit(5000);
+    const rows = await prisma_1.prisma.product.findMany({
+        orderBy: { updatedAt: "desc" },
+        take: 5000,
+    });
     const content = toCsv(rows.map((product) => ({
         sku: product.sku,
         name: product.name,
@@ -61,7 +65,10 @@ async function exportProductsCsv() {
     };
 }
 async function exportCustomersCsv() {
-    const rows = await Customer_1.CustomerModel.find().sort({ createdAt: -1 }).limit(5000);
+    const rows = await prisma_1.prisma.customer.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 5000,
+    });
     const content = toCsv(rows.map((customer) => ({
         name: customer.name,
         email: customer.email,

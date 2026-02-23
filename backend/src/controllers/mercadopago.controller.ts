@@ -79,3 +79,37 @@ export const mercadoPagoPaymentDebugHandler = [
     res.json({ data });
   }),
 ] as const;
+
+export const mercadoPagoWebhookHandler = asyncHandler(async (req: Request, res: Response) => {
+  const body = (req.body || {}) as Record<string, unknown>;
+  const query = req.query as Record<string, unknown>;
+
+  const paymentIdRaw =
+    (body?.data && typeof body.data === "object" ? (body.data as Record<string, unknown>).id : undefined) ||
+    query["data.id"] ||
+    query.id ||
+    query.payment_id;
+
+  const paymentId = String(paymentIdRaw || "").trim();
+
+  if (!paymentId) {
+    res.status(200).json({ data: { ok: true } });
+    return;
+  }
+
+  try {
+    await verifyMercadoPagoPayment({
+      paymentId,
+      externalReference: query.external_reference ? String(query.external_reference).trim() : undefined,
+      merchantOrderId: query.merchant_order_id ? String(query.merchant_order_id).trim() : undefined,
+    });
+  } catch (error) {
+    // O webhook deve sempre responder 200 para evitar retries desnecessários em loop.
+    console.error("[MP webhook] Falha ao processar pagamento", {
+      paymentId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  res.status(200).json({ data: { ok: true } });
+});

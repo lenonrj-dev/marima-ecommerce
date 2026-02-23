@@ -1,9 +1,4 @@
-import { FilterQuery, Types } from "../lib/dbCompat";
-import { CustomerAddressModel } from "../models/CustomerAddress";
-import { CustomerModel } from "../models/Customer";
-import { FavoriteModel } from "../models/Favorite";
-import { OrderModel } from "../models/Order";
-import { ProductModel } from "../models/Product";
+import { prisma } from "../lib/prisma";
 import { ApiError } from "../utils/apiError";
 import { buildMeta } from "../utils/pagination";
 import { fromCents, toCents } from "../utils/money";
@@ -11,7 +6,7 @@ import { invalidateMeCacheForUser } from "./auth.service";
 
 function toCustomer(customer: any) {
   return {
-    id: String(customer._id),
+    id: String(customer.id),
     name: customer.name,
     email: customer.email,
     phone: customer.phone,
@@ -20,13 +15,15 @@ function toCustomer(customer: any) {
     totalSpent: fromCents(customer.totalSpentCents),
     lastOrderAt: customer.lastOrderAt ? customer.lastOrderAt.toISOString() : undefined,
     createdAt: customer.createdAt?.toISOString(),
-    tags: customer.tags || [],
+    tags: Array.isArray(customer.tags) ? customer.tags : [],
   };
 }
 
 function toOrder(order: any) {
+  const items = Array.isArray(order.items) ? order.items : [];
+
   return {
-    id: String(order._id),
+    id: String(order.id),
     code: order.code,
     customerId: order.customerId ? String(order.customerId) : undefined,
     customerName: order.customerName,
@@ -38,20 +35,20 @@ function toOrder(order: any) {
     shippingMethod: order.shippingMethod,
     paymentMethod: order.paymentMethod,
     createdAt: order.createdAt?.toISOString(),
-    items: (order.items || []).map((item: any) => ({
-      id: String(item._id),
-      name: item.name,
-      sku: item.sku,
-      qty: item.qty,
-      unitPrice: fromCents(item.unitPriceCents),
-      total: fromCents(item.totalCents),
+    items: items.map((item: any, index: number) => ({
+      id: String(item?.id || item?._id || `${index}`),
+      name: item?.name,
+      sku: item?.sku,
+      qty: Number(item?.qty || 0),
+      unitPrice: fromCents(Number(item?.unitPriceCents || 0)),
+      total: fromCents(Number(item?.totalCents || 0)),
     })),
   };
 }
 
 function toAddress(address: any) {
   return {
-    id: String(address._id),
+    id: String(address.id),
     label: address.label,
     fullName: address.fullName,
     zip: address.zip,
@@ -69,7 +66,7 @@ function toAddress(address: any) {
 
 function toFavorite(favorite: any) {
   return {
-    id: String(favorite._id),
+    id: String(favorite.id),
     productId: String(favorite.productId),
     slug: favorite.slug,
     title: favorite.title,
@@ -85,25 +82,26 @@ export async function listAdminCustomers(input: {
   q?: string;
   segment?: string;
 }) {
-  const query: FilterQuery<any> = {};
+  const where: any = {};
 
   if (input.q) {
-    query.$or = [
-      { name: { $regex: input.q, $options: "i" } },
-      { email: { $regex: input.q, $options: "i" } },
-      { phone: { $regex: input.q, $options: "i" } },
-      { tags: { $elemMatch: { $regex: input.q, $options: "i" } } },
+    where.OR = [
+      { name: { contains: input.q, mode: "insensitive" } },
+      { email: { contains: input.q, mode: "insensitive" } },
+      { phone: { contains: input.q, mode: "insensitive" } },
     ];
   }
 
-  if (input.segment && input.segment !== "all") query.segment = input.segment;
+  if (input.segment && input.segment !== "all") where.segment = input.segment;
 
   const [rows, total] = await Promise.all([
-    CustomerModel.find(query)
-      .sort({ createdAt: -1 })
-      .skip((input.page - 1) * input.limit)
-      .limit(input.limit),
-    CustomerModel.countDocuments(query),
+    prisma.customer.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (input.page - 1) * input.limit,
+      take: input.limit,
+    }),
+    prisma.customer.count({ where }),
   ]);
 
   return {
@@ -113,49 +111,63 @@ export async function listAdminCustomers(input: {
 }
 
 export async function getAdminCustomerById(id: string) {
-  const customer = await CustomerModel.findById(id);
+  const customer = await prisma.customer.findUnique({ where: { id } });
   if (!customer) throw new ApiError(404, "Cliente não encontrado.");
   return toCustomer(customer);
 }
 
 export async function updateAdminCustomer(id: string, input: { segment?: string; tags?: string[]; phone?: string }) {
-  const customer = await CustomerModel.findById(id);
+  const customer = await prisma.customer.findUnique({ where: { id } });
   if (!customer) throw new ApiError(404, "Cliente não encontrado.");
 
-  if (input.segment) customer.segment = input.segment as any;
-  if (input.tags) customer.tags = input.tags;
-  if (input.phone !== undefined) customer.phone = input.phone || undefined;
+  const updated = await prisma.customer.update({
+    where: { id },
+    data: {
+      ...(input.segment !== undefined ? { segment: input.segment as any } : {}),
+      ...(input.tags !== undefined ? { tags: input.tags as any } : {}),
+      ...(input.phone !== undefined ? { phone: input.phone || null } : {}),
+    },
+  });
 
-  await customer.save();
-  await invalidateMeCacheForUser(String(customer._id));
-  return toCustomer(customer);
+  await invalidateMeCacheForUser(updated.id);
+  return toCustomer(updated);
 }
 
 export async function listAdminCustomerOrders(customerId: string) {
-  const rows = await OrderModel.find({ customerId }).sort({ createdAt: -1 });
+  const rows = await prisma.order.findMany({
+    where: { customerId },
+    orderBy: { createdAt: "desc" },
+  });
   return rows.map(toOrder);
 }
 
 export async function getMeProfile(customerId: string) {
-  const customer = await CustomerModel.findById(customerId);
+  const customer = await prisma.customer.findUnique({ where: { id: customerId } });
   if (!customer) throw new ApiError(404, "Cliente não encontrado.");
   return toCustomer(customer);
 }
 
 export async function patchMeProfile(customerId: string, input: { name?: string; phone?: string }) {
-  const customer = await CustomerModel.findById(customerId);
+  const customer = await prisma.customer.findUnique({ where: { id: customerId } });
   if (!customer) throw new ApiError(404, "Cliente não encontrado.");
 
-  if (input.name !== undefined) customer.name = input.name.trim();
-  if (input.phone !== undefined) customer.phone = input.phone?.trim() || undefined;
+  const updated = await prisma.customer.update({
+    where: { id: customerId },
+    data: {
+      ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+      ...(input.phone !== undefined ? { phone: input.phone?.trim() || null } : {}),
+    },
+  });
 
-  await customer.save();
-  await invalidateMeCacheForUser(String(customer._id));
-  return toCustomer(customer);
+  await invalidateMeCacheForUser(updated.id);
+  return toCustomer(updated);
 }
 
 export async function listMeAddresses(customerId: string) {
-  const rows = await CustomerAddressModel.find({ customerId }).sort({ isDefault: -1, createdAt: -1 });
+  const rows = await prisma.customerAddress.findMany({
+    where: { customerId },
+    orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
+  });
   return rows.map(toAddress);
 }
 
@@ -175,10 +187,19 @@ export async function createMeAddress(
   },
 ) {
   if (input.isDefault) {
-    await CustomerAddressModel.updateMany({ customerId }, { $set: { isDefault: false } });
+    await prisma.customerAddress.updateMany({
+      where: { customerId },
+      data: { isDefault: false },
+    });
   }
 
-  const created = await CustomerAddressModel.create({ ...input, customerId });
+  const created = await prisma.customerAddress.create({
+    data: {
+      ...input,
+      customerId,
+    },
+  });
+
   return toAddress(created);
 }
 
@@ -198,78 +219,108 @@ export async function updateMeAddress(
     isDefault?: boolean;
   }>,
 ) {
-  const address = await CustomerAddressModel.findOne({ _id: addressId, customerId });
+  const address = await prisma.customerAddress.findFirst({
+    where: { id: addressId, customerId },
+  });
   if (!address) throw new ApiError(404, "Endereço não encontrado.");
 
   if (input.isDefault) {
-    await CustomerAddressModel.updateMany({ customerId }, { $set: { isDefault: false } });
+    await prisma.customerAddress.updateMany({
+      where: { customerId },
+      data: { isDefault: false },
+    });
   }
 
-  Object.assign(address, input);
-  await address.save();
-  return toAddress(address);
+  const updated = await prisma.customerAddress.update({
+    where: { id: address.id },
+    data: input,
+  });
+
+  return toAddress(updated);
 }
 
 export async function deleteMeAddress(customerId: string, addressId: string) {
-  await CustomerAddressModel.findOneAndDelete({ _id: addressId, customerId });
+  await prisma.customerAddress.deleteMany({
+    where: { id: addressId, customerId },
+  });
 }
 
 export async function listMeFavorites(customerId: string) {
-  const rows = await FavoriteModel.find({ customerId }).sort({ createdAt: -1 });
+  const rows = await prisma.favorite.findMany({
+    where: { customerId },
+    orderBy: { createdAt: "desc" },
+  });
   return rows.map(toFavorite);
 }
 
 export async function addMeFavorite(customerId: string, productId: string) {
-  if (!Types.ObjectId.isValid(productId)) throw new ApiError(400, "Produto inválido.");
-  const product = await ProductModel.findById(productId);
+  const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product) throw new ApiError(404, "Produto não encontrado.");
 
-  const row = await FavoriteModel.findOneAndUpdate(
-    { customerId, productId },
-    {
-      $setOnInsert: {
+  const row = await prisma.favorite.upsert({
+    where: {
+      customerId_productId: {
         customerId,
         productId,
-        slug: product.slug,
-        title: product.name,
-        image: product.images?.[0] || "",
-        priceCents: product.priceCents,
       },
     },
-    { upsert: true, new: true },
-  );
+    update: {
+      slug: product.slug,
+      title: product.name,
+      image: Array.isArray(product.images) && product.images.length ? String(product.images[0]) : "",
+      priceCents: product.priceCents,
+    },
+    create: {
+      customerId,
+      productId,
+      slug: product.slug,
+      title: product.name,
+      image: Array.isArray(product.images) && product.images.length ? String(product.images[0]) : "",
+      priceCents: product.priceCents,
+    },
+  });
 
   return toFavorite(row);
 }
 
 export async function removeMeFavorite(customerId: string, productId: string) {
-  await FavoriteModel.findOneAndDelete({ customerId, productId });
+  await prisma.favorite.deleteMany({
+    where: { customerId, productId },
+  });
 }
 
 export async function refreshCustomerMetrics(customerId: string) {
-  const [ordersCount, total] = await Promise.all([
-    OrderModel.countDocuments({ customerId }),
-    OrderModel.aggregate([
-      { $match: { customerId: new Types.ObjectId(customerId), status: { $in: ["pago", "separacao", "enviado", "entregue"] } } },
-      { $group: { _id: null, total: { $sum: "$totalCents" }, lastOrderAt: { $max: "$createdAt" } } },
-    ]),
+  const [ordersCount, totals] = await Promise.all([
+    prisma.order.count({ where: { customerId } }),
+    prisma.order.aggregate({
+      where: {
+        customerId,
+        status: { in: ["pago", "separacao", "enviado", "entregue"] },
+      },
+      _sum: { totalCents: true },
+      _max: { createdAt: true },
+    }),
   ]);
 
-  await CustomerModel.findByIdAndUpdate(customerId, {
-    $set: {
+  await prisma.customer.update({
+    where: { id: customerId },
+    data: {
       ordersCount,
-      totalSpentCents: total[0]?.total || 0,
-      lastOrderAt: total[0]?.lastOrderAt || null,
+      totalSpentCents: totals._sum.totalCents || 0,
+      lastOrderAt: totals._max.createdAt || null,
       segment: ordersCount >= 6 ? "vip" : ordersCount >= 2 ? "recorrente" : "novo",
     },
   });
 }
 
 export async function getMeCashbackBalance(customerId: string) {
-  const { CashbackLedgerModel } = await import("../models/CashbackLedger");
-  const rows = await CashbackLedgerModel.find({ customerId }).sort({ createdAt: -1 });
+  const row = await prisma.cashbackLedger.findFirst({
+    where: { customerId },
+    orderBy: { createdAt: "desc" },
+    select: { balanceAfterCents: true },
+  });
 
-  const balance = rows.length ? rows[0]!.balanceAfterCents : 0;
+  const balance = row?.balanceAfterCents || 0;
 
   return {
     balance: fromCents(balance),
@@ -278,18 +329,18 @@ export async function getMeCashbackBalance(customerId: string) {
 }
 
 export async function createCustomerFromGuest(input: { name: string; email: string; phone?: string; passwordHash: string }) {
-  const created = await CustomerModel.create({
-    name: input.name,
-    email: input.email.toLowerCase(),
-    phone: input.phone,
-    passwordHash: input.passwordHash,
-    segment: "novo",
-    ordersCount: 0,
-    totalSpentCents: toCents(0),
+  const created = await prisma.customer.create({
+    data: {
+      name: input.name,
+      email: input.email.toLowerCase(),
+      phone: input.phone,
+      passwordHash: input.passwordHash,
+      segment: "novo",
+      ordersCount: 0,
+      totalSpentCents: toCents(0),
+    },
   });
   return created;
 }
 
 export { toCustomer, toOrder, toAddress, toFavorite };
-
-

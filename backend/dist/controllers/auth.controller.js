@@ -11,7 +11,7 @@ exports.registerCustomerHandler = (0, notFound_1.asyncHandler)(async (req, res) 
     const guestToken = req.cookies?.[carts_service_1.GUEST_CART_COOKIE];
     if (typeof guestToken === "string" && guestToken) {
         try {
-            await (0, carts_service_1.bindGuestCartToCustomer)(guestToken, String(user._id));
+            await (0, carts_service_1.bindGuestCartToCustomer)(guestToken, String(user.id));
             res.clearCookie(carts_service_1.GUEST_CART_COOKIE, (0, cookies_1.cookieBaseOptions)(req));
         }
         catch {
@@ -19,13 +19,13 @@ exports.registerCustomerHandler = (0, notFound_1.asyncHandler)(async (req, res) 
         }
     }
     (0, auth_service_1.setAuthCookies)(res, {
-        sub: String(user._id),
+        sub: String(user.id),
         role: "customer",
         type: "customer",
     }, req);
     res.status(201).json({
         data: {
-            id: String(user._id),
+            id: String(user.id),
             name: user.name,
             email: user.email,
             phone: user.phone,
@@ -39,7 +39,7 @@ exports.loginCustomerHandler = (0, notFound_1.asyncHandler)(async (req, res) => 
     const guestToken = req.cookies?.[carts_service_1.GUEST_CART_COOKIE];
     if (typeof guestToken === "string" && guestToken) {
         try {
-            await (0, carts_service_1.bindGuestCartToCustomer)(guestToken, String(user._id));
+            await (0, carts_service_1.bindGuestCartToCustomer)(guestToken, String(user.id));
             res.clearCookie(carts_service_1.GUEST_CART_COOKIE, (0, cookies_1.cookieBaseOptions)(req));
         }
         catch {
@@ -47,13 +47,13 @@ exports.loginCustomerHandler = (0, notFound_1.asyncHandler)(async (req, res) => 
         }
     }
     (0, auth_service_1.setAuthCookies)(res, {
-        sub: String(user._id),
+        sub: String(user.id),
         role: "customer",
         type: "customer",
     }, req);
     res.json({
         data: {
-            id: String(user._id),
+            id: String(user.id),
             name: user.name,
             email: user.email,
             phone: user.phone,
@@ -64,13 +64,13 @@ exports.loginCustomerHandler = (0, notFound_1.asyncHandler)(async (req, res) => 
 exports.loginAdminHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
     const user = await (0, auth_service_1.loginAdmin)(req.body);
     (0, auth_service_1.setAuthCookies)(res, {
-        sub: String(user._id),
+        sub: String(user.id),
         role: user.role,
         type: "admin",
     }, req);
     res.json({
         data: {
-            id: String(user._id),
+            id: String(user.id),
             name: user.name,
             email: user.email,
             role: user.role,

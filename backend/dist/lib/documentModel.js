@@ -4,7 +4,6 @@ exports.DocumentId = void 0;
 exports.matchesQuery = matchesQuery;
 exports.createDocumentModel = createDocumentModel;
 const crypto_1 = require("crypto");
-const client_1 = require("@prisma/client");
 const prisma_1 = require("./prisma");
 const dbCompat_1 = require("./dbCompat");
 function cloneValue(value) {
@@ -84,6 +83,11 @@ function ensureSubdocumentIds(node) {
     }
 }
 function stripRuntime(value) {
+    if (value instanceof Date)
+        return value;
+    if (value && typeof value === "object" && value.constructor?.name === "ObjectIdCompat") {
+        return String(value);
+    }
     if (Array.isArray(value)) {
         return value.map((item) => stripRuntime(item));
     }
@@ -289,20 +293,47 @@ function applyUpdate(target, update, isUpsertInsert = false) {
         }
     }
 }
+const COLLECTION_DELEGATES = {
+    AdminUser: "adminUser",
+    Cart: "cart",
+    CashbackLedger: "cashbackLedger",
+    CashbackRule: "cashbackRule",
+    Category: "category",
+    Coupon: "coupon",
+    Customer: "customer",
+    CustomerAddress: "customerAddress",
+    Favorite: "favorite",
+    IntegrationConfig: "integrationConfig",
+    InventoryMovement: "inventoryMovement",
+    Order: "order",
+    PaymentTransaction: "paymentTransaction",
+    Post: "post",
+    Product: "product",
+    Review: "review",
+    SavedCart: "savedCart",
+    SharedCart: "sharedCart",
+    StoreSettings: "storeSettings",
+    SupportTicket: "supportTicket",
+};
+function getDelegate(collection) {
+    const key = COLLECTION_DELEGATES[collection];
+    if (!key) {
+        throw new Error(`Colecao nao mapeada para Prisma: ${collection}`);
+    }
+    return prisma_1.prisma[key];
+}
 async function listCollectionRows(collection) {
-    return prisma_1.prisma.document.findMany({
-        where: { collection },
-        orderBy: { createdAt: "asc" },
-    });
+    const delegate = getDelegate(collection);
+    return delegate.findMany({ orderBy: { createdAt: "asc" } });
 }
 function hydrateDocument(model, row) {
-    const payload = (cloneValue(row.data) || {});
+    const payload = (cloneValue(row) || {});
+    const id = String(payload.id || "");
     const doc = {
         ...payload,
-        _id: row.id,
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
+        _id: id,
     };
+    delete doc.id;
     const attachArrayHelpers = (node, owner, ownerKey, ownerArray) => {
         if (!node || typeof node !== "object")
             return;
@@ -470,6 +501,7 @@ class QueryOne {
     }
 }
 function createDocumentModel(collection) {
+    const delegate = getDelegate(collection);
     const model = {
         collection,
         async _queryMany(filter) {
@@ -480,13 +512,11 @@ function createDocumentModel(collection) {
         },
         async _saveById(id, document) {
             const rawPayload = stripRuntime(document);
-            const payload = rawPayload === null
-                ? client_1.Prisma.JsonNull
-                : rawPayload;
+            const payload = (rawPayload || {});
             ensureSubdocumentIds(payload);
-            await prisma_1.prisma.document.update({
+            await delegate.update({
                 where: { id },
-                data: { data: payload },
+                data: payload,
             });
         },
         find(filter = {}, projection) {
@@ -502,15 +532,8 @@ function createDocumentModel(collection) {
             const payload = cloneValue(data || {});
             ensureSubdocumentIds(payload);
             const rawPayload = stripRuntime(payload);
-            const safePayload = rawPayload === null
-                ? client_1.Prisma.JsonNull
-                : rawPayload;
-            const created = await prisma_1.prisma.document.create({
-                data: {
-                    collection,
-                    data: safePayload,
-                },
-            });
+            const safePayload = (rawPayload || {});
+            const created = await delegate.create({ data: safePayload });
             return hydrateDocument(model, created);
         },
         async countDocuments(filter = {}) {
@@ -567,7 +590,7 @@ function createDocumentModel(collection) {
             const row = await model.findOne(filter);
             if (!row)
                 return null;
-            await prisma_1.prisma.document.delete({ where: { id: String(row._id) } });
+            await delegate.delete({ where: { id: String(row._id) } });
             return row;
         },
         async findByIdAndDelete(id) {
@@ -577,13 +600,13 @@ function createDocumentModel(collection) {
             const row = await model.findOne(filter);
             if (!row)
                 return { deletedCount: 0 };
-            await prisma_1.prisma.document.delete({ where: { id: String(row._id) } });
+            await delegate.delete({ where: { id: String(row._id) } });
             return { deletedCount: 1 };
         },
         async deleteMany(filter) {
             const rows = await model._queryMany(filter || {});
             for (const row of rows) {
-                await prisma_1.prisma.document.delete({ where: { id: String(row._id) } });
+                await delegate.delete({ where: { id: String(row._id) } });
             }
             return { deletedCount: rows.length };
         },

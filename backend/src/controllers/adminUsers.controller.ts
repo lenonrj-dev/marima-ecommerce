@@ -1,12 +1,12 @@
 import { Request, Response } from "express";
-import { AdminUserModel } from "../models/AdminUser";
+import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middlewares/notFound";
 import { buildMeta } from "../utils/pagination";
 import { invalidateMeCacheForUser, inviteAdminUser } from "../services/auth.service";
 
 function toAdminUser(row: any) {
   return {
-    id: String(row._id),
+    id: String(row.id),
     name: row.name,
     email: row.email,
     role: row.role,
@@ -23,21 +23,23 @@ export const listAdminUsersHandler = asyncHandler(async (req: Request, res: Resp
   const q = String(req.query.q || "").trim();
   const role = String(req.query.role || "").trim();
 
-  const query: any = {};
+  const where: any = {};
   if (q) {
-    query.$or = [
-      { name: { $regex: q, $options: "i" } },
-      { email: { $regex: q, $options: "i" } },
+    where.OR = [
+      { name: { contains: q, mode: "insensitive" } },
+      { email: { contains: q, mode: "insensitive" } },
     ];
   }
-  if (role && role !== "all") query.role = role;
+  if (role && role !== "all") where.role = role;
 
   const [rows, total] = await Promise.all([
-    AdminUserModel.find(query)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit),
-    AdminUserModel.countDocuments(query),
+    prisma.adminUser.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.adminUser.count({ where }),
   ]);
 
   res.json({
@@ -58,18 +60,22 @@ export const inviteAdminUserHandler = asyncHandler(async (req: Request, res: Res
 });
 
 export const patchAdminUserHandler = asyncHandler(async (req: Request, res: Response) => {
-  const user = await AdminUserModel.findById(String(req.params.id));
+  const id = String(req.params.id);
+  const user = await prisma.adminUser.findUnique({ where: { id } });
   if (!user) {
     res.status(404).json({ message: "Usuário não encontrado." });
     return;
   }
 
-  if (req.body.name !== undefined) user.name = req.body.name;
-  if (req.body.role !== undefined) user.role = req.body.role;
-  if (req.body.active !== undefined) user.active = req.body.active;
+  const updated = await prisma.adminUser.update({
+    where: { id },
+    data: {
+      ...(req.body.name !== undefined ? { name: req.body.name } : {}),
+      ...(req.body.role !== undefined ? { role: req.body.role } : {}),
+      ...(req.body.active !== undefined ? { active: req.body.active } : {}),
+    },
+  });
 
-  await user.save();
-  await invalidateMeCacheForUser(String(user._id));
-  res.json({ data: toAdminUser(user) });
+  await invalidateMeCacheForUser(updated.id);
+  res.json({ data: toAdminUser(updated) });
 });
-

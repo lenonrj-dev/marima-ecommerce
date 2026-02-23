@@ -25,30 +25,27 @@ exports.listAbandonedCarts = listAbandonedCarts;
 exports.recoverAbandonedCart = recoverAbandonedCart;
 exports.getCartForConversion = getCartForConversion;
 const crypto_1 = require("crypto");
-const dbCompat_1 = require("../lib/dbCompat");
-const env_1 = require("../config/env");
+const prisma_1 = require("../lib/prisma");
 const cache_1 = require("../lib/cache");
-const Cart_1 = require("../models/Cart");
-const Coupon_1 = require("../models/Coupon");
-const Product_1 = require("../models/Product");
-const SavedCart_1 = require("../models/SavedCart");
-const SharedCart_1 = require("../models/SharedCart");
+const env_1 = require("../config/env");
 const apiError_1 = require("../utils/apiError");
 const SHIPPING_FLAT_CENTS = 1290;
 const FREE_SHIPPING_THRESHOLD_CENTS = 29900;
 const TAX_RATE = 0.08;
 const SHARED_CART_TTL_DAYS = 1;
-exports.GUEST_CART_COOKIE = "marima_guest_cart";
 const CART_CACHE_TTL_SECONDS = 60 * 5;
-function toIsoDate(value) {
+exports.GUEST_CART_COOKIE = "marima_guest_cart";
+const asArray = (value) => (Array.isArray(value) ? value : []);
+const asObj = (value) => (value && typeof value === "object" ? value : null);
+const toIso = (value) => {
     if (!value)
         return undefined;
     if (value instanceof Date)
         return value.toISOString();
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
-}
-function buildCartCacheKey(identity) {
+};
+function cacheKey(identity) {
     if (identity.customerId)
         return `cache:v1:cart:saved:${identity.customerId}`;
     if (identity.guestToken)
@@ -56,42 +53,123 @@ function buildCartCacheKey(identity) {
     return null;
 }
 async function invalidateCartCache(identity) {
-    const key = buildCartCacheKey(identity);
-    if (!key)
-        return;
-    await (0, cache_1.delCache)(key);
+    const key = cacheKey(identity);
+    if (key)
+        await (0, cache_1.delCache)(key);
 }
-function computeTotals(cart, options) {
-    const subtotalCents = cart.items.reduce((acc, item) => acc + item.unitPriceCents * item.qty, 0);
-    const discountCents = cart.discountCents || 0;
-    const taxable = Math.max(0, subtotalCents - discountCents);
-    const shouldForceFreeShipping = options?.forceFreeShipping !== undefined ? options.forceFreeShipping : Boolean(cart.freeShippingCouponApplied);
-    const shippingCents = shouldForceFreeShipping
-        ? 0
-        : subtotalCents >= FREE_SHIPPING_THRESHOLD_CENTS || subtotalCents === 0
-            ? 0
-            : SHIPPING_FLAT_CENTS;
-    const taxCents = Math.round(taxable * TAX_RATE);
-    const totalCents = Math.max(0, taxable + shippingCents + taxCents);
-    cart.subtotalCents = subtotalCents;
-    cart.shippingCents = shippingCents;
-    cart.taxCents = taxCents;
-    cart.totalCents = totalCents;
+const nVariant = (value) => value?.trim().toLowerCase() || "default";
+const nSize = (value) => value?.trim().toLowerCase() || "default";
+function parseItem(input) {
+    const row = asObj(input);
+    if (!row)
+        return null;
+    const productId = String(row.productId || "").trim();
+    const slug = String(row.slug || "").trim();
+    const name = String(row.name || "").trim();
+    const imageUrl = String(row.imageUrl || "").trim();
+    if (!productId || !slug || !name || !imageUrl)
+        return null;
+    return {
+        itemId: row.itemId ? String(row.itemId) : row.id ? String(row.id) : undefined,
+        productId,
+        slug,
+        name,
+        imageUrl,
+        variant: typeof row.variant === "string" && row.variant.trim() ? row.variant.trim() : undefined,
+        sizeLabel: typeof row.sizeLabel === "string" && row.sizeLabel.trim() ? row.sizeLabel.trim() : undefined,
+        unitPriceCents: Math.max(0, Math.floor(Number(row.unitPriceCents || 0))),
+        qty: Math.max(1, Math.floor(Number(row.qty || 1))),
+        stock: Math.max(0, Math.floor(Number(row.stock || 0))),
+    };
+}
+function parseItems(value) {
+    return asArray(value)
+        .map((item) => parseItem(item))
+        .filter((item) => item !== null)
+        .map((item) => ({ ...item, itemId: item.itemId || (0, crypto_1.randomUUID)() }));
+}
+function toItemsJson(items) {
+    return items.map((item) => ({
+        itemId: item.itemId,
+        id: item.itemId,
+        productId: item.productId,
+        slug: item.slug,
+        name: item.name,
+        imageUrl: item.imageUrl,
+        variant: item.variant,
+        sizeLabel: item.sizeLabel,
+        unitPriceCents: item.unitPriceCents,
+        qty: item.qty,
+        stock: item.stock,
+    }));
+}
+function hydrate(row) {
+    return {
+        id: String(row.id),
+        customerId: row.customerId ? String(row.customerId) : undefined,
+        guestToken: row.guestToken ? String(row.guestToken) : undefined,
+        status: row.status || "active",
+        recovered: Boolean(row.recovered),
+        lastActivityAt: row.lastActivityAt instanceof Date ? row.lastActivityAt : new Date(row.lastActivityAt || Date.now()),
+        couponCode: row.couponCode ? String(row.couponCode) : undefined,
+        freeShippingCouponApplied: Boolean(row.freeShippingCouponApplied),
+        discountCents: Math.max(0, Math.floor(Number(row.discountCents || 0))),
+        shippingCents: Math.max(0, Math.floor(Number(row.shippingCents || 0))),
+        taxCents: Math.max(0, Math.floor(Number(row.taxCents || 0))),
+        subtotalCents: Math.max(0, Math.floor(Number(row.subtotalCents || 0))),
+        totalCents: Math.max(0, Math.floor(Number(row.totalCents || 0))),
+        notes: asArray(row.notes).map((n) => String(n || "").trim()).filter(Boolean),
+        items: parseItems(row.items),
+    };
+}
+function totals(cart, forceFreeShipping) {
+    const subtotal = cart.items.reduce((acc, item) => acc + item.unitPriceCents * item.qty, 0);
+    const discount = Math.max(0, cart.discountCents || 0);
+    const taxable = Math.max(0, subtotal - discount);
+    const freeShipping = forceFreeShipping ?? Boolean(cart.freeShippingCouponApplied);
+    const shipping = freeShipping || subtotal >= FREE_SHIPPING_THRESHOLD_CENTS || subtotal === 0 ? 0 : SHIPPING_FLAT_CENTS;
+    const tax = Math.round(taxable * TAX_RATE);
+    cart.subtotalCents = subtotal;
+    cart.shippingCents = shipping;
+    cart.taxCents = tax;
+    cart.totalCents = Math.max(0, taxable + shipping + tax);
+}
+async function persist(cart) {
+    const updated = await prisma_1.prisma.cart.update({
+        where: { id: cart.id },
+        data: {
+            customerId: cart.customerId || null,
+            guestToken: cart.customerId ? null : cart.guestToken || null,
+            status: cart.status,
+            recovered: cart.recovered,
+            lastActivityAt: cart.lastActivityAt,
+            couponCode: cart.couponCode || null,
+            freeShippingCouponApplied: cart.freeShippingCouponApplied,
+            discountCents: cart.discountCents,
+            shippingCents: cart.shippingCents,
+            taxCents: cart.taxCents,
+            subtotalCents: cart.subtotalCents,
+            totalCents: cart.totalCents,
+            notes: cart.notes,
+            items: toItemsJson(cart.items),
+        },
+    });
+    return hydrate(updated);
 }
 function toOutput(cart) {
     return {
-        id: String(cart._id),
-        customerId: cart.customerId ? String(cart.customerId) : undefined,
+        id: cart.id,
+        customerId: cart.customerId,
         guestToken: cart.guestToken,
         status: cart.status,
         recovered: cart.recovered,
-        lastActivityAt: toIsoDate(cart.lastActivityAt),
+        lastActivityAt: toIso(cart.lastActivityAt),
         couponCode: cart.couponCode,
         freeShippingCouponApplied: Boolean(cart.freeShippingCouponApplied),
         items: cart.items.map((item) => ({
-            itemId: String(item._id),
-            id: String(item._id),
-            productId: String(item.productId),
+            itemId: item.itemId,
+            id: item.itemId,
+            productId: item.productId,
             slug: item.slug,
             name: item.name,
             imageUrl: item.imageUrl,
@@ -117,402 +195,272 @@ function toOutput(cart) {
         },
     };
 }
-function toSnapshotItems(cart) {
-    return (cart.items || []).map((item) => ({
-        productId: String(item.productId),
-        slug: String(item.slug || ""),
-        name: String(item.name || ""),
-        imageUrl: String(item.imageUrl || ""),
-        variant: item.variant ? String(item.variant) : undefined,
-        sizeLabel: item.sizeLabel ? String(item.sizeLabel) : undefined,
-        unitPriceCents: Math.max(0, Math.floor(Number(item.unitPriceCents || 0))),
-        qty: Math.max(1, Math.floor(Number(item.qty || 1))),
-        stock: Math.max(0, Math.floor(Number(item.stock || 0))),
-    }));
-}
-function normalizeSnapshotItem(input) {
-    if (!input || typeof input !== "object")
-        return null;
-    const row = input;
-    const productId = String(row.productId || "").trim();
-    if (!dbCompat_1.Types.ObjectId.isValid(productId))
-        return null;
-    const slug = String(row.slug || "").trim();
-    const name = String(row.name || "").trim();
-    const imageUrl = String(row.imageUrl || "").trim();
-    if (!slug || !name || !imageUrl)
-        return null;
-    const qty = Math.max(1, Math.floor(Number(row.qty || 1)));
-    const stock = Math.max(0, Math.floor(Number(row.stock || 0)));
-    const unitPriceCents = Math.max(0, Math.floor(Number(row.unitPriceCents || 0)));
-    return {
-        productId,
-        slug,
-        name,
-        imageUrl,
-        variant: typeof row.variant === "string" && row.variant.trim() ? row.variant.trim() : undefined,
-        sizeLabel: typeof row.sizeLabel === "string" && row.sizeLabel.trim() ? row.sizeLabel.trim() : undefined,
-        unitPriceCents,
-        qty,
-        stock,
-    };
-}
-function normalizeStoreBaseUrl() {
-    const base = String(env_1.env.STORE_URL || "").trim();
-    if (!base)
-        return "";
-    return base.replace(/\/+$/, "");
-}
-function buildSharedCartPath(token) {
-    return `/carrinho/compartilhado/${token}`;
-}
-function toSavedCartOutput(row) {
-    return {
-        id: String(row._id),
-        title: row.title || "Carrinho salvo",
-        itemCount: Number(row.itemCount || 0),
-        couponCode: row.couponCode || undefined,
-        createdAt: toIsoDate(row.createdAt),
-        updatedAt: toIsoDate(row.updatedAt),
-        items: (row.items || []).map((item) => ({
-            productId: String(item.productId),
-            slug: item.slug,
-            name: item.name,
-            imageUrl: item.imageUrl,
-            variant: item.variant,
-            sizeLabel: item.sizeLabel,
-            unitPriceCents: item.unitPriceCents,
-            qty: item.qty,
-            stock: item.stock,
-            subtotalCents: item.unitPriceCents * item.qty,
-        })),
-        totals: {
-            subtotalCents: Number(row.subtotalCents || 0),
-            discountCents: Number(row.discountCents || 0),
-            shippingCents: Number(row.shippingCents || 0),
-            taxCents: Number(row.taxCents || 0),
-            totalCents: Number(row.totalCents || 0),
-        },
-    };
-}
-function toSharedCartOutput(row) {
-    return {
-        token: row.token,
-        savedCartId: row.sourceSavedCartId ? String(row.sourceSavedCartId) : undefined,
-        itemCount: Number(row.itemCount || 0),
-        couponCode: row.couponCode || undefined,
-        expiresAt: toIsoDate(row.expiresAt),
-        createdAt: toIsoDate(row.createdAt),
-        items: (row.items || []).map((item) => ({
-            productId: String(item.productId),
-            slug: item.slug,
-            name: item.name,
-            imageUrl: item.imageUrl,
-            variant: item.variant,
-            sizeLabel: item.sizeLabel,
-            unitPriceCents: item.unitPriceCents,
-            qty: item.qty,
-            stock: item.stock,
-            subtotalCents: item.unitPriceCents * item.qty,
-        })),
-        totals: {
-            subtotalCents: Number(row.subtotalCents || 0),
-            discountCents: Number(row.discountCents || 0),
-            shippingCents: Number(row.shippingCents || 0),
-            taxCents: Number(row.taxCents || 0),
-            totalCents: Number(row.totalCents || 0),
-        },
-    };
-}
-function toSharedLinkOutput(row) {
-    const path = buildSharedCartPath(String(row.token || ""));
-    const storeBase = normalizeStoreBaseUrl();
-    return {
-        token: String(row.token || ""),
-        savedCartId: row.sourceSavedCartId ? String(row.sourceSavedCartId) : undefined,
-        path,
-        url: storeBase ? `${storeBase}${path}` : path,
-        expiresAt: toIsoDate(row.expiresAt),
-    };
-}
-async function replaceCartWithSnapshot(identity, snapshotItems) {
-    const normalizedItems = snapshotItems
-        .map((row) => normalizeSnapshotItem(row))
+function parseSizes(product) {
+    return asArray(product.sizes)
+        .map((entry) => {
+        const row = asObj(entry);
+        if (!row)
+            return null;
+        const label = String(row.label || "").trim();
+        if (!label)
+            return null;
+        return {
+            label,
+            stock: Math.max(0, Math.floor(Number(row.stock ?? 0))),
+            active: row.active === undefined ? true : Boolean(row.active),
+        };
+    })
         .filter((row) => row !== null);
-    if (!normalizedItems.length) {
-        throw new apiError_1.ApiError(400, "Nenhum item válido para carregar no carrinho.");
+}
+function resolveStock(product, sizeLabel) {
+    const sizes = parseSizes(product);
+    const sizeType = String(product.sizeType || "").trim() || (sizes.length ? "custom" : "unico");
+    if (sizeType === "unico" || sizes.length === 0) {
+        return { stock: Math.max(0, Math.floor(Number(product.stock ?? 0))), sizeLabel: undefined };
     }
-    const cart = await getOrCreateCart(identity);
+    const raw = String(sizeLabel || "").trim();
+    if (!raw)
+        throw new apiError_1.ApiError(400, "Selecione um tamanho.");
+    const normalized = raw.toLocaleLowerCase("pt-BR");
+    const match = sizes.find((row) => row.active && row.label.toLocaleLowerCase("pt-BR") === normalized);
+    if (!match)
+        throw new apiError_1.ApiError(400, "Tamanho inválido para este produto.");
+    return { stock: Math.max(0, match.stock), sizeLabel: match.label };
+}
+async function syncWithCatalog(items) {
+    if (!items.length)
+        return [];
+    const productIds = Array.from(new Set(items.map((item) => item.productId)));
+    const products = await prisma_1.prisma.product.findMany({ where: { id: { in: productIds }, active: true } });
+    const byId = new Map(products.map((row) => [String(row.id), row]));
+    const next = [];
+    for (const item of items) {
+        const product = byId.get(item.productId);
+        if (!product)
+            continue;
+        let resolved;
+        try {
+            resolved = resolveStock(product, item.sizeLabel);
+        }
+        catch {
+            continue;
+        }
+        if (resolved.stock <= 0)
+            continue;
+        const images = asArray(product.images).map((img) => String(img || "").trim()).filter(Boolean);
+        next.push({
+            itemId: item.itemId || (0, crypto_1.randomUUID)(),
+            productId: String(product.id),
+            slug: String(product.slug || item.slug || ""),
+            name: String(product.name || item.name || ""),
+            imageUrl: images[0] || item.imageUrl,
+            variant: item.variant,
+            sizeLabel: resolved.sizeLabel,
+            unitPriceCents: Math.max(0, Math.floor(Number(product.priceCents || 0))),
+            qty: Math.min(resolved.stock, Math.max(1, Math.floor(item.qty || 1))),
+            stock: resolved.stock,
+        });
+    }
+    return next;
+}
+async function getSavedCart(customerId, savedCartId) {
+    const row = await prisma_1.prisma.savedCart.findFirst({ where: { id: savedCartId, customerId } });
+    if (!row)
+        throw new apiError_1.ApiError(404, "Carrinho salvo não encontrado.");
+    return row;
+}
+async function getSharedByToken(token) {
+    const normalized = String(token || "").trim();
+    if (!normalized)
+        throw new apiError_1.ApiError(400, "Token inválido.");
+    const row = await prisma_1.prisma.sharedCart.findUnique({ where: { token: normalized } });
+    if (!row)
+        throw new apiError_1.ApiError(404, "Carrinho compartilhado não encontrado.");
+    if (row.expiresAt.getTime() <= Date.now()) {
+        await prisma_1.prisma.sharedCart.delete({ where: { id: row.id } }).catch(() => undefined);
+        throw new apiError_1.ApiError(410, "Este link de carrinho compartilhado expirou.");
+    }
+    return row;
+}
+async function replaceFromSnapshot(identity, itemsInput) {
+    const normalized = itemsInput.map((row) => parseItem(row)).filter((row) => row !== null);
+    if (!normalized.length)
+        throw new apiError_1.ApiError(400, "Nenhum item válido para carregar no carrinho.");
+    let cart = await getOrCreateCart(identity);
     cart.items = [];
     cart.couponCode = undefined;
     cart.discountCents = 0;
     cart.freeShippingCouponApplied = false;
     cart.lastActivityAt = new Date();
-    computeTotals(cart);
-    await cart.save();
+    totals(cart);
+    await persist(cart);
     await invalidateCartCache(identity);
     let imported = 0;
-    for (const item of normalizedItems) {
+    for (const item of normalized) {
         try {
-            await upsertCartItem(identity, {
-                productId: item.productId,
-                qty: item.qty,
-                variant: item.variant,
-                sizeLabel: item.sizeLabel,
-            });
+            await upsertCartItem(identity, { productId: item.productId, qty: item.qty, variant: item.variant, sizeLabel: item.sizeLabel });
             imported += 1;
         }
-        catch {
-            // Ignora itens inválidos/sem estoque e continua importação.
-        }
+        catch { }
     }
-    if (imported === 0) {
+    if (imported === 0)
         throw new apiError_1.ApiError(400, "Não foi possível importar itens disponíveis para o carrinho.");
-    }
     return getCart(identity);
 }
-async function getSharedCartDocumentByToken(token) {
-    const normalized = String(token || "").trim();
-    if (!normalized)
-        throw new apiError_1.ApiError(400, "Token inválido.");
-    const row = await SharedCart_1.SharedCartModel.findOne({ token: normalized });
-    if (!row)
-        throw new apiError_1.ApiError(404, "Carrinho compartilhado não encontrado.");
-    const now = Date.now();
-    const expiresAt = row.expiresAt ? row.expiresAt.getTime() : 0;
-    if (expiresAt && expiresAt <= now) {
-        await row.deleteOne();
-        throw new apiError_1.ApiError(410, "Este link de carrinho compartilhado expirou.");
-    }
-    return row;
-}
-async function getSavedCartDocumentForCustomer(customerId, savedCartId) {
-    if (!dbCompat_1.Types.ObjectId.isValid(savedCartId))
-        throw new apiError_1.ApiError(400, "Carrinho salvo inválido.");
-    const row = await SavedCart_1.SavedCartModel.findOne({
-        _id: new dbCompat_1.Types.ObjectId(savedCartId),
-        customerId: new dbCompat_1.Types.ObjectId(customerId),
-    });
-    if (!row)
-        throw new apiError_1.ApiError(404, "Carrinho salvo não encontrado.");
-    return row;
-}
 async function getOrCreateCart(identity) {
-    let cart;
+    let row = null;
     if (identity.customerId) {
-        cart = await Cart_1.CartModel.findOne({ customerId: identity.customerId, status: "active" });
+        row = await prisma_1.prisma.cart.findFirst({ where: { customerId: identity.customerId, status: "active" }, orderBy: { updatedAt: "desc" } });
     }
     else if (identity.guestToken) {
-        cart = await Cart_1.CartModel.findOne({ guestToken: identity.guestToken, status: "active" });
+        row = await prisma_1.prisma.cart.findFirst({ where: { guestToken: identity.guestToken, status: "active" }, orderBy: { updatedAt: "desc" } });
     }
-    if (!cart) {
-        cart = await Cart_1.CartModel.create({
-            customerId: identity.customerId || undefined,
-            guestToken: identity.customerId ? undefined : identity.guestToken || (0, crypto_1.randomUUID)(),
-            items: [],
-            status: "active",
-            lastActivityAt: new Date(),
+    if (!row) {
+        row = await prisma_1.prisma.cart.create({
+            data: { customerId: identity.customerId || null, guestToken: identity.customerId ? null : identity.guestToken || (0, crypto_1.randomUUID)(), status: "active", lastActivityAt: new Date(), items: [] },
         });
     }
-    computeTotals(cart);
-    await cart.save();
+    let cart = hydrate(row);
+    totals(cart);
+    cart = await persist(cart);
     return cart;
 }
 async function getCart(identity) {
-    const key = buildCartCacheKey(identity);
-    if (!key) {
-        const cart = await getOrCreateCart(identity);
-        return toOutput(cart);
-    }
-    return (0, cache_1.getOrSetCache)(key, CART_CACHE_TTL_SECONDS, async () => {
-        const cart = await getOrCreateCart(identity);
-        return toOutput(cart);
-    });
-}
-function normalizeVariant(value) {
-    return value?.trim().toLowerCase() || "default";
-}
-function normalizeSizeLabel(value) {
-    return value?.trim().toLowerCase() || "default";
+    const key = cacheKey(identity);
+    if (!key)
+        return toOutput(await getOrCreateCart(identity));
+    return (0, cache_1.getOrSetCache)(key, CART_CACHE_TTL_SECONDS, async () => toOutput(await getOrCreateCart(identity)));
 }
 async function upsertCartItem(identity, input) {
-    if (!dbCompat_1.Types.ObjectId.isValid(input.productId))
+    const productId = String(input.productId || "").trim();
+    if (!productId)
         throw new apiError_1.ApiError(400, "Produto inválido.");
-    const product = await Product_1.ProductModel.findById(input.productId);
-    if (!product || !product.active)
+    const product = await prisma_1.prisma.product.findFirst({ where: { id: productId, active: true } });
+    if (!product)
         throw new apiError_1.ApiError(404, "Produto não encontrado.");
-    if (product.stock <= 0)
+    const resolved = resolveStock(product, input.sizeLabel);
+    if (resolved.stock <= 0)
         throw new apiError_1.ApiError(400, "Produto sem estoque.");
-    const sizeType = product.sizeType || (Array.isArray(product.sizes) && product.sizes.length ? "custom" : "unico");
-    const hasSizes = sizeType !== "unico" && Array.isArray(product.sizes) && product.sizes.length > 0;
-    let sizeLabel;
-    let availableStock = Math.max(0, Math.floor(Number(product.stock ?? 0)));
-    if (hasSizes) {
-        const rawLabel = String(input.sizeLabel || "").trim();
-        if (!rawLabel)
-            throw new apiError_1.ApiError(400, "Selecione um tamanho.");
-        const normalized = rawLabel.toLocaleLowerCase("pt-BR");
-        const row = product.sizes.find((entry) => {
-            const label = String(entry?.label || "").trim();
-            const active = entry?.active === undefined ? true : Boolean(entry.active);
-            return active && label.toLocaleLowerCase("pt-BR") === normalized;
-        });
-        if (!row)
-            throw new apiError_1.ApiError(400, "Tamanho inválido para este produto.");
-        sizeLabel = String(row.label || rawLabel).trim();
-        availableStock = Math.max(0, Math.floor(Number(row.stock ?? 0)));
-        if (availableStock <= 0)
-            throw new apiError_1.ApiError(400, "Tamanho sem estoque.");
-    }
-    const cart = await getOrCreateCart(identity);
-    const qty = Math.max(1, Math.floor(input.qty));
-    const variantKey = normalizeVariant(input.variant);
-    const sizeKey = normalizeSizeLabel(sizeLabel);
-    const existing = cart.items.find((item) => String(item.productId) === String(product._id) &&
-        normalizeVariant(item.variant) === variantKey &&
-        normalizeSizeLabel(item.sizeLabel) === sizeKey);
+    const images = asArray(product.images).map((img) => String(img || "").trim()).filter(Boolean);
+    let cart = await getOrCreateCart(identity);
+    const qty = Math.max(1, Math.floor(Number(input.qty || 1)));
+    const existing = cart.items.find((row) => row.productId === productId && nVariant(row.variant) === nVariant(input.variant) && nSize(row.sizeLabel) === nSize(resolved.sizeLabel));
     if (existing) {
-        existing.qty = Math.min(availableStock, qty);
-        existing.stock = availableStock;
+        existing.qty = Math.min(resolved.stock, qty);
+        existing.stock = resolved.stock;
         existing.unitPriceCents = product.priceCents;
         existing.slug = product.slug;
         existing.name = product.name;
-        existing.imageUrl = product.images?.[0] || "";
+        existing.imageUrl = images[0] || existing.imageUrl;
         existing.variant = input.variant;
-        existing.sizeLabel = sizeLabel;
+        existing.sizeLabel = resolved.sizeLabel;
     }
     else {
         cart.items.push({
-            productId: product._id,
+            itemId: (0, crypto_1.randomUUID)(),
+            productId,
             slug: product.slug,
             name: product.name,
-            imageUrl: product.images?.[0] || "",
+            imageUrl: images[0] || "",
             variant: input.variant,
-            sizeLabel,
+            sizeLabel: resolved.sizeLabel,
             unitPriceCents: product.priceCents,
-            qty: Math.min(availableStock, qty),
-            stock: availableStock,
+            qty: Math.min(resolved.stock, qty),
+            stock: resolved.stock,
         });
     }
-    cart.lastActivityAt = new Date();
     cart.status = "active";
     cart.recovered = false;
-    computeTotals(cart);
-    await cart.save();
+    cart.lastActivityAt = new Date();
+    totals(cart);
+    cart = await persist(cart);
     await invalidateCartCache(identity);
     return toOutput(cart);
 }
 async function patchCartItemQty(identity, itemId, qty) {
-    const cart = await getOrCreateCart(identity);
-    const item = cart.items.id(itemId);
-    if (!item)
+    let cart = await getOrCreateCart(identity);
+    const target = cart.items.find((item) => item.itemId === String(itemId || "").trim());
+    if (!target)
         throw new apiError_1.ApiError(404, "Item não encontrado no carrinho.");
-    const product = await Product_1.ProductModel.findById(item.productId);
-    if (!product || !product.active) {
-        item.deleteOne();
-        cart.lastActivityAt = new Date();
-        computeTotals(cart);
-        await cart.save();
-        await invalidateCartCache(identity);
-        return toOutput(cart);
+    const product = await prisma_1.prisma.product.findFirst({ where: { id: target.productId, active: true } });
+    if (!product) {
+        cart.items = cart.items.filter((item) => item.itemId !== target.itemId);
     }
-    const sizeType = product.sizeType || (Array.isArray(product.sizes) && product.sizes.length ? "custom" : "unico");
-    const hasSizes = sizeType !== "unico" && Array.isArray(product.sizes) && product.sizes.length > 0;
-    let availableStock = Math.max(0, Math.floor(Number(product.stock ?? 0)));
-    if (hasSizes) {
-        const rawLabel = String(item.sizeLabel || "").trim();
-        if (!rawLabel) {
-            item.deleteOne();
-            cart.lastActivityAt = new Date();
-            computeTotals(cart);
-            await cart.save();
-            await invalidateCartCache(identity);
-            return toOutput(cart);
+    else {
+        try {
+            const resolved = resolveStock(product, target.sizeLabel);
+            if (resolved.stock <= 0) {
+                cart.items = cart.items.filter((item) => item.itemId !== target.itemId);
+            }
+            else {
+                const images = asArray(product.images).map((img) => String(img || "").trim()).filter(Boolean);
+                target.slug = product.slug;
+                target.name = product.name;
+                target.imageUrl = images[0] || target.imageUrl;
+                target.unitPriceCents = product.priceCents;
+                target.stock = resolved.stock;
+                target.sizeLabel = resolved.sizeLabel;
+                target.qty = Math.min(resolved.stock, Math.max(1, Math.floor(Number(qty || 1))));
+            }
         }
-        const normalized = rawLabel.toLocaleLowerCase("pt-BR");
-        const row = product.sizes.find((entry) => {
-            const label = String(entry?.label || "").trim();
-            const active = entry?.active === undefined ? true : Boolean(entry.active);
-            return active && label.toLocaleLowerCase("pt-BR") === normalized;
-        });
-        availableStock = row ? Math.max(0, Math.floor(Number(row.stock ?? 0))) : 0;
+        catch {
+            cart.items = cart.items.filter((item) => item.itemId !== target.itemId);
+        }
     }
-    if (availableStock <= 0) {
-        item.deleteOne();
-        cart.lastActivityAt = new Date();
-        computeTotals(cart);
-        await cart.save();
-        await invalidateCartCache(identity);
-        return toOutput(cart);
-    }
-    item.slug = product.slug;
-    item.name = product.name;
-    item.imageUrl = product.images?.[0] || item.imageUrl;
-    item.unitPriceCents = product.priceCents;
-    item.stock = availableStock;
-    item.qty = Math.min(availableStock, Math.max(1, Math.floor(qty)));
     cart.lastActivityAt = new Date();
-    computeTotals(cart);
-    await cart.save();
+    totals(cart);
+    cart = await persist(cart);
     await invalidateCartCache(identity);
     return toOutput(cart);
 }
 async function deleteCartItem(identity, itemId) {
-    const cart = await getOrCreateCart(identity);
-    const item = (cart.items || []).find((row) => String(row?._id || "") === String(itemId));
-    if (!item)
+    let cart = await getOrCreateCart(identity);
+    const before = cart.items.length;
+    cart.items = cart.items.filter((item) => item.itemId !== String(itemId || "").trim());
+    if (before === cart.items.length)
         return toOutput(cart);
-    if (typeof item.deleteOne === "function") {
-        item.deleteOne();
-    }
-    else {
-        cart.items = (cart.items || []).filter((row) => String(row?._id || "") !== String(itemId));
-    }
     cart.lastActivityAt = new Date();
-    computeTotals(cart);
-    await cart.save();
+    totals(cart);
+    cart = await persist(cart);
     await invalidateCartCache(identity);
     return toOutput(cart);
 }
 async function applyCouponToCart(identity, code) {
-    const cart = await getOrCreateCart(identity);
-    const normalized = code.trim().toUpperCase();
+    let cart = await getOrCreateCart(identity);
+    const normalized = String(code || "").trim().toUpperCase();
     if (!normalized) {
         cart.couponCode = undefined;
         cart.discountCents = 0;
         cart.freeShippingCouponApplied = false;
-        computeTotals(cart);
-        await cart.save();
+        totals(cart);
+        cart = await persist(cart);
         await invalidateCartCache(identity);
         return toOutput(cart);
     }
-    const coupon = await Coupon_1.CouponModel.findOne({ code: normalized, active: true });
+    const coupon = await prisma_1.prisma.coupon.findFirst({ where: { code: normalized, active: true } });
     if (!coupon)
         throw new apiError_1.ApiError(404, "Cupom não encontrado.");
     const now = new Date();
-    if (coupon.startsAt > now || coupon.endsAt < now) {
+    if (coupon.startsAt > now || coupon.endsAt < now)
         throw new apiError_1.ApiError(400, "Cupom fora do período de validade.");
-    }
-    if (coupon.maxUses && coupon.uses >= coupon.maxUses) {
+    if (coupon.maxUses && coupon.uses >= coupon.maxUses)
         throw new apiError_1.ApiError(400, "Cupom atingiu o limite de usos.");
-    }
     const subtotal = cart.items.reduce((acc, item) => acc + item.unitPriceCents * item.qty, 0);
-    if (coupon.minSubtotalCents && subtotal < coupon.minSubtotalCents) {
+    if (coupon.minSubtotalCents && subtotal < coupon.minSubtotalCents)
         throw new apiError_1.ApiError(400, "Subtotal mínimo não atingido para este cupom.");
-    }
     let discount = 0;
     let freeShipping = false;
     if (coupon.type === "percent")
-        discount = Math.round(subtotal * (coupon.amount / 100));
+        discount = Math.round(subtotal * (Number(coupon.amount || 0) / 100));
     if (coupon.type === "fixed")
-        discount = Math.min(subtotal, coupon.amount);
+        discount = Math.min(subtotal, Math.max(0, Math.floor(Number(coupon.amount || 0))));
     if (coupon.type === "shipping")
         freeShipping = true;
     cart.couponCode = normalized;
     cart.discountCents = discount;
     cart.freeShippingCouponApplied = freeShipping;
-    computeTotals(cart, { forceFreeShipping: freeShipping });
-    await cart.save();
+    totals(cart, freeShipping);
+    cart = await persist(cart);
     await invalidateCartCache(identity);
     return toOutput(cart);
 }
@@ -520,232 +468,209 @@ async function removeCouponFromCart(identity) {
     return applyCouponToCart(identity, "");
 }
 async function saveCartSnapshotForCustomer(customerId) {
-    const identity = { customerId };
-    const cart = await getOrCreateCart(identity);
-    if (!cart.items.length) {
+    const cart = await getOrCreateCart({ customerId });
+    if (!cart.items.length)
         throw new apiError_1.ApiError(400, "Adicione itens ao carrinho antes de salvar.");
-    }
-    const items = toSnapshotItems(cart);
+    const items = cart.items.map((item) => ({ ...item }));
     const itemCount = items.reduce((acc, item) => acc + item.qty, 0);
-    const created = await SavedCart_1.SavedCartModel.create({
-        customerId: new dbCompat_1.Types.ObjectId(customerId),
-        sourceCartId: cart._id,
-        title: `Carrinho salvo em ${new Date().toLocaleDateString("pt-BR")}`,
-        items,
-        itemCount,
-        couponCode: cart.couponCode || undefined,
-        discountCents: cart.discountCents || 0,
-        shippingCents: cart.shippingCents || 0,
-        taxCents: cart.taxCents || 0,
-        subtotalCents: cart.subtotalCents || 0,
-        totalCents: cart.totalCents || 0,
+    const row = await prisma_1.prisma.savedCart.create({
+        data: {
+            customerId,
+            sourceCartId: cart.id,
+            title: `Carrinho salvo em ${new Date().toLocaleDateString("pt-BR")}`,
+            items: items,
+            itemCount,
+            couponCode: cart.couponCode || null,
+            discountCents: cart.discountCents,
+            shippingCents: cart.shippingCents,
+            taxCents: cart.taxCents,
+            subtotalCents: cart.subtotalCents,
+            totalCents: cart.totalCents,
+        },
     });
-    return toSavedCartOutput(created);
-}
-async function listSavedCartsForCustomer(customerId) {
-    const rows = await SavedCart_1.SavedCartModel.find({ customerId: new dbCompat_1.Types.ObjectId(customerId) })
-        .sort({ createdAt: -1 })
-        .limit(30);
-    return rows.map((row) => toSavedCartOutput(row));
-}
-async function getSavedCartForCustomer(customerId, savedCartId) {
-    const row = await getSavedCartDocumentForCustomer(customerId, savedCartId);
-    return toSavedCartOutput(row);
-}
-async function deleteSavedCartForCustomer(customerId, savedCartId) {
-    const row = await getSavedCartDocumentForCustomer(customerId, savedCartId);
-    await Promise.all([
-        SavedCart_1.SavedCartModel.deleteOne({ _id: row._id }),
-        SharedCart_1.SharedCartModel.deleteMany({ sourceSavedCartId: row._id }),
-    ]);
-}
-async function loadSavedCartForCustomer(customerId, savedCartId) {
-    const row = await getSavedCartDocumentForCustomer(customerId, savedCartId);
-    const cart = await replaceCartWithSnapshot({ customerId }, row.items || []);
     return {
-        savedCart: toSavedCartOutput(row),
-        cart,
+        id: row.id,
+        title: row.title || "Carrinho salvo",
+        itemCount: row.itemCount,
+        couponCode: row.couponCode || undefined,
+        createdAt: toIso(row.createdAt),
+        updatedAt: toIso(row.updatedAt),
+        items: parseItems(row.items).map((item) => ({ ...item, subtotalCents: item.qty * item.unitPriceCents })),
+        totals: { subtotalCents: row.subtotalCents, discountCents: row.discountCents, shippingCents: row.shippingCents, taxCents: row.taxCents, totalCents: row.totalCents },
     };
 }
+async function listSavedCartsForCustomer(customerId) {
+    const rows = await prisma_1.prisma.savedCart.findMany({ where: { customerId }, orderBy: { createdAt: "desc" }, take: 30 });
+    return rows.map((row) => ({
+        id: row.id,
+        title: row.title || "Carrinho salvo",
+        itemCount: row.itemCount,
+        couponCode: row.couponCode || undefined,
+        createdAt: toIso(row.createdAt),
+        updatedAt: toIso(row.updatedAt),
+        items: parseItems(row.items).map((item) => ({ ...item, subtotalCents: item.qty * item.unitPriceCents })),
+        totals: { subtotalCents: row.subtotalCents, discountCents: row.discountCents, shippingCents: row.shippingCents, taxCents: row.taxCents, totalCents: row.totalCents },
+    }));
+}
+async function getSavedCartForCustomer(customerId, savedCartId) {
+    const row = await getSavedCart(customerId, savedCartId);
+    return {
+        id: row.id,
+        title: row.title || "Carrinho salvo",
+        itemCount: row.itemCount,
+        couponCode: row.couponCode || undefined,
+        createdAt: toIso(row.createdAt),
+        updatedAt: toIso(row.updatedAt),
+        items: parseItems(row.items).map((item) => ({ ...item, subtotalCents: item.qty * item.unitPriceCents })),
+        totals: { subtotalCents: row.subtotalCents, discountCents: row.discountCents, shippingCents: row.shippingCents, taxCents: row.taxCents, totalCents: row.totalCents },
+    };
+}
+async function deleteSavedCartForCustomer(customerId, savedCartId) {
+    const row = await getSavedCart(customerId, savedCartId);
+    await prisma_1.prisma.$transaction([prisma_1.prisma.sharedCart.deleteMany({ where: { sourceSavedCartId: row.id } }), prisma_1.prisma.savedCart.delete({ where: { id: row.id } })]);
+}
+async function loadSavedCartForCustomer(customerId, savedCartId) {
+    const row = await getSavedCart(customerId, savedCartId);
+    const cart = await replaceFromSnapshot({ customerId }, asArray(row.items));
+    return { savedCart: await getSavedCartForCustomer(customerId, savedCartId), cart };
+}
 async function shareSavedCartForCustomer(customerId, savedCartId) {
-    const row = await getSavedCartDocumentForCustomer(customerId, savedCartId);
+    const row = await getSavedCart(customerId, savedCartId);
     const now = new Date();
-    const existing = await SharedCart_1.SharedCartModel.findOne({
-        sourceSavedCartId: row._id,
-        sourceCustomerId: new dbCompat_1.Types.ObjectId(customerId),
-        expiresAt: { $gt: now },
-    }).sort({ createdAt: -1 });
+    const existing = await prisma_1.prisma.sharedCart.findFirst({
+        where: { sourceSavedCartId: row.id, sourceCustomerId: customerId, expiresAt: { gt: now } },
+        orderBy: { createdAt: "desc" },
+    });
     if (existing) {
-        return toSharedLinkOutput(existing);
+        const path = `/carrinho/compartilhado/${existing.token}`;
+        const base = String(env_1.env.STORE_URL || "").trim().replace(/\/+$/, "");
+        return { token: existing.token, savedCartId: existing.sourceSavedCartId || undefined, path, url: base ? `${base}${path}` : path, expiresAt: toIso(existing.expiresAt) };
     }
     const token = (0, crypto_1.randomUUID)().replace(/-/g, "");
-    const expiresAt = new Date(Date.now() + SHARED_CART_TTL_DAYS * 24 * 60 * 60 * 1000);
-    const items = (row.items || []).map((item) => ({
-        productId: item.productId,
-        slug: item.slug,
-        name: item.name,
-        imageUrl: item.imageUrl,
-        variant: item.variant,
-        sizeLabel: item.sizeLabel,
-        unitPriceCents: item.unitPriceCents,
-        qty: item.qty,
-        stock: item.stock,
-    }));
-    const shared = await SharedCart_1.SharedCartModel.create({
-        token,
-        sourceCustomerId: new dbCompat_1.Types.ObjectId(customerId),
-        sourceSavedCartId: row._id,
-        sourceCartId: row.sourceCartId || undefined,
-        items,
-        itemCount: Number(row.itemCount || 0),
-        couponCode: row.couponCode || undefined,
-        discountCents: Number(row.discountCents || 0),
-        shippingCents: Number(row.shippingCents || 0),
-        taxCents: Number(row.taxCents || 0),
-        subtotalCents: Number(row.subtotalCents || 0),
-        totalCents: Number(row.totalCents || 0),
-        expiresAt,
+    const created = await prisma_1.prisma.sharedCart.create({
+        data: {
+            token,
+            sourceCustomerId: customerId,
+            sourceSavedCartId: row.id,
+            sourceCartId: row.sourceCartId || null,
+            items: asArray(row.items),
+            itemCount: row.itemCount,
+            couponCode: row.couponCode || null,
+            discountCents: row.discountCents,
+            shippingCents: row.shippingCents,
+            taxCents: row.taxCents,
+            subtotalCents: row.subtotalCents,
+            totalCents: row.totalCents,
+            expiresAt: new Date(Date.now() + SHARED_CART_TTL_DAYS * 24 * 60 * 60 * 1000),
+        },
     });
-    return toSharedLinkOutput(shared);
+    const path = `/carrinho/compartilhado/${created.token}`;
+    const base = String(env_1.env.STORE_URL || "").trim().replace(/\/+$/, "");
+    return { token: created.token, savedCartId: created.sourceSavedCartId || undefined, path, url: base ? `${base}${path}` : path, expiresAt: toIso(created.expiresAt) };
 }
 async function revokeSavedCartShareForCustomer(customerId, savedCartId) {
-    const row = await getSavedCartDocumentForCustomer(customerId, savedCartId);
-    await SharedCart_1.SharedCartModel.deleteMany({
-        sourceSavedCartId: row._id,
-        sourceCustomerId: new dbCompat_1.Types.ObjectId(customerId),
-    });
+    const row = await getSavedCart(customerId, savedCartId);
+    await prisma_1.prisma.sharedCart.deleteMany({ where: { sourceSavedCartId: row.id, sourceCustomerId: customerId } });
 }
 async function createSharedCartLink(identity) {
     const cart = await getOrCreateCart(identity);
-    if (!cart.items.length) {
+    if (!cart.items.length)
         throw new apiError_1.ApiError(400, "Adicione itens ao carrinho antes de compartilhar.");
-    }
     const token = (0, crypto_1.randomUUID)().replace(/-/g, "");
-    const items = toSnapshotItems(cart);
-    const itemCount = items.reduce((acc, item) => acc + item.qty, 0);
-    const expiresAt = new Date(Date.now() + SHARED_CART_TTL_DAYS * 24 * 60 * 60 * 1000);
-    const shared = await SharedCart_1.SharedCartModel.create({
-        token,
-        sourceCustomerId: identity.customerId ? new dbCompat_1.Types.ObjectId(identity.customerId) : undefined,
-        sourceCartId: cart._id,
-        items,
-        itemCount,
-        couponCode: cart.couponCode || undefined,
-        discountCents: cart.discountCents || 0,
-        shippingCents: cart.shippingCents || 0,
-        taxCents: cart.taxCents || 0,
-        subtotalCents: cart.subtotalCents || 0,
-        totalCents: cart.totalCents || 0,
-        expiresAt,
+    const created = await prisma_1.prisma.sharedCart.create({
+        data: {
+            token,
+            sourceCustomerId: identity.customerId || null,
+            sourceCartId: cart.id,
+            items: toItemsJson(cart.items),
+            itemCount: cart.items.reduce((acc, item) => acc + item.qty, 0),
+            couponCode: cart.couponCode || null,
+            discountCents: cart.discountCents,
+            shippingCents: cart.shippingCents,
+            taxCents: cart.taxCents,
+            subtotalCents: cart.subtotalCents,
+            totalCents: cart.totalCents,
+            expiresAt: new Date(Date.now() + SHARED_CART_TTL_DAYS * 24 * 60 * 60 * 1000),
+        },
     });
-    return toSharedLinkOutput(shared);
+    const path = `/carrinho/compartilhado/${created.token}`;
+    const base = String(env_1.env.STORE_URL || "").trim().replace(/\/+$/, "");
+    return { token: created.token, savedCartId: created.sourceSavedCartId || undefined, path, url: base ? `${base}${path}` : path, expiresAt: toIso(created.expiresAt) };
 }
 async function getSharedCartByToken(token) {
-    const row = await getSharedCartDocumentByToken(token);
-    return toSharedCartOutput(row);
-}
-async function importSharedCartByToken(identity, token) {
-    const row = await getSharedCartDocumentByToken(token);
-    const cart = await replaceCartWithSnapshot(identity, row.items || []);
+    const row = await getSharedByToken(token);
     return {
-        sharedCart: toSharedCartOutput(row),
-        cart,
+        token: row.token,
+        savedCartId: row.sourceSavedCartId ? String(row.sourceSavedCartId) : undefined,
+        itemCount: row.itemCount,
+        couponCode: row.couponCode || undefined,
+        expiresAt: toIso(row.expiresAt),
+        createdAt: toIso(row.createdAt),
+        items: parseItems(row.items).map((item) => ({ ...item, subtotalCents: item.qty * item.unitPriceCents })),
+        totals: { subtotalCents: row.subtotalCents, discountCents: row.discountCents, shippingCents: row.shippingCents, taxCents: row.taxCents, totalCents: row.totalCents },
     };
 }
+async function importSharedCartByToken(identity, token) {
+    const row = await getSharedByToken(token);
+    const cart = await replaceFromSnapshot(identity, asArray(row.items));
+    return { sharedCart: await getSharedCartByToken(token), cart };
+}
 async function bindGuestCartToCustomer(guestToken, customerId) {
-    if (!guestToken)
+    const token = String(guestToken || "").trim();
+    if (!token)
         return;
-    const guestCart = await Cart_1.CartModel.findOne({ guestToken, status: "active" });
-    if (!guestCart)
+    const [guestRow, customerRow] = await Promise.all([
+        prisma_1.prisma.cart.findFirst({ where: { guestToken: token, status: "active" }, orderBy: { updatedAt: "desc" } }),
+        prisma_1.prisma.cart.findFirst({ where: { customerId, status: "active" }, orderBy: { updatedAt: "desc" } }),
+    ]);
+    if (!guestRow)
         return;
-    const customerObjectId = new dbCompat_1.Types.ObjectId(customerId);
-    const customerCart = await Cart_1.CartModel.findOne({ customerId: customerObjectId, status: "active" });
-    if (!customerCart) {
-        guestCart.customerId = customerObjectId;
-        guestCart.guestToken = undefined;
-        guestCart.lastActivityAt = new Date();
-        computeTotals(guestCart);
-        await guestCart.save();
-        await invalidateCartCache({ guestToken });
+    const guest = hydrate(guestRow);
+    if (!customerRow) {
+        guest.items = await syncWithCatalog(guest.items);
+        guest.customerId = customerId;
+        guest.guestToken = undefined;
+        guest.lastActivityAt = new Date();
+        totals(guest);
+        await persist(guest);
+        await invalidateCartCache({ guestToken: token });
         await invalidateCartCache({ customerId });
         return;
     }
-    for (const guestItem of guestCart.items) {
-        const variantKey = normalizeVariant(guestItem.variant);
-        const sizeKey = normalizeSizeLabel(guestItem.sizeLabel);
-        const existing = customerCart.items.find((item) => String(item.productId) === String(guestItem.productId) &&
-            normalizeVariant(item.variant) === variantKey &&
-            normalizeSizeLabel(item.sizeLabel) === sizeKey);
-        if (existing) {
-            existing.qty += guestItem.qty;
-            continue;
-        }
-        customerCart.items.push({
-            productId: guestItem.productId,
-            slug: guestItem.slug,
-            name: guestItem.name,
-            imageUrl: guestItem.imageUrl,
-            variant: guestItem.variant,
-            sizeLabel: guestItem.sizeLabel,
-            unitPriceCents: guestItem.unitPriceCents,
-            qty: guestItem.qty,
-            stock: guestItem.stock,
-        });
+    const customer = hydrate(customerRow);
+    const map = new Map();
+    for (const item of [...customer.items, ...guest.items]) {
+        const key = `${item.productId}::${nVariant(item.variant)}::${nSize(item.sizeLabel)}`;
+        const current = map.get(key);
+        if (current)
+            current.qty += Math.max(1, Math.floor(Number(item.qty || 1)));
+        else
+            map.set(key, { ...item, itemId: item.itemId || (0, crypto_1.randomUUID)(), qty: Math.max(1, Math.floor(Number(item.qty || 1))) });
     }
-    for (const item of [...customerCart.items]) {
-        const product = await Product_1.ProductModel.findById(item.productId);
-        if (!product || !product.active) {
-            item.deleteOne();
-            continue;
-        }
-        const sizeType = product.sizeType || (Array.isArray(product.sizes) && product.sizes.length ? "custom" : "unico");
-        const hasSizes = sizeType !== "unico" && Array.isArray(product.sizes) && product.sizes.length > 0;
-        let availableStock = Math.max(0, Math.floor(Number(product.stock ?? 0)));
-        if (hasSizes) {
-            const rawLabel = String(item.sizeLabel || "").trim();
-            if (!rawLabel) {
-                item.deleteOne();
-                continue;
-            }
-            const normalized = rawLabel.toLocaleLowerCase("pt-BR");
-            const row = product.sizes.find((entry) => {
-                const label = String(entry?.label || "").trim();
-                const active = entry?.active === undefined ? true : Boolean(entry.active);
-                return active && label.toLocaleLowerCase("pt-BR") === normalized;
-            });
-            availableStock = row ? Math.max(0, Math.floor(Number(row.stock ?? 0))) : 0;
-        }
-        if (availableStock <= 0) {
-            item.deleteOne();
-            continue;
-        }
-        item.slug = product.slug;
-        item.name = product.name;
-        item.imageUrl = product.images?.[0] || item.imageUrl;
-        item.unitPriceCents = product.priceCents;
-        item.stock = availableStock;
-        item.qty = Math.min(availableStock, Math.max(1, Math.floor(item.qty)));
-    }
-    customerCart.lastActivityAt = new Date();
-    computeTotals(customerCart);
-    await customerCart.save();
-    await guestCart.deleteOne();
-    await invalidateCartCache({ guestToken });
+    customer.items = await syncWithCatalog(Array.from(map.values()));
+    customer.lastActivityAt = new Date();
+    totals(customer);
+    await prisma_1.prisma.$transaction([
+        prisma_1.prisma.cart.update({
+            where: { id: customer.id },
+            data: { items: toItemsJson(customer.items), subtotalCents: customer.subtotalCents, discountCents: customer.discountCents, shippingCents: customer.shippingCents, taxCents: customer.taxCents, totalCents: customer.totalCents, lastActivityAt: customer.lastActivityAt },
+        }),
+        prisma_1.prisma.cart.delete({ where: { id: guest.id } }),
+    ]);
+    await invalidateCartCache({ guestToken: token });
     await invalidateCartCache({ customerId });
 }
 async function markCartConverted(cartId) {
-    const cart = await Cart_1.CartModel.findById(cartId);
-    if (!cart)
+    const id = String(cartId || "").trim();
+    if (!id)
         return;
-    cart.status = "converted";
-    cart.lastActivityAt = new Date();
-    await cart.save();
-    await invalidateCartCache({
-        customerId: cart.customerId ? String(cart.customerId) : undefined,
-        guestToken: cart.guestToken || undefined,
-    });
+    const row = await prisma_1.prisma.cart.findUnique({ where: { id } });
+    if (!row)
+        return;
+    await prisma_1.prisma.cart.update({ where: { id }, data: { status: "converted", lastActivityAt: new Date() } });
+    await invalidateCartCache({ customerId: row.customerId || undefined, guestToken: row.guestToken || undefined });
 }
-function stageByDate(lastActivityAt) {
+function stage(lastActivityAt) {
     const diffHours = (Date.now() - lastActivityAt.getTime()) / 36e5;
     if (diffHours <= 24)
         return "quente";
@@ -755,47 +680,49 @@ function stageByDate(lastActivityAt) {
 }
 async function listAbandonedCarts(input) {
     const threshold = new Date(Date.now() - 2 * 60 * 60 * 1000);
-    await Cart_1.CartModel.updateMany({ status: "active", lastActivityAt: { $lte: threshold }, items: { $exists: true, $ne: [] } }, { $set: { status: "abandoned" } });
+    const candidates = await prisma_1.prisma.cart.findMany({ where: { status: "active", lastActivityAt: { lte: threshold } }, select: { id: true, items: true } });
+    const ids = candidates.filter((row) => parseItems(row.items).length > 0).map((row) => row.id);
+    if (ids.length)
+        await prisma_1.prisma.cart.updateMany({ where: { id: { in: ids } }, data: { status: "abandoned" } });
     const [rows, total] = await Promise.all([
-        Cart_1.CartModel.find({ status: "abandoned" })
-            .sort({ lastActivityAt: -1 })
-            .skip((input.page - 1) * input.limit)
-            .limit(input.limit),
-        Cart_1.CartModel.countDocuments({ status: "abandoned" }),
+        prisma_1.prisma.cart.findMany({ where: { status: "abandoned" }, include: { customer: { select: { name: true, email: true } } }, orderBy: { lastActivityAt: "desc" }, skip: (input.page - 1) * input.limit, take: input.limit }),
+        prisma_1.prisma.cart.count({ where: { status: "abandoned" } }),
     ]);
     return {
-        data: rows.map((cart) => ({
-            id: String(cart._id),
-            customerName: "Cliente",
-            email: "cliente@exemplo.com",
-            itemsCount: cart.items.length,
-            value: Number((cart.totalCents / 100).toFixed(2)),
-            stage: stageByDate(cart.lastActivityAt),
-            recovered: cart.recovered,
-            lastActivityAt: toIsoDate(cart.lastActivityAt),
-        })),
-        meta: {
-            total,
-            page: input.page,
-            limit: input.limit,
-            pages: Math.max(1, Math.ceil(total / input.limit)),
-        },
+        data: rows.map((row) => {
+            const items = parseItems(row.items);
+            return {
+                id: String(row.id),
+                customerName: row.customer?.name || "Cliente",
+                email: row.customer?.email || "cliente@exemplo.com",
+                itemsCount: items.reduce((acc, item) => acc + item.qty, 0),
+                value: Number((Number(row.totalCents || 0) / 100).toFixed(2)),
+                stage: stage(row.lastActivityAt instanceof Date ? row.lastActivityAt : new Date(row.lastActivityAt || Date.now())),
+                recovered: Boolean(row.recovered),
+                lastActivityAt: toIso(row.lastActivityAt),
+            };
+        }),
+        meta: { total, page: input.page, limit: input.limit, pages: Math.max(1, Math.ceil(total / input.limit)) },
     };
 }
 async function recoverAbandonedCart(cartId, note) {
-    const cart = await Cart_1.CartModel.findById(cartId);
-    if (!cart)
+    const id = String(cartId || "").trim();
+    const row = await prisma_1.prisma.cart.findUnique({ where: { id } });
+    if (!row)
         throw new apiError_1.ApiError(404, "Carrinho não encontrado.");
-    cart.recovered = true;
-    if (note)
-        cart.notes.push(note);
-    await cart.save();
+    const notes = asArray(row.notes).map((n) => String(n || "").trim()).filter(Boolean);
+    if (note && String(note).trim())
+        notes.push(String(note).trim());
+    await prisma_1.prisma.cart.update({ where: { id }, data: { recovered: true, notes: notes } });
+    await invalidateCartCache({ customerId: row.customerId || undefined, guestToken: row.guestToken || undefined });
     return { success: true };
 }
 async function getCartForConversion(cartId) {
-    const cart = await Cart_1.CartModel.findById(cartId);
-    if (!cart)
+    const id = String(cartId || "").trim();
+    const row = await prisma_1.prisma.cart.findUnique({ where: { id } });
+    if (!row)
         throw new apiError_1.ApiError(404, "Carrinho não encontrado.");
+    const cart = hydrate(row);
     if (!cart.items.length)
         throw new apiError_1.ApiError(400, "Carrinho sem itens.");
     return cart;

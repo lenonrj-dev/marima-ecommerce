@@ -1,18 +1,25 @@
-import { connectDb, disconnectDb } from "./config/db";
-import { ProductModel } from "./models/Product";
+﻿import { prisma } from "./lib/prisma";
 import { normalizeColorVariantInput } from "./utils/colorVariants";
 
 async function migrateColors() {
-  await connectDb();
-
   let scanned = 0;
   let updated = 0;
   let unchanged = 0;
   let withoutColor = 0;
 
-  const cursor = ProductModel.find({}).cursor();
+  const products = await prisma.product.findMany({
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      groupKey: true,
+      colorName: true,
+      colorHex: true,
+      name: true,
+      category: true,
+    },
+  });
 
-  for await (const product of cursor) {
+  for (const product of products) {
     scanned += 1;
 
     const hasGroupKey = typeof product.groupKey === "string" && product.groupKey.trim().length > 0;
@@ -37,31 +44,31 @@ async function migrateColors() {
       continue;
     }
 
-    let changed = false;
+    const data: { groupKey?: string; colorName?: string; colorHex?: string } = {};
 
     if (!hasGroupKey) {
-      product.groupKey = normalized.inferred.groupKey;
-      changed = true;
+      data.groupKey = normalized.inferred.groupKey;
     }
     if (!hasColorName) {
-      product.colorName = normalized.inferred.colorName;
-      changed = true;
+      data.colorName = normalized.inferred.colorName;
     }
     if (!hasColorHex && normalized.inferred.colorHex) {
-      product.colorHex = normalized.inferred.colorHex;
-      changed = true;
+      data.colorHex = normalized.inferred.colorHex;
     }
 
-    if (!changed) {
+    if (!Object.keys(data).length) {
       unchanged += 1;
       continue;
     }
 
-    await product.save();
+    await prisma.product.update({
+      where: { id: product.id },
+      data,
+    });
+
     updated += 1;
   }
 
-  // Relatório objetivo para conferência
   console.log(
     JSON.stringify(
       { scanned, updated, unchanged, withoutColor },
@@ -69,12 +76,13 @@ async function migrateColors() {
       2,
     ),
   );
-
-  await disconnectDb();
 }
 
-migrateColors().catch(async (err) => {
-  console.error(err);
-  await disconnectDb();
-  process.exit(1);
-});
+migrateColors()
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

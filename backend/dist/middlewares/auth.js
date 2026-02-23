@@ -65,7 +65,7 @@ function requireCustomerAuth(req, _res, next) {
         return;
     }
     if (payload.type !== "customer") {
-        next(new apiError_1.ApiError(403, "Sem permissão para esta ação.", "FORBIDDEN"));
+        next(new apiError_1.ApiError(401, "Acesso do cliente não autenticado.", "AUTH_REQUIRED"));
         return;
     }
     req.auth = {

@@ -1,5 +1,5 @@
 import { env } from "../config/env";
-import { PaymentTransactionModel } from "../models/PaymentTransaction";
+import { prisma } from "../lib/prisma";
 import { cancelMercadoPagoOrder } from "../services/mercadopago.service";
 
 const DEFAULT_TTL_MINUTES = 30;
@@ -15,16 +15,18 @@ function resolveTtlMinutes() {
 async function expireOnce(ttlMinutes: number) {
   const cutoff = new Date(Date.now() - ttlMinutes * 60 * 1000);
 
-  const rows = await PaymentTransactionModel.find({
-    provider: "mercadopago",
-    status: { $in: ["initiated", "pending"] },
-    createdAt: { $lt: cutoff },
-  })
-    .sort({ createdAt: 1 })
-    .limit(MAX_BATCH);
+  const rows = await prisma.paymentTransaction.findMany({
+    where: {
+      provider: "mercadopago",
+      status: { in: ["initiated", "pending"] },
+      createdAt: { lt: cutoff },
+    },
+    orderBy: { createdAt: "asc" },
+    take: MAX_BATCH,
+  });
 
   for (const tx of rows) {
-    const orderId = String(tx.orderId);
+    const orderId = String(tx.orderId || "");
     const cancelToken = tx.cancelToken ? String(tx.cancelToken) : "";
     if (!cancelToken) continue;
 

@@ -50,6 +50,7 @@ export type ApiListResponse<T> = {
 type ApiFetchOptions = RequestInit & {
   query?: Record<string, string | number | boolean | undefined | null>;
   skipAuthRedirect?: boolean;
+  __authRetry?: boolean;
 };
 
 export class HttpError extends Error {
@@ -75,6 +76,7 @@ type AuthExpiredListener = (event: AuthExpiredEvent) => void;
 const authExpiredListeners = new Set<AuthExpiredListener>();
 let lastAuthExpiredAt = 0;
 const AUTH_EXPIRED_COOLDOWN_MS = 1500;
+let refreshPromise: Promise<boolean> | null = null;
 
 export function onAuthExpired(listener: AuthExpiredListener) {
   authExpiredListeners.add(listener);
@@ -156,8 +158,43 @@ export function buildApiUrl(path: string, query?: ApiFetchOptions["query"]) {
   return joinApiPath(getApiBase(), withQuery(path, query));
 }
 
+function shouldAttemptRefresh(path: string, code?: string) {
+  const normalized = path.toLowerCase();
+  if (normalized.includes("/api/v1/auth/refresh")) return false;
+  if (normalized.includes("/api/v1/auth/customer/login")) return false;
+  if (normalized.includes("/api/v1/auth/customer/register")) return false;
+  if (normalized.includes("/api/v1/auth/admin/login")) return false;
+  if (normalized.includes("/api/v1/auth/logout")) return false;
+  if (normalized.includes("/api/v1/auth/customer/logout")) return false;
+  if (normalized.includes("/api/v1/auth/admin/logout")) return false;
+  return code === "AUTH_EXPIRED" || code === "AUTH_REQUIRED" || code === undefined;
+}
+
+async function tryRefreshSession(base: string, skipNgrokWarning: boolean) {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const refreshUrl = joinApiPath(base, "/api/v1/auth/refresh");
+      const response = await fetch(refreshUrl, {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+        headers: skipNgrokWarning ? { "ngrok-skip-browser-warning": "true" } : undefined,
+      });
+      return response.ok;
+    } catch {
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
 export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptions = {}): Promise<T> {
-  const { query, skipAuthRedirect = false, ...requestOptions } = options;
+  const { query, skipAuthRedirect = false, __authRetry = false, ...requestOptions } = options;
   const base = getApiBase();
   const url = joinApiPath(base, withQuery(path, query));
   const hasJsonBody = typeof requestOptions.body === "string";
@@ -184,6 +221,17 @@ export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptio
       typeof payload === "object" && payload !== null && "message" in payload
         ? String((payload as Record<string, unknown>).message || "Falha na requisicao")
         : "Falha na requisicao";
+
+    if (response.status === 401 && !__authRetry && shouldAttemptRefresh(path, code)) {
+      const refreshed = await tryRefreshSession(base, skipNgrokWarning);
+      if (refreshed) {
+        return apiFetch<T>(path, {
+          ...options,
+          skipAuthRedirect: true,
+          __authRetry: true,
+        });
+      }
+    }
 
     if (!skipAuthRedirect && response.status === 401 && code !== "AUTH_INVALID_CREDENTIALS") {
       if (code === "AUTH_EXPIRED" || code === undefined) {

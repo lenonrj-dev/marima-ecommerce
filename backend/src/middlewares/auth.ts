@@ -73,7 +73,7 @@ export function requireCustomerAuth(req: Request, _res: Response, next: NextFunc
   }
 
   if (payload.type !== "customer") {
-    next(new ApiError(403, "Sem permissão para esta ação.", "FORBIDDEN"));
+    next(new ApiError(401, "Acesso do cliente não autenticado.", "AUTH_REQUIRED"));
     return;
   }
 

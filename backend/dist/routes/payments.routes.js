@@ -27,6 +27,8 @@ router.post("/mercadopago/checkout-pro", (0, validate_1.validate)({
     }),
 }), ...mercadopago_controller_1.mercadoPagoCheckoutProHandler);
 router.get("/mercadopago/verify", mercadopago_controller_1.mercadoPagoVerifyHandler);
+router.post("/mercadopago/webhook", mercadopago_controller_1.mercadoPagoWebhookHandler);
+router.get("/mercadopago/webhook", mercadopago_controller_1.mercadoPagoWebhookHandler);
 router.post("/mercadopago/cancel", (0, validate_1.validate)({
     body: zod_1.z.object({
         orderId: zod_1.z.string().min(1),

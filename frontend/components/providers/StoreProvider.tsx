@@ -24,11 +24,22 @@ import {
   toCartItemInput,
 } from "@/lib/store/cart";
 import {
+  FAVORITES_STORAGE_KEY,
   INITIAL_FAVORITES_STATE,
   type FavoriteItem,
   favoritesReducer,
+  sanitizeFavoritesState,
   toFavoriteItem,
 } from "@/lib/store/favorites";
+import {
+  clearGuestCart,
+  clearLegacyGuestCartStorage,
+  isGuestCartExpired,
+  readGuestCart,
+  toGuestCartItems,
+  type GuestCartItem,
+  writeGuestCart,
+} from "@/lib/cartStorage";
 
 type CheckoutDraft = {
   zip: string;
@@ -142,12 +153,15 @@ type ApiCartShare = {
 const CartContext = createContext<CartContextValue | null>(null);
 const FavoritesContext = createContext<FavoritesContextValue | null>(null);
 
-const MONGO_ID_REGEX = /^[a-f\d]{24}$/i;
 const AUTH_CHANGED_EVENT = "marima:auth-changed";
 const CART_CHANGED_EVENT = "marima:cart-changed";
 
-function isMongoId(value: string) {
-  return MONGO_ID_REGEX.test(value);
+function hasBackendId(value: string | undefined | null) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isClientOnlyItemId(value: string | undefined | null) {
+  return typeof value === "string" && value.includes(":");
 }
 
 function normalizeTotalsFromApi(cart: ApiCart): CartTotals {
@@ -217,6 +231,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const hydrateSeq = useRef(0);
   const logoutLockUntil = useRef(0);
+  const bootstrappedFromLocal = useRef(false);
+  const pendingLocalMergeRef = useRef<GuestCartItem[]>([]);
+  const pendingLocalCouponRef = useRef<string | null>(null);
 
   const [checkoutDraft, setCheckoutDraft] = useState<CheckoutDraft>({
     zip: "",
@@ -237,6 +254,89 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setCartId(cart.id || null);
     setCouponStatus("idle");
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || bootstrappedFromLocal.current) return;
+    bootstrappedFromLocal.current = true;
+
+    try {
+      clearLegacyGuestCartStorage();
+      const snapshot = readGuestCart();
+      pendingLocalMergeRef.current = snapshot?.items || [];
+      pendingLocalCouponRef.current = snapshot?.couponCode || null;
+      dispatchCart({ type: "hydrate", payload: { isHydrated: true, items: [] } });
+    } catch {
+      dispatchCart({ type: "hydrate", payload: { isHydrated: true, items: [] } });
+    }
+
+    try {
+      const rawFavorites = window.localStorage.getItem(FAVORITES_STORAGE_KEY);
+      if (rawFavorites) {
+        dispatchFavorites({ type: "hydrate", payload: sanitizeFavoritesState(JSON.parse(rawFavorites)) });
+      } else {
+        dispatchFavorites({ type: "hydrate", payload: { isHydrated: true, items: [] } });
+      }
+    } catch {
+      dispatchFavorites({ type: "hydrate", payload: { isHydrated: true, items: [] } });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const runCleanup = () => {
+      if (isGuestCartExpired()) {
+        clearGuestCart();
+        pendingLocalMergeRef.current = [];
+        pendingLocalCouponRef.current = null;
+      }
+    };
+
+    runCleanup();
+    const intervalId = window.setInterval(runCleanup, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !cartState.isHydrated) return;
+
+    if (isCustomer) {
+      clearGuestCart();
+      return;
+    }
+
+    const guestItems = toGuestCartItems(cartState.items);
+    if (guestItems.length === 0) {
+      if (pendingLocalMergeRef.current.length === 0) {
+        clearGuestCart();
+      }
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      writeGuestCart({
+        items: guestItems,
+        couponCode: coupon || null,
+      });
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [cartState.isHydrated, cartState.items, coupon, isCustomer]);
+
+  useEffect(() => {
+    if (!favoritesState.isHydrated || typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        FAVORITES_STORAGE_KEY,
+        JSON.stringify({
+          isHydrated: true,
+          items: favoritesState.items,
+        }),
+      );
+    } catch {
+      // Ignore localStorage errors.
+    }
+  }, [favoritesState.isHydrated, favoritesState.items]);
 
   const forceLogout = useCallback(
     (reason: "expired" | "unauthorized") => {
@@ -290,10 +390,79 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       try {
         const cartResponse = await apiFetch<{ data: ApiCart }>("/api/v1/me/cart");
         if (!active || seq !== hydrateSeq.current) return;
-        syncCartFromApi(cartResponse.data);
+
+        let nextCart = cartResponse.data;
+        const pendingLocal = pendingLocalMergeRef.current;
+        const pendingCoupon = pendingLocalCouponRef.current;
+
+        if (pendingLocal.length > 0) {
+          const remoteItems = nextCart.items || [];
+          const remoteKey = new Set(
+            remoteItems.map(
+              (item) =>
+                `${item.productId}:${String(item.variant || "").toLowerCase()}:${String(item.sizeLabel || "").toLowerCase()}`,
+            ),
+          );
+
+          const missingLocal = pendingLocal.filter((item) => {
+            const key = `${item.productId}:${String(item.variantId || "").toLowerCase()}:${String(item.sizeLabel || "").toLowerCase()}`;
+            return !remoteKey.has(key);
+          });
+
+          if (missingLocal.length > 0) {
+            for (const item of missingLocal) {
+              try {
+                await apiFetch<{ data: ApiCart }>("/api/v1/me/cart/items", {
+                  method: "PUT",
+                  body: JSON.stringify({
+                    productId: item.productId,
+                    qty: item.qty,
+                    variant: item.variantId,
+                    sizeLabel: item.sizeLabel,
+                  }),
+                  skipAuthRedirect: true,
+                });
+              } catch {
+                // Mantém item local como fallback; não bloqueia hidratação.
+              }
+            }
+
+            const refreshed = await apiFetch<{ data: ApiCart }>("/api/v1/me/cart", {
+              skipAuthRedirect: true,
+            });
+            nextCart = refreshed.data;
+          }
+        }
+
+        if (pendingCoupon && !nextCart.couponCode) {
+          try {
+            await apiFetch<{ data: ApiCart }>("/api/v1/me/cart/apply-coupon", {
+              method: "POST",
+              body: JSON.stringify({ code: pendingCoupon }),
+              skipAuthRedirect: true,
+            });
+
+            const refreshed = await apiFetch<{ data: ApiCart }>("/api/v1/me/cart", {
+              skipAuthRedirect: true,
+            });
+            nextCart = refreshed.data;
+          } catch {
+            // Coupon can be expired/invalid. Keep checkout flow.
+          }
+        }
+
+        pendingLocalMergeRef.current = [];
+        pendingLocalCouponRef.current = null;
+        syncCartFromApi(nextCart);
       } catch {
         if (!active || seq !== hydrateSeq.current) return;
-        dispatchCart({ type: "hydrate", payload: { isHydrated: true, items: [] } });
+        dispatchCart({
+          type: "hydrate",
+          payload: {
+            isHydrated: true,
+            items: [],
+          },
+        });
         setServerTotals(null);
         setCoupon(null);
         setCartId(null);
@@ -318,6 +487,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     void hydrateFromBackend();
 
     function onAuthChanged() {
+      const snapshot = readGuestCart();
+      pendingLocalMergeRef.current = snapshot?.items || [];
+      pendingLocalCouponRef.current = snapshot?.couponCode || null;
       void hydrateFromBackend();
     }
 
@@ -354,11 +526,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       dispatchCart({ type: "add_item", payload: input });
       setError(null);
       open();
-
-      if (!isMongoId(input.productId)) {
-        setServerTotals(null);
-        return;
-      }
 
       void (async () => {
         try {
@@ -397,7 +564,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const item = cartState.items.find((row) => row.id === itemId);
       dispatchCart({ type: "remove_item", payload: { itemId } });
 
-      if (!item || !isMongoId(item.productId)) {
+      if (!item || isClientOnlyItemId(item.id) || !hasBackendId(item.productId)) {
         setServerTotals(null);
         return;
       }
@@ -426,7 +593,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const item = cartState.items.find((row) => row.id === itemId);
       dispatchCart({ type: "set_qty", payload: { itemId, qty } });
 
-      if (!item || !isMongoId(item.productId)) {
+      if (!item || isClientOnlyItemId(item.id) || !hasBackendId(item.productId)) {
         setServerTotals(null);
         return;
       }
@@ -452,7 +619,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const clear = useCallback(() => {
-    const apiItems = cartState.items.filter((item) => isMongoId(item.productId));
+    const apiItems = cartState.items.filter((item) => hasBackendId(item.productId) && !isClientOnlyItemId(item.id));
 
     dispatchCart({ type: "clear" });
     setServerTotals(null);
@@ -648,12 +815,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     void (async () => {
       const authed = await isAuthenticated();
       if (!authed) {
+        const guestItems = toGuestCartItems(cartState.items);
+        if (guestItems.length > 0) {
+          writeGuestCart({ items: guestItems, couponCode: coupon || null });
+        } else {
+          clearGuestCart();
+        }
+
         router.push(buildLoginUrl("/checkout"));
         return;
       }
       router.push("/checkout");
     })();
-  }, [close, router]);
+  }, [cartState.items, close, coupon, router]);
 
   const favoriteIds = useMemo(
     () => new Set(favoritesState.items.map((item) => item.productId)),
@@ -700,7 +874,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [forceLogout, isCustomer, router]);
 
   const removeFavorite = useCallback((productId: string) => {
-    if (!isCustomer || !isMongoId(productId)) return;
+    if (!isCustomer || !hasBackendId(productId)) return;
 
     dispatchFavorites({ type: "remove", payload: { productId } });
 
@@ -734,7 +908,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     dispatchFavorites({ type: "toggle", payload: item });
 
-    if (!isMongoId(product.id)) return;
+    if (!hasBackendId(product.id)) return;
 
     if (exists) {
       void apiFetch(`/api/v1/me/favorites/${product.id}`, { method: "DELETE" }).catch((err) => {
@@ -785,7 +959,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const apiFavorites = favoritesState.items.filter((item) => isMongoId(item.productId));
+    const apiFavorites = favoritesState.items.filter((item) => hasBackendId(item.productId));
     dispatchFavorites({ type: "clear" });
 
     if (!apiFavorites.length) return;

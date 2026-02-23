@@ -2976,6 +2976,45 @@ body {
     animation: marquee 22s linear infinite;
   }
 }
+
+/* Home product lists: horizontal carousel on mobile, grid on sm+ */
+.mobile-products-carousel {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  padding-right: 1rem;
+  min-width: 0;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.mobile-products-carousel > * {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+.mobile-products-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .mobile-products-carousel {
+    display: grid;
+    overflow: visible;
+    scroll-snap-type: none;
+    padding-right: 0;
+  }
+
+  .mobile-products-carousel > * {
+    flex: initial;
+  }
+}
 @property --tw-translate-x {
   syntax: "*";
   inherits: false;

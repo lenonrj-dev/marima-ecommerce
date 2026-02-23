@@ -44,7 +44,7 @@ export default function BlogSidebar({ posts = BLOG_POSTS }: { posts?: BlogPostIt
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Link
-            href="mailto:suporte.marima.loja@gmail.com"
+            href="https://wa.me/5524981467489?text=Ola!%20Vim%20pelo%20site%20da%20Marima%20e%20quero%20saber%20das%20promocoes."
             className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
             aria-label="Enviar e-mail para suporte"
           >

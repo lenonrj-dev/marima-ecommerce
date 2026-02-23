@@ -1,6 +1,7 @@
 import Container from "@/components/ui/Container";
 import SectionHeading from "@/components/ui/SectionHeading";
 import ProductCard from "@/components/ui/ProductCard";
+import MobileProductCarousel from "@/components/home/MobileProductCarousel";
 import { fetchStoreProducts } from "@/lib/productsData";
 
 export default async function BestSelling() {
@@ -19,11 +20,11 @@ export default async function BestSelling() {
           subtitle="Peças favoritas das clientes Marima para treino e rotina casual."
         />
 
-        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <MobileProductCarousel className="mt-8" carouselClassName="gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {products.map((product) => (
             <ProductCard key={product.id} product={product} href={`/produtos/${product.slug}`} />
           ))}
-        </div>
+        </MobileProductCarousel>
       </Container>
     </section>
   );

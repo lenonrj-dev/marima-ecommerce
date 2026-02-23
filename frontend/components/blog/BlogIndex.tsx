@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import BlogGrid from "@/components/blog/BlogGrid";
 import BlogHero from "@/components/blog/BlogHero";
 import BlogNewsletter from "@/components/blog/BlogNewsletter";
@@ -10,23 +10,47 @@ import BlogTopics from "@/components/blog/BlogTopics";
 import Container from "@/components/ui/Container";
 import { BLOG_POSTS, BLOG_TOPICS, type BlogPostItem } from "@/lib/blogData";
 
-export default function BlogIndex({ posts = BLOG_POSTS }: { posts?: BlogPostItem[] }) {
-  const [topic, setTopic] = useState<string>("all");
-  const [page, setPage] = useState(1);
+type BlogIndexProps = {
+  posts?: BlogPostItem[];
+  activeTopic?: string;
+  page?: number;
+  totalPages?: number;
+};
 
-  const filtered = useMemo(() => {
-    const base = topic === "all" ? posts : posts.filter((post) => post.topic === topic);
-    return base;
-  }, [topic, posts]);
+export default function BlogIndex({
+  posts = BLOG_POSTS,
+  activeTopic = "all",
+  page = 1,
+  totalPages = 1,
+}: BlogIndexProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const topic = activeTopic || "all";
 
-  const pageSize = 8;
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const safePage = Math.min(page, totalPages);
+  function updateSearchParams(patch: { topic?: string; page?: number }) {
+    const params = new URLSearchParams(searchParams.toString());
 
-  const paged = useMemo(() => {
-    const start = (safePage - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, safePage]);
+    if (patch.topic !== undefined) {
+      if (!patch.topic || patch.topic === "all") {
+        params.delete("topic");
+      } else {
+        params.set("topic", patch.topic);
+      }
+      params.delete("page");
+    }
+
+    if (patch.page !== undefined) {
+      if (patch.page <= 1) {
+        params.delete("page");
+      } else {
+        params.set("page", String(patch.page));
+      }
+    }
+
+    const queryString = params.toString();
+    router.replace(queryString ? `${pathname}?${queryString}` : pathname);
+  }
 
   return (
     <div className="space-y-10 sm:space-y-12">
@@ -39,14 +63,23 @@ export default function BlogIndex({ posts = BLOG_POSTS }: { posts?: BlogPostItem
               <BlogTopics
                 topics={[{ id: "all", label: "Todos" }, ...BLOG_TOPICS]}
                 value={topic}
-                onChange={(next) => {
-                  setTopic(next);
-                  setPage(1);
+                onChange={(nextTopic) => {
+                  updateSearchParams({ topic: nextTopic, page: 1 });
                 }}
               />
 
-              <BlogGrid posts={paged} />
-              <BlogPagination page={safePage} totalPages={totalPages} onChange={setPage} />
+              <BlogGrid posts={posts} />
+              {posts.length === 0 ? (
+                <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-6 text-center text-sm text-zinc-600">
+                  Nenhum post encontrado para este filtro.
+                </p>
+              ) : null}
+
+              <BlogPagination
+                page={Math.max(1, page)}
+                totalPages={Math.max(1, totalPages)}
+                onChange={(nextPage) => updateSearchParams({ page: nextPage })}
+              />
             </div>
 
             <div className="lg:pt-1">

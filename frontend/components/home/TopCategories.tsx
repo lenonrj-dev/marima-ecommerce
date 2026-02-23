@@ -69,8 +69,6 @@ export default function TopCategories() {
               <div className="absolute inset-0 grid place-items-center px-3 text-center">
                 <div>
                   <p className="text-sm font-semibold text-white">{c.title}</p>
-
-                  <p className="mt-0.5 text-[11px] text-white/80">{c.count}</p>
                 </div>
               </div>
             </div>

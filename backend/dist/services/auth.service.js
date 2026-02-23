@@ -16,10 +16,10 @@ exports.inviteAdminUser = inviteAdminUser;
 exports.meFromPayload = meFromPayload;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const client_1 = require("@prisma/client");
 const env_1 = require("../config/env");
 const cache_1 = require("../lib/cache");
-const AdminUser_1 = require("../models/AdminUser");
-const Customer_1 = require("../models/Customer");
+const prisma_1 = require("../lib/prisma");
 const apiError_1 = require("../utils/apiError");
 const auth_1 = require("../middlewares/auth");
 const cookies_1 = require("../utils/cookies");
@@ -70,22 +70,28 @@ function clearAuthCookies(res, req) {
 }
 async function registerCustomer(input) {
     const email = input.email.trim().toLowerCase();
-    const exists = await Customer_1.CustomerModel.findOne({ email });
-    if (exists)
-        throw new apiError_1.ApiError(409, "E-mail j� cadastrado.");
     const passwordHash = await bcryptjs_1.default.hash(input.password, SALT_ROUNDS);
-    const created = await Customer_1.CustomerModel.create({
-        name: input.name.trim(),
-        email,
-        phone: input.phone?.trim() || undefined,
-        passwordHash,
-        segment: "novo",
-    });
-    return created;
+    try {
+        return await prisma_1.prisma.customer.create({
+            data: {
+                name: input.name.trim(),
+                email,
+                phone: input.phone?.trim() || undefined,
+                passwordHash,
+                segment: "novo",
+            },
+        });
+    }
+    catch (error) {
+        if (error instanceof client_1.Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+            throw new apiError_1.ApiError(409, "E-mail j� cadastrado.");
+        }
+        throw error;
+    }
 }
 async function loginCustomer(input) {
     const email = input.email.trim().toLowerCase();
-    const user = await Customer_1.CustomerModel.findOne({ email });
+    const user = await prisma_1.prisma.customer.findUnique({ where: { email } });
     if (!user)
         throw new apiError_1.ApiError(401, "Credenciais inv�lidas.", "AUTH_INVALID_CREDENTIALS");
     if (!user.active)
@@ -97,7 +103,7 @@ async function loginCustomer(input) {
 }
 async function loginAdmin(input) {
     const email = input.email.trim().toLowerCase();
-    const user = await AdminUser_1.AdminUserModel.findOne({ email });
+    const user = await prisma_1.prisma.adminUser.findUnique({ where: { email } });
     if (!user)
         throw new apiError_1.ApiError(401, "Credenciais inv�lidas.", "AUTH_INVALID_CREDENTIALS");
     if (!user.active)
@@ -105,53 +111,82 @@ async function loginAdmin(input) {
     const ok = await bcryptjs_1.default.compare(input.password, user.passwordHash);
     if (!ok)
         throw new apiError_1.ApiError(401, "Credenciais inv�lidas.", "AUTH_INVALID_CREDENTIALS");
-    user.lastLoginAt = new Date();
-    await user.save();
-    return user;
+    return prisma_1.prisma.adminUser.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+    });
 }
 async function inviteAdminUser(input) {
     const email = input.email.trim().toLowerCase();
-    const exists = await AdminUser_1.AdminUserModel.findOne({ email });
-    if (exists)
-        throw new apiError_1.ApiError(409, "J� existe usu�rio com este e-mail.");
     const passwordHash = await bcryptjs_1.default.hash(input.temporaryPassword, SALT_ROUNDS);
-    return AdminUser_1.AdminUserModel.create({
-        name: input.name.trim(),
-        email,
-        role: input.role,
-        passwordHash,
-        active: true,
-        tempPassword: true,
-    });
+    try {
+        return await prisma_1.prisma.adminUser.create({
+            data: {
+                name: input.name.trim(),
+                email,
+                role: input.role,
+                passwordHash,
+                active: true,
+                tempPassword: true,
+            },
+        });
+    }
+    catch (error) {
+        if (error instanceof client_1.Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+            throw new apiError_1.ApiError(409, "J� existe usu�rio com este e-mail.");
+        }
+        throw error;
+    }
 }
 async function meFromPayload(payload) {
     return (0, cache_1.getOrSetCache)(meCacheKey(payload), ME_CACHE_TTL_SECONDS, async () => {
         if (payload.type === "admin") {
-            const admin = await AdminUser_1.AdminUserModel.findById(payload.sub).select("name email role active createdAt");
+            const admin = await prisma_1.prisma.adminUser.findUnique({
+                where: { id: payload.sub },
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    role: true,
+                    active: true,
+                    createdAt: true,
+                },
+            });
             if (!admin)
                 throw new apiError_1.ApiError(401, "Sess�o expirada.", "AUTH_EXPIRED");
             return {
-                id: String(admin._id),
+                id: admin.id,
                 type: "admin",
                 name: admin.name,
                 email: admin.email,
                 role: admin.role,
                 active: admin.active,
-                createdAt: admin.createdAt?.toISOString(),
+                createdAt: admin.createdAt.toISOString(),
             };
         }
-        const customer = await Customer_1.CustomerModel.findById(payload.sub).select("name email phone segment active createdAt");
+        const customer = await prisma_1.prisma.customer.findUnique({
+            where: { id: payload.sub },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                segment: true,
+                active: true,
+                createdAt: true,
+            },
+        });
         if (!customer)
             throw new apiError_1.ApiError(401, "Sess�o expirada.", "AUTH_EXPIRED");
         return {
-            id: String(customer._id),
+            id: customer.id,
             type: "customer",
             name: customer.name,
             email: customer.email,
             phone: customer.phone,
             segment: customer.segment,
             active: customer.active,
-            createdAt: customer.createdAt?.toISOString(),
+            createdAt: customer.createdAt.toISOString(),
         };
     });
 }

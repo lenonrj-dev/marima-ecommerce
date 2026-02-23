@@ -1,6 +1,4 @@
-import { FilterQuery } from "../lib/dbCompat";
-import { InventoryMovementModel } from "../models/InventoryMovement";
-import { ProductModel } from "../models/Product";
+import { prisma } from "../lib/prisma";
 import { ApiError } from "../utils/apiError";
 import { buildMeta } from "../utils/pagination";
 import { fromCents } from "../utils/money";
@@ -12,27 +10,35 @@ function canonicalCategory(value: unknown) {
   return key || "outros";
 }
 
-function toInventoryItem(product: any) {
-  const sizes = Array.isArray(product.sizes)
-    ? product.sizes.map((row: any) => ({
-        label: String(row.label || "").trim(),
+type SizeRow = { label: string; stock: number; sku?: string; active?: boolean };
+
+function normalizeSizes(value: unknown): SizeRow[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((raw) => {
+      if (!raw || typeof raw !== "object") return null;
+      const row = raw as any;
+      const label = String(row.label || "").trim();
+      if (!label) return null;
+      return {
+        label,
         stock: Math.max(0, Math.floor(Number(row.stock ?? 0))),
         sku: row.sku ? String(row.sku) : undefined,
         active: row.active === undefined ? true : Boolean(row.active),
-      }))
-    : [];
+      } as SizeRow;
+    })
+    .filter((row): row is SizeRow => row !== null);
+}
 
+function toInventoryItem(product: any) {
+  const sizes = normalizeSizes(product.sizes);
   const sizeType = (product.sizeType as string) || (sizes.length ? "custom" : "unico");
   const totalStock = sizes.length
-    ? sizes.reduce(
-        (acc: number, row: { stock: number; active?: boolean }) =>
-          acc + (row.active === false ? 0 : Math.max(0, Math.floor(row.stock))),
-        0,
-      )
+    ? sizes.reduce((acc, row) => acc + (row.active === false ? 0 : Math.max(0, row.stock)), 0)
     : product.stock;
 
   return {
-    id: String(product._id),
+    id: String(product.id),
     name: product.name,
     sku: product.sku,
     category: canonicalCategory(product.category),
@@ -50,7 +56,7 @@ function toInventoryItem(product: any) {
 
 function toMovement(row: any) {
   return {
-    id: String(row._id),
+    id: String(row.id),
     productId: String(row.productId),
     variantId: row.variantId,
     sizeLabel: row.sizeLabel,
@@ -70,32 +76,33 @@ export async function listInventoryItems(input: {
   category?: string;
   lowStockOnly?: boolean;
 }) {
-  const query: FilterQuery<any> = {};
+  const where: any = {};
 
   if (input.q) {
-    query.$or = [
-      { name: { $regex: input.q, $options: "i" } },
-      { sku: { $regex: input.q, $options: "i" } },
-      { tags: { $elemMatch: { $regex: input.q, $options: "i" } } },
+    where.OR = [
+      { name: { contains: input.q, mode: "insensitive" } },
+      { sku: { contains: input.q, mode: "insensitive" } },
     ];
   }
 
   if (input.category && input.category !== "all") {
     const key = canonicalCategory(input.category);
     if (key === "casual") {
-      query.category = { $in: ["casual", "acessorios"] };
+      where.category = { in: ["casual", "acessorios"] };
     } else {
-      query.category = input.category;
+      where.category = input.category;
     }
   }
-  if (input.lowStockOnly) query.stock = { $lte: 5 };
+  if (input.lowStockOnly) where.stock = { lte: 5 };
 
   const [rows, total] = await Promise.all([
-    ProductModel.find(query)
-      .sort({ updatedAt: -1 })
-      .skip((input.page - 1) * input.limit)
-      .limit(input.limit),
-    ProductModel.countDocuments(query),
+    prisma.product.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+      skip: (input.page - 1) * input.limit,
+      take: input.limit,
+    }),
+    prisma.product.count({ where }),
   ]);
 
   return {
@@ -106,9 +113,9 @@ export async function listInventoryItems(input: {
 
 export async function getInventorySummary() {
   const [total, lowStock, outOfStock] = await Promise.all([
-    ProductModel.countDocuments(),
-    ProductModel.countDocuments({ stock: { $lte: 5 } }),
-    ProductModel.countDocuments({ stock: { $lte: 0 } }),
+    prisma.product.count(),
+    prisma.product.count({ where: { stock: { lte: 5 } } }),
+    prisma.product.count({ where: { stock: { lte: 0 } } }),
   ]);
 
   return { total, lowStock, outOfStock };
@@ -123,22 +130,21 @@ export async function adjustInventory(input: {
   createdBy?: string;
   note?: string;
 }) {
-  const product = await ProductModel.findById(input.productId);
+  const product = await prisma.product.findUnique({ where: { id: input.productId } });
   if (!product) throw new ApiError(404, "Produto não encontrado.");
 
   const qty = Math.abs(Math.floor(input.quantity));
   let delta = qty;
 
-  if (input.type === "saida" || input.type === "reserva") {
-    delta = -qty;
-  }
+  if (input.type === "saida" || input.type === "reserva") delta = -qty;
+  if (input.type === "ajuste") delta = Math.floor(input.quantity);
 
-  if (input.type === "ajuste") {
-    delta = Math.floor(input.quantity);
-  }
+  const sizes = normalizeSizes(product.sizes);
+  const sizeType = (product.sizeType as string) || (sizes.length ? "custom" : "unico");
+  const hasSizes = sizeType !== "unico" && sizes.length > 0;
 
-  const sizeType = (product.sizeType as string) || (Array.isArray(product.sizes) && product.sizes.length ? "custom" : "unico");
-  const hasSizes = sizeType !== "unico" && Array.isArray(product.sizes) && product.sizes.length > 0;
+  let nextStock = Math.max(0, Math.floor(Number(product.stock ?? 0)));
+  let nextSizes = sizes;
 
   if (input.sizeLabel && !hasSizes) {
     throw new ApiError(400, "Este produto não possui estoque por tamanho.");
@@ -149,43 +155,52 @@ export async function adjustInventory(input: {
     if (!rawLabel) throw new ApiError(400, "Informe o tamanho para ajustar o estoque.");
 
     const normalized = rawLabel.toLocaleLowerCase("pt-BR");
-    const idx = product.sizes.findIndex((row: any) => String(row.label || "").trim().toLocaleLowerCase("pt-BR") === normalized);
+    const idx = nextSizes.findIndex((row) => row.label.toLocaleLowerCase("pt-BR") === normalized);
     if (idx === -1) throw new ApiError(400, "Tamanho inválido para este produto.");
 
-    const current = Math.max(0, Math.floor(Number(product.sizes[idx]?.stock ?? 0)));
+    const current = Math.max(0, Math.floor(Number(nextSizes[idx]?.stock ?? 0)));
     const next = current + delta;
     if (next < 0) throw new ApiError(400, "Estoque insuficiente para este tamanho.");
 
-    product.sizes[idx]!.stock = next;
-    product.stock = product.sizes.reduce((acc: number, row: any) => {
-      const isActive = row?.active === undefined ? true : Boolean(row.active);
-      const value = Math.max(0, Math.floor(Number(row?.stock ?? 0)));
-      return acc + (isActive ? value : 0);
-    }, 0);
+    nextSizes[idx] = { ...nextSizes[idx]!, stock: next };
+    nextStock = nextSizes.reduce((acc, row) => acc + (row.active === false ? 0 : Math.max(0, row.stock)), 0);
   } else {
-    const nextStock = product.stock + delta;
-    if (nextStock < 0) throw new ApiError(400, "Estoque insuficiente para esta operação.");
-    product.stock = nextStock;
+    const updatedStock = nextStock + delta;
+    if (updatedStock < 0) throw new ApiError(400, "Estoque insuficiente para esta operação.");
+    nextStock = updatedStock;
   }
 
-  await product.save();
-  await invalidateProductCacheByIdentity({
-    id: String(product._id),
-    slug: String(product.slug || ""),
+  const { updatedProduct, movement } = await prisma.$transaction(async (tx) => {
+    const updatedProduct = await tx.product.update({
+      where: { id: product.id },
+      data: {
+        stock: nextStock,
+        sizes: nextSizes as any,
+      },
+    });
+
+    const movement = await tx.inventoryMovement.create({
+      data: {
+        productId: product.id,
+        type: input.type,
+        quantity: delta,
+        reason: input.reason,
+        sizeLabel: input.sizeLabel ? String(input.sizeLabel).trim() : undefined,
+        createdBy: input.createdBy,
+        note: input.note,
+      },
+    });
+
+    return { updatedProduct, movement };
   });
 
-  const movement = await InventoryMovementModel.create({
-    productId: product._id,
-    type: input.type,
-    quantity: delta,
-    reason: input.reason,
-    sizeLabel: input.sizeLabel ? String(input.sizeLabel).trim() : undefined,
-    createdBy: input.createdBy,
-    note: input.note,
+  await invalidateProductCacheByIdentity({
+    id: updatedProduct.id,
+    slug: String(updatedProduct.slug || ""),
   });
 
   return {
-    product: toInventoryItem(product),
+    product: toInventoryItem(updatedProduct),
     movement: toMovement(movement),
   };
 }
@@ -195,15 +210,17 @@ export async function listInventoryMovements(input: {
   limit: number;
   productId?: string;
 }) {
-  const query: FilterQuery<any> = {};
-  if (input.productId) query.productId = input.productId;
+  const where: any = {};
+  if (input.productId) where.productId = input.productId;
 
   const [rows, total] = await Promise.all([
-    InventoryMovementModel.find(query)
-      .sort({ createdAt: -1 })
-      .skip((input.page - 1) * input.limit)
-      .limit(input.limit),
-    InventoryMovementModel.countDocuments(query),
+    prisma.inventoryMovement.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (input.page - 1) * input.limit,
+      take: input.limit,
+    }),
+    prisma.inventoryMovement.count({ where }),
   ]);
 
   return {
@@ -211,4 +228,3 @@ export async function listInventoryMovements(input: {
     meta: buildMeta(total, input.page, input.limit),
   };
 }
-

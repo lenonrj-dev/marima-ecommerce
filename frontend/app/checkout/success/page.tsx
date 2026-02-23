@@ -7,28 +7,35 @@ function readParam(searchParams: SearchParams, key: string) {
   return typeof value === "string" ? value : Array.isArray(value) ? value[0] : "";
 }
 
-export default function CheckoutSuccessPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function CheckoutSuccessPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParams>;
+}) {
+  const resolvedSearchParams = (await searchParams) ?? {};
   const paymentId =
-    readParam(searchParams, "payment_id") || readParam(searchParams, "collection_id") || readParam(searchParams, "id");
+    readParam(resolvedSearchParams, "payment_id") ||
+    readParam(resolvedSearchParams, "collection_id") ||
+    readParam(resolvedSearchParams, "id");
 
-  const status = readParam(searchParams, "status") || undefined;
+  const status = readParam(resolvedSearchParams, "status") || undefined;
   const orderId =
-    readParam(searchParams, "orderId") ||
-    readParam(searchParams, "order_id") ||
-    readParam(searchParams, "external_reference") ||
+    readParam(resolvedSearchParams, "orderId") ||
+    readParam(resolvedSearchParams, "order_id") ||
+    readParam(resolvedSearchParams, "external_reference") ||
     undefined;
   const totalPaid =
-    readParam(searchParams, "total") ||
-    readParam(searchParams, "amount") ||
-    readParam(searchParams, "transaction_amount") ||
+    readParam(resolvedSearchParams, "total") ||
+    readParam(resolvedSearchParams, "amount") ||
+    readParam(resolvedSearchParams, "transaction_amount") ||
     undefined;
   const paidAt =
-    readParam(searchParams, "paid_at") ||
-    readParam(searchParams, "date_approved") ||
-    readParam(searchParams, "approved_at") ||
+    readParam(resolvedSearchParams, "paid_at") ||
+    readParam(resolvedSearchParams, "date_approved") ||
+    readParam(resolvedSearchParams, "approved_at") ||
     undefined;
-  const externalReference = readParam(searchParams, "external_reference") || undefined;
-  const merchantOrderId = readParam(searchParams, "merchant_order_id") || undefined;
+  const externalReference = readParam(resolvedSearchParams, "external_reference") || undefined;
+  const merchantOrderId = readParam(resolvedSearchParams, "merchant_order_id") || undefined;
 
   return (
     <SuccessClient

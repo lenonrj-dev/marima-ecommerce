@@ -1,16 +1,18 @@
 import bcrypt from "bcryptjs";
 import jwt, { type SignOptions } from "jsonwebtoken";
+import { Prisma, type AdminRole } from "@prisma/client";
 import { Request, Response } from "express";
 import { env } from "../config/env";
 import { delCache, getOrSetCache } from "../lib/cache";
-import { AdminUserModel, Role } from "../models/AdminUser";
-import { CustomerModel } from "../models/Customer";
+import { prisma } from "../lib/prisma";
 import { ApiError } from "../utils/apiError";
 import { ACCESS_COOKIE, REFRESH_COOKIE } from "../middlewares/auth";
 import { cookieBaseOptions, cookieOptions } from "../utils/cookies";
 
 const SALT_ROUNDS = 10;
 const ME_CACHE_TTL_SECONDS = 60;
+
+export type Role = AdminRole;
 
 type TokenPayload = {
   sub: string;
@@ -54,11 +56,7 @@ function parseDurationMs(text: string) {
   return 15 * 60 * 1000;
 }
 
-export function setAuthCookies(
-  res: Response,
-  payload: TokenPayload,
-  req?: Request,
-) {
+export function setAuthCookies(res: Response, payload: TokenPayload, req?: Request) {
   const access = signAccessToken(payload);
   const refresh = signRefreshToken(payload);
 
@@ -78,24 +76,29 @@ export async function registerCustomer(input: {
   phone?: string;
 }) {
   const email = input.email.trim().toLowerCase();
-  const exists = await CustomerModel.findOne({ email });
-  if (exists) throw new ApiError(409, "E-mail já cadastrado.");
-
   const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
-  const created = await CustomerModel.create({
-    name: input.name.trim(),
-    email,
-    phone: input.phone?.trim() || undefined,
-    passwordHash,
-    segment: "novo",
-  });
 
-  return created;
+  try {
+    return await prisma.customer.create({
+      data: {
+        name: input.name.trim(),
+        email,
+        phone: input.phone?.trim() || undefined,
+        passwordHash,
+        segment: "novo",
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new ApiError(409, "E-mail já cadastrado.");
+    }
+    throw error;
+  }
 }
 
 export async function loginCustomer(input: { email: string; password: string }) {
   const email = input.email.trim().toLowerCase();
-  const user = await CustomerModel.findOne({ email });
+  const user = await prisma.customer.findUnique({ where: { email } });
 
   if (!user) throw new ApiError(401, "Credenciais inválidas.", "AUTH_INVALID_CREDENTIALS");
   if (!user.active) throw new ApiError(403, "Usuário inativo.", "FORBIDDEN");
@@ -107,17 +110,17 @@ export async function loginCustomer(input: { email: string; password: string }) 
 
 export async function loginAdmin(input: { email: string; password: string }) {
   const email = input.email.trim().toLowerCase();
-  const user = await AdminUserModel.findOne({ email });
+  const user = await prisma.adminUser.findUnique({ where: { email } });
 
   if (!user) throw new ApiError(401, "Credenciais inválidas.", "AUTH_INVALID_CREDENTIALS");
   if (!user.active) throw new ApiError(403, "Usuário inativo.", "FORBIDDEN");
   const ok = await bcrypt.compare(input.password, user.passwordHash);
   if (!ok) throw new ApiError(401, "Credenciais inválidas.", "AUTH_INVALID_CREDENTIALS");
 
-  user.lastLoginAt = new Date();
-  await user.save();
-
-  return user;
+  return prisma.adminUser.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date() },
+  });
 }
 
 export async function inviteAdminUser(input: {
@@ -127,49 +130,79 @@ export async function inviteAdminUser(input: {
   temporaryPassword: string;
 }) {
   const email = input.email.trim().toLowerCase();
-  const exists = await AdminUserModel.findOne({ email });
-  if (exists) throw new ApiError(409, "Já existe usuário com este e-mail.");
-
   const passwordHash = await bcrypt.hash(input.temporaryPassword, SALT_ROUNDS);
-  return AdminUserModel.create({
-    name: input.name.trim(),
-    email,
-    role: input.role,
-    passwordHash,
-    active: true,
-    tempPassword: true,
-  });
+
+  try {
+    return await prisma.adminUser.create({
+      data: {
+        name: input.name.trim(),
+        email,
+        role: input.role,
+        passwordHash,
+        active: true,
+        tempPassword: true,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new ApiError(409, "Já existe usuário com este e-mail.");
+    }
+    throw error;
+  }
 }
 
 export async function meFromPayload(payload: TokenPayload) {
   return getOrSetCache(meCacheKey(payload), ME_CACHE_TTL_SECONDS, async () => {
     if (payload.type === "admin") {
-      const admin = await AdminUserModel.findById(payload.sub).select("name email role active createdAt");
+      const admin = await prisma.adminUser.findUnique({
+        where: { id: payload.sub },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          active: true,
+          createdAt: true,
+        },
+      });
+
       if (!admin) throw new ApiError(401, "Sessão expirada.", "AUTH_EXPIRED");
 
       return {
-        id: String(admin._id),
+        id: admin.id,
         type: "admin" as const,
         name: admin.name,
         email: admin.email,
         role: admin.role,
         active: admin.active,
-        createdAt: admin.createdAt?.toISOString(),
+        createdAt: admin.createdAt.toISOString(),
       };
     }
 
-    const customer = await CustomerModel.findById(payload.sub).select("name email phone segment active createdAt");
+    const customer = await prisma.customer.findUnique({
+      where: { id: payload.sub },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        segment: true,
+        active: true,
+        createdAt: true,
+      },
+    });
+
     if (!customer) throw new ApiError(401, "Sessão expirada.", "AUTH_EXPIRED");
 
     return {
-      id: String(customer._id),
+      id: customer.id,
       type: "customer" as const,
       name: customer.name,
       email: customer.email,
       phone: customer.phone,
       segment: customer.segment,
       active: customer.active,
-      createdAt: customer.createdAt?.toISOString(),
+      createdAt: customer.createdAt.toISOString(),
     };
   });
 }

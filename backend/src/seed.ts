@@ -1,75 +1,54 @@
-import bcrypt from "bcryptjs";
-import { connectDb, disconnectDb } from "./config/db";
-import { AdminUserModel } from "./models/AdminUser";
-import { CategoryModel } from "./models/Category";
-import { ProductModel } from "./models/Product";
-import { StoreSettingsModel } from "./models/StoreSettings";
-import { IntegrationConfigModel } from "./models/IntegrationConfig";
-import { CouponModel } from "./models/Coupon";
-import { CashbackRuleModel } from "./models/CashbackRule";
-import { CustomerModel } from "./models/Customer";
-import { OrderModel } from "./models/Order";
-import { InventoryMovementModel } from "./models/InventoryMovement";
+ï»¿import bcrypt from "bcryptjs";
+import { prisma } from "./lib/prisma";
 import { toCents } from "./utils/money";
 
-async function seed() {
-  await connectDb();
+async function upsertStoreSettings() {
+  const existing = await prisma.storeSettings.findFirst();
 
-  const adminEmail = "admin@exemplo.com";
-  const adminPassword = "Admin@123";
+  const payload = {
+    name: "Minha Loja",
+    domain: "minhaloja.com",
+    timezone: "America/Sao_Paulo",
+    currency: "BRL",
+    supportEmail: "suporte@minhaloja.com",
+    policy: "Trocas em ate 7 dias. Consulte regras no site.",
+  };
 
-  const adminHash = await bcrypt.hash(adminPassword, 10);
+  if (existing) {
+    await prisma.storeSettings.update({ where: { id: existing.id }, data: payload });
+    return;
+  }
 
-  await AdminUserModel.findOneAndUpdate(
-    { email: adminEmail },
-    {
-      $set: {
-        name: "Administrador",
-        email: adminEmail,
-        passwordHash: adminHash,
-        role: "admin",
-        active: true,
-      },
-    },
-    { upsert: true, new: true },
-  );
+  await prisma.storeSettings.create({ data: payload });
+}
 
-  await StoreSettingsModel.findOneAndUpdate(
-    {},
-    {
-      $set: {
-        name: "Minha Loja",
-        domain: "minhaloja.com",
-        timezone: "America/Sao_Paulo",
-        currency: "BRL",
-        supportEmail: "suporte@minhaloja.com",
-        policy: "Trocas em até 7 dias. Consulte regras no site.",
-      },
-    },
-    { upsert: true, new: true },
-  );
+async function normalizeCategories() {
+  const existingCasual = await prisma.category.findUnique({ where: { slug: "casual" } });
+  const legacyAccessories = await prisma.category.findUnique({ where: { slug: "acessorios" } });
 
-  // Migração simples: substitui "Acessórios" por "Casual" para manter consistência entre frontend/admin.
-  const existingCasual = await CategoryModel.findOne({ slug: "casual" });
-  const legacyAccessories = await CategoryModel.findOne({ slug: "acessorios" });
   if (legacyAccessories) {
     if (!existingCasual) {
-      legacyAccessories.slug = "casual";
-      legacyAccessories.name = "Casual";
-      legacyAccessories.sortOrder = legacyAccessories.sortOrder || 3;
-      legacyAccessories.active = true;
-      try {
-        await legacyAccessories.save();
-      } catch {
-        // Ignore migration failures and fallback to creating/upserting below.
-      }
+      await prisma.category.update({
+        where: { id: legacyAccessories.id },
+        data: {
+          slug: "casual",
+          name: "Casual",
+          sortOrder: legacyAccessories.sortOrder || 3,
+          active: true,
+        },
+      });
     } else {
-      legacyAccessories.active = false;
-      await legacyAccessories.save();
+      await prisma.category.update({
+        where: { id: legacyAccessories.id },
+        data: { active: false },
+      });
     }
   }
 
-  await ProductModel.updateMany({ category: "acessorios" }, { $set: { category: "casual" } });
+  await prisma.product.updateMany({
+    where: { category: "acessorios" },
+    data: { category: "casual" },
+  });
 
   const categories = [
     { name: "Fitness", slug: "fitness", active: true, sortOrder: 1 },
@@ -77,12 +56,18 @@ async function seed() {
     { name: "Casual", slug: "casual", active: true, sortOrder: 3 },
     { name: "Suplementos", slug: "suplementos", active: true, sortOrder: 4 },
     { name: "Outros", slug: "outros", active: true, sortOrder: 5 },
-  ];
+  ] as const;
 
   for (const category of categories) {
-    await CategoryModel.findOneAndUpdate({ slug: category.slug }, { $set: category }, { upsert: true });
+    await prisma.category.upsert({
+      where: { slug: category.slug },
+      update: category,
+      create: category,
+    });
   }
+}
 
+async function upsertProducts() {
   const sampleImages = [
     "https://images.unsplash.com/photo-1520975682031-a8d55b2e9c5e?auto=format&fit=crop&w=900&q=60",
     "https://images.unsplash.com/photo-1590487988256-9ed24133863e?auto=format&fit=crop&w=900&q=60",
@@ -108,10 +93,9 @@ async function seed() {
       stock: 8,
       priceCents: toCents(159.9),
       compareAtPriceCents: toCents(199.9),
-      shortDescription: "Modela o corpo com alta compressão e conforto.",
-      description:
-        "Legging seamless com alta compressão, cintura alta e tecido respirável. Ideal para treinos e uso diário.",
-      tags: ["compressão", "cintura alta", "best-seller"],
+      shortDescription: "Modela o corpo com alta compressao e conforto.",
+      description: "Legging seamless com alta compressao, cintura alta e tecido respiravel. Ideal para treinos e uso diario.",
+      tags: ["compressao", "cintura alta", "best-seller"],
       status: "destaque",
       active: true,
       images: sampleImages,
@@ -130,9 +114,9 @@ async function seed() {
       size: "P, M, G",
       stock: 6,
       priceCents: toCents(119.9),
-      shortDescription: "Sustentação média com acabamento premium.",
-      description: "Top com sustentação média e tecido de secagem rápida.",
-      tags: ["secagem rápida", "suporte", "novo"],
+      shortDescription: "Sustentacao media com acabamento premium.",
+      description: "Top com sustentacao media e tecido de secagem rapida.",
+      tags: ["secagem rapida", "suporte", "novo"],
       status: "novo",
       active: true,
       images: sampleImages,
@@ -156,160 +140,270 @@ async function seed() {
       stock: 45,
       priceCents: toCents(89.9),
       compareAtPriceCents: toCents(99.9),
-      shortDescription: "Leve, respirável e com caimento perfeito.",
-      description: "Camiseta dry com tecido leve e respirável.",
-      tags: ["dry", "respirável", "oferta"],
+      shortDescription: "Leve, respiravel e com caimento perfeito.",
+      description: "Camiseta dry com tecido leve e respiravel.",
+      tags: ["dry", "respiravel", "oferta"],
       status: "oferta",
       active: true,
       images: sampleImages,
     },
-  ];
+  ] as const;
 
   for (const product of products) {
-    await ProductModel.findOneAndUpdate({ sku: product.sku }, { $set: product }, { upsert: true, new: true });
-  }
+    const category = await prisma.category.findUnique({
+      where: { slug: product.category },
+      select: { id: true },
+    });
 
-    const integrations = [
+    const payload = {
+      ...product,
+      categoryId: category?.id,
+    };
+
+    await prisma.product.upsert({
+      where: { sku: product.sku },
+      update: payload,
+      create: payload,
+    });
+  }
+}
+
+async function upsertIntegrations() {
+  const integrations = [
     {
       group: "pagamentos",
-      name: "Pix + Cartão",
-      description: "Conecte gateway para Pix, cartão e boleto.",
+      name: "Pix + Cartao",
+      description: "Conecte gateway para Pix, cartao e boleto.",
       connected: false,
     },
     {
       group: "frete",
       name: "Correios / Melhor Envio",
-      description: "Cálculo de frete e geração de etiqueta.",
+      description: "Calculo de frete e geracao de etiqueta.",
       connected: false,
     },
     {
       group: "email",
       name: "E-mail Marketing",
-      description: "Automação para carrinhos abandonados e pós-compra.",
+      description: "Automacao para carrinhos abandonados e pos-compra.",
       connected: false,
     },
     {
       group: "whatsapp",
       name: "WhatsApp",
-      description: "Recuperação, suporte e campanhas via WhatsApp.",
+      description: "Recuperacao, suporte e campanhas via WhatsApp.",
       connected: false,
     },
     {
       group: "analytics",
       name: "Google Analytics",
-      description: "Métricas de tráfego e conversão transacional.",
+      description: "Metricas de trafego e conversao transacional.",
       connected: false,
     },
     {
       group: "pixel",
       name: "Meta Pixel",
-      description: "Atribuição de campanhas e eventos de compra.",
+      description: "Atribuicao de campanhas e eventos de compra.",
       connected: false,
     },
-  ];
+  ] as const;
 
   for (const integration of integrations) {
-    await IntegrationConfigModel.findOneAndUpdate(
-      { group: integration.group, name: integration.name },
-      { $set: integration },
-      { upsert: true, new: true },
-    );
-  }
+    const existing = await prisma.integrationConfig.findFirst({
+      where: {
+        group: integration.group,
+        name: integration.name,
+      },
+      select: { id: true },
+    });
 
+    if (existing) {
+      await prisma.integrationConfig.update({
+        where: { id: existing.id },
+        data: integration,
+      });
+      continue;
+    }
+
+    await prisma.integrationConfig.create({ data: integration });
+  }
+}
+
+async function upsertCouponsAndCashback() {
   const now = new Date();
   const end = new Date(now);
   end.setMonth(end.getMonth() + 2);
 
-  await CouponModel.findOneAndUpdate(
-    { code: "BEMVINDO10" },
-    {
-      $set: {
-        code: "BEMVINDO10",
-        description: "10% OFF na primeira compra",
-        type: "percent",
-        amount: 10,
-        minSubtotalCents: 0,
-        maxUses: 300,
-        startsAt: now,
-        endsAt: end,
-        active: true,
-      },
+  await prisma.coupon.upsert({
+    where: { code: "BEMVINDO10" },
+    update: {
+      description: "10% OFF na primeira compra",
+      type: "percent",
+      amount: 10,
+      minSubtotalCents: 0,
+      maxUses: 300,
+      startsAt: now,
+      endsAt: end,
+      active: true,
     },
-    { upsert: true },
-  );
-
-  await CouponModel.findOneAndUpdate(
-    { code: "FRETEGRATIS" },
-    {
-      $set: {
-        code: "FRETEGRATIS",
-        description: "Frete grátis acima de R$199",
-        type: "shipping",
-        amount: 0,
-        minSubtotalCents: toCents(199),
-        maxUses: 500,
-        startsAt: now,
-        endsAt: end,
-        active: true,
-      },
+    create: {
+      code: "BEMVINDO10",
+      description: "10% OFF na primeira compra",
+      type: "percent",
+      amount: 10,
+      minSubtotalCents: 0,
+      maxUses: 300,
+      startsAt: now,
+      endsAt: end,
+      active: true,
     },
-    { upsert: true },
-  );
+  });
 
-  await CashbackRuleModel.findOneAndUpdate(
-    { name: "Cashback padrão" },
-    {
-      $set: {
-        name: "Cashback padrão",
+  await prisma.coupon.upsert({
+    where: { code: "FRETEGRATIS" },
+    update: {
+      description: "Frete gratis acima de R$199",
+      type: "shipping",
+      amount: 0,
+      minSubtotalCents: toCents(199),
+      maxUses: 500,
+      startsAt: now,
+      endsAt: end,
+      active: true,
+    },
+    create: {
+      code: "FRETEGRATIS",
+      description: "Frete gratis acima de R$199",
+      type: "shipping",
+      amount: 0,
+      minSubtotalCents: toCents(199),
+      maxUses: 500,
+      startsAt: now,
+      endsAt: end,
+      active: true,
+    },
+  });
+
+  const cashbackRule = await prisma.cashbackRule.findFirst({
+    where: { name: "Cashback padrao" },
+    select: { id: true },
+  });
+
+  if (cashbackRule) {
+    await prisma.cashbackRule.update({
+      where: { id: cashbackRule.id },
+      data: {
         percent: 5,
         validDays: 30,
         minSubtotalCents: toCents(150),
         maxCashbackCents: toCents(50),
         active: true,
       },
-    },
-    { upsert: true },
-  );
-
-  const customerHash = await bcrypt.hash("Cliente@123", 10);
-  const customer = await CustomerModel.findOneAndUpdate(
-    { email: "cliente@exemplo.com" },
-    {
-      $set: {
-        name: "Cliente Exemplo",
-        email: "cliente@exemplo.com",
-        phone: "+55 21 99999-0001",
-        passwordHash: customerHash,
-        segment: "novo",
-        tags: ["primeira compra"],
+    });
+  } else {
+    await prisma.cashbackRule.create({
+      data: {
+        name: "Cashback padrao",
+        percent: 5,
+        validDays: 30,
+        minSubtotalCents: toCents(150),
+        maxCashbackCents: toCents(50),
+        active: true,
       },
+    });
+  }
+}
+
+async function upsertCustomerAndOrder() {
+  const customerHash = await bcrypt.hash("Cliente@123", 10);
+  const customer = await prisma.customer.upsert({
+    where: { email: "cliente@exemplo.com" },
+    update: {
+      name: "Cliente Exemplo",
+      phone: "+55 21 99999-0001",
+      segment: "novo",
+      tags: ["primeira compra"],
+      active: true,
     },
-    { upsert: true, new: true },
-  );
+    create: {
+      name: "Cliente Exemplo",
+      email: "cliente@exemplo.com",
+      passwordHash: customerHash,
+      phone: "+55 21 99999-0001",
+      segment: "novo",
+      tags: ["primeira compra"],
+      active: true,
+    },
+  });
 
-  const productRows = await ProductModel.find().limit(2);
-  if (productRows.length >= 2) {
-    const existingOrder = await OrderModel.findOne({ code: "10483" });
-    if (!existingOrder) {
-      const item1 = productRows[0]!;
-      const item2 = productRows[1]!;
-      const subtotal = item1.priceCents + item2.priceCents;
-      const tax = Math.round(subtotal * 0.08);
-      const shipping = 1290;
-      const total = subtotal + tax + shipping;
+  const productRows = await prisma.product.findMany({
+    orderBy: { createdAt: "asc" },
+    take: 2,
+  });
 
-      const order = await OrderModel.create({
-        code: "10483",
-        customerId: customer._id,
-        customerName: customer.name,
+  if (productRows.length < 2) return;
+
+  const existingOrder = await prisma.order.findUnique({ where: { code: "10483" }, select: { id: true } });
+  if (existingOrder) return;
+
+  const item1 = productRows[0]!;
+  const item2 = productRows[1]!;
+  const subtotal = item1.priceCents + item2.priceCents;
+  const tax = Math.round(subtotal * 0.08);
+  const shipping = 1290;
+  const total = subtotal + tax + shipping;
+
+  const order = await prisma.order.create({
+    data: {
+      code: "10483",
+      customerId: customer.id,
+      customerName: customer.name,
+      email: customer.email,
+      status: "pago",
+      channel: "Site",
+      shippingMethod: "PAC",
+      paymentMethod: "Pix",
+      items: [
+        {
+          productId: item1.id,
+          name: item1.name,
+          sku: item1.sku,
+          qty: 1,
+          unitPriceCents: item1.priceCents,
+          totalCents: item1.priceCents,
+          slug: item1.slug,
+        },
+        {
+          productId: item2.id,
+          name: item2.name,
+          sku: item2.sku,
+          qty: 1,
+          unitPriceCents: item2.priceCents,
+          totalCents: item2.priceCents,
+          slug: item2.slug,
+        },
+      ],
+      itemsCount: 2,
+      subtotalCents: subtotal,
+      discountCents: 0,
+      shippingCents: shipping,
+      taxCents: tax,
+      totalCents: total,
+      address: {
+        fullName: "Cliente Exemplo",
         email: customer.email,
-        status: "pago",
-        channel: "Site",
-        shippingMethod: "PAC",
-        paymentMethod: "Pix",
-        items: [
+        phone: customer.phone,
+        zip: "27213-120",
+        state: "RJ",
+        city: "Volta Redonda",
+        neighborhood: "Aterrado",
+        street: "Rua Exemplo",
+        number: "123",
+      },
+      orderItems: {
+        create: [
           {
-            productId: item1._id,
+            productId: item1.id,
             name: item1.name,
             sku: item1.sku,
             qty: 1,
@@ -318,7 +412,7 @@ async function seed() {
             slug: item1.slug,
           },
           {
-            productId: item2._id,
+            productId: item2.id,
             name: item2.name,
             sku: item2.sku,
             qty: 1,
@@ -327,44 +421,63 @@ async function seed() {
             slug: item2.slug,
           },
         ],
-        itemsCount: 2,
-        subtotalCents: subtotal,
-        discountCents: 0,
-        shippingCents: shipping,
-        taxCents: tax,
-        totalCents: total,
-        address: {
-          fullName: "Cliente Exemplo",
-          email: customer.email,
-          phone: customer.phone,
-          zip: "27213-120",
-          state: "RJ",
-          city: "Volta Redonda",
-          neighborhood: "Aterrado",
-          street: "Rua Exemplo",
-          number: "123",
-        },
-      });
+      },
+    },
+  });
 
-      await InventoryMovementModel.create({
-        productId: item1._id,
-        type: "saida",
-        quantity: -1,
-        reason: `Pedido ${order.code}`,
-        createdBy: "seed",
-      });
+  await prisma.inventoryMovement.create({
+    data: {
+      productId: item1.id,
+      type: "saida",
+      quantity: -1,
+      reason: `Pedido ${order.code}`,
+      createdBy: "seed",
+    },
+  });
 
-      await InventoryMovementModel.create({
-        productId: item2._id,
-        type: "saida",
-        quantity: -1,
-        reason: `Pedido ${order.code}`,
-        createdBy: "seed",
-      });
-    }
-  }
+  await prisma.inventoryMovement.create({
+    data: {
+      productId: item2.id,
+      type: "saida",
+      quantity: -1,
+      reason: `Pedido ${order.code}`,
+      createdBy: "seed",
+    },
+  });
+}
 
-  console.log("Seed concluído com sucesso.");
+async function seed() {
+  const adminEmail = "admin@exemplo.com";
+  const adminPassword = "Admin@123";
+  const adminHash = await bcrypt.hash(adminPassword, 10);
+
+  await prisma.adminUser.upsert({
+    where: { email: adminEmail },
+    update: {
+      name: "Administrador",
+      passwordHash: adminHash,
+      role: "admin",
+      active: true,
+      tempPassword: false,
+    },
+    create: {
+      name: "Administrador",
+      email: adminEmail,
+      passwordHash: adminHash,
+      role: "admin",
+      active: true,
+      tempPassword: false,
+    },
+  });
+
+  await upsertStoreSettings();
+  await normalizeCategories();
+  await upsertProducts();
+  await upsertIntegrations();
+  await upsertCouponsAndCashback();
+  await upsertCustomerAndOrder();
+
+  console.log("Seed concluido com sucesso.");
   console.log(`Admin: ${adminEmail} / ${adminPassword}`);
 }
 
@@ -374,6 +487,5 @@ seed()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await disconnectDb();
+    await prisma.$disconnect();
   });
-

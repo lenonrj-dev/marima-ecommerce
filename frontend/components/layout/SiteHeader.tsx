@@ -8,7 +8,17 @@ import Container from "@/components/ui/Container";
 import TopBar from "@/components/layout/TopBar";
 import IconButton from "@/components/ui/IconButton";
 import { cn } from "@/lib/utils";
-import { Heart, Menu, Search, User, X } from "lucide-react";
+import {
+  Bookmark,
+  Heart,
+  LayoutGrid,
+  MapPin,
+  Menu,
+  Package,
+  Search,
+  User,
+  X,
+} from "lucide-react";
 import CartTrigger from "@/components/cart/CartTrigger";
 import { MAIN_NAV, SITE_COPY } from "@/lib/siteCopy";
 import { apiFetch } from "@/lib/api";
@@ -33,6 +43,15 @@ function resolveUserName(payload: AuthMeResponse) {
     null;
 
   return typeof rawName === "string" && rawName.trim() ? rawName.trim() : null;
+}
+
+function getInitials(name: string | null) {
+  const trimmed = (name || "").trim();
+  if (!trimmed) return "M";
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  const first = parts[0]?.[0] || "M";
+  const last = parts.length > 1 ? parts[parts.length - 1]?.[0] : "";
+  return `${first}${last}`.toUpperCase();
 }
 
 export default function SiteHeader() {
@@ -61,19 +80,11 @@ export default function SiteHeader() {
     setMenuOpen(false);
   }
 
-  const logoSrc =
-    "https://res.cloudinary.com/dhcaw7ipf/image/upload/v1771339219/MARIMA._1_hrjb8k.png";
+  const logoSrc = "https://res.cloudinary.com/dhcaw7ipf/image/upload/v1771339219/MARIMA._1_hrjb8k.png";
 
   const logo = (
     <span className="relative inline-flex items-center">
-      <Image
-        src={logoSrc}
-        alt={SITE_COPY.brand}
-        width={160}
-        height={42}
-        priority
-        className="h-15 w-15 select-none"
-      />
+      <Image src={logoSrc} alt={SITE_COPY.brand} width={160} height={42} priority className="h-15 w-15 select-none" />
     </span>
   );
 
@@ -187,49 +198,135 @@ export default function SiteHeader() {
           ref={accountPanelRef}
           role="menu"
           aria-label="Menu da conta"
-          className="absolute right-0 top-[calc(100%+10px)] z-[70] w-[260px] overflow-hidden rounded-2xl bg-white shadow-[0_24px_70px_rgba(0,0,0,0.18)] ring-1 ring-black/10"
+          className="absolute right-0 top-[calc(100%+12px)] z-[70] w-[min(360px,calc(100vw-24px))] overflow-hidden rounded-2xl bg-white shadow-[0_28px_90px_rgba(0,0,0,0.16)] ring-1 ring-black/10"
         >
-          <div className="px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Conta</p>
-            <p className="mt-1 text-sm font-semibold text-zinc-900">
-              {userLabel ? `Olá, ${userLabel}` : "Acessos da sua conta"}
-            </p>
+          <div aria-hidden className="pointer-events-none absolute -top-2 right-5 h-4 w-4 rotate-45 rounded-[4px] bg-white ring-1 ring-black/10" />
+
+          <div className="flex items-start gap-3 px-4 py-4">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-zinc-200 bg-zinc-50 text-[12px] font-bold tracking-tight text-zinc-900">
+              {getInitials(userLabel)}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Conta</p>
+              <p className="mt-1 truncate text-sm font-semibold text-zinc-900">
+                {userLabel ? `Olá, ${userLabel}` : "Minha conta"}
+              </p>
+              <p className="mt-1 text-[12px] leading-snug text-zinc-600">Acesse pedidos, favoritos e seus dados de entrega.</p>
+            </div>
           </div>
 
-          <div className="h-px bg-zinc-100" />
+          <div className="h-px bg-zinc-100" role="separator" />
 
           <div className="p-2">
             <Link
               href="/dashboard"
               role="menuitem"
-              className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20"
+              className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20"
               onClick={() => {
                 setAccountOpen(false);
                 setMenuOpen(false);
               }}
             >
-              Dados pessoais
-              <span className="text-xs text-zinc-500">→</span>
+              <span className="grid h-10 w-10 place-items-center rounded-xl border border-zinc-200 bg-white text-zinc-900 shadow-sm">
+                <LayoutGrid className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-zinc-900">Minha conta</span>
+                <span className="block truncate text-[12px] text-zinc-600">Resumo, dados pessoais e configurações</span>
+              </span>
+              <span className="text-xs text-zinc-400 transition group-hover:text-zinc-600" aria-hidden>
+                →
+              </span>
             </Link>
+
+            <Link
+              href="/dashboard/pedidos"
+              role="menuitem"
+              className="group mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20"
+              onClick={() => {
+                setAccountOpen(false);
+                setMenuOpen(false);
+              }}
+            >
+              <span className="grid h-10 w-10 place-items-center rounded-xl border border-zinc-200 bg-white text-zinc-900 shadow-sm">
+                <Package className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-zinc-900">Pedidos</span>
+                <span className="block truncate text-[12px] text-zinc-600">Acompanhe o status das suas compras</span>
+              </span>
+              <span className="text-xs text-zinc-400 transition group-hover:text-zinc-600" aria-hidden>
+                →
+              </span>
+            </Link>
+
+            <Link
+              href="/dashboard/enderecos"
+              role="menuitem"
+              className="group mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20"
+              onClick={() => {
+                setAccountOpen(false);
+                setMenuOpen(false);
+              }}
+            >
+              <span className="grid h-10 w-10 place-items-center rounded-xl border border-zinc-200 bg-white text-zinc-900 shadow-sm">
+                <MapPin className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-zinc-900">Endereços</span>
+                <span className="block truncate text-[12px] text-zinc-600">Gerencie entregas e endereço principal</span>
+              </span>
+              <span className="text-xs text-zinc-400 transition group-hover:text-zinc-600" aria-hidden>
+                →
+              </span>
+            </Link>
+
+            <div className="mt-1 grid grid-cols-2 gap-2">
+              <Link
+                href="/dashboard/favoritos"
+                role="menuitem"
+                className="group flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-3 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20"
+                onClick={() => {
+                  setAccountOpen(false);
+                  setMenuOpen(false);
+                }}
+              >
+                <Heart className="h-4.5 w-4.5 text-zinc-900" aria-hidden="true" />
+                <span className="truncate">Favoritos</span>
+              </Link>
+
+              <Link
+                href="/dashboard/carrinhos-salvos"
+                role="menuitem"
+                className="group flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-3 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20"
+                onClick={() => {
+                  setAccountOpen(false);
+                  setMenuOpen(false);
+                }}
+              >
+                <Bookmark className="h-4.5 w-4.5 text-zinc-900" aria-hidden="true" />
+                <span className="truncate">Carrinhos</span>
+              </Link>
+            </div>
 
             <button
               type="button"
               role="menuitem"
               onClick={handleLogout}
               disabled={logoutLoading}
-              className="mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200 disabled:cursor-not-allowed disabled:opacity-70"
+              className="mt-2 flex w-full items-center justify-between rounded-xl px-3 py-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {logoutLoading ? "Saindo..." : "Sair"}
-              <span className="text-xs text-rose-600">⎋</span>
+              <span className="text-xs text-rose-600" aria-hidden>
+                ⎋
+              </span>
             </button>
           </div>
 
-          <div className="h-px bg-zinc-100" />
+          <div className="h-px bg-zinc-100" role="separator" />
 
           <div className="px-4 py-3">
-            <p className="text-[11px] leading-relaxed text-zinc-500">
-              Dica: se sua sessão expirar, você será direcionado para fazer login novamente.
-            </p>
+            <p className="text-[11px] leading-relaxed text-zinc-500">Se sua sessão expirar, você será direcionado para fazer login novamente.</p>
           </div>
         </div>
       ) : null}
@@ -248,9 +345,9 @@ export default function SiteHeader() {
     <header className="sticky top-0 z-50">
       <TopBar />
 
-      <div className="bg-white">
-        <Container>
-          <div className="flex h-[72px] items-center justify-between border-b border-zinc-100">
+        <div className="bg-white">
+          <Container>
+            <div className="flex h-[72px] items-center justify-between border-b border-zinc-100">
             <div className="flex items-center gap-4">
               <button
                 type="button"
@@ -276,8 +373,7 @@ export default function SiteHeader() {
 
             <nav className="hidden items-center justify-center gap-6 lg:flex" aria-label="Navegação principal">
               {nav.map((item) => {
-                const active =
-                  item.href === "/" ? pathname === "/" : pathname?.startsWith(item.href.split("?")[0] ?? "");
+                const active = item.href === "/" ? pathname === "/" : pathname?.startsWith(item.href.split("?")[0] ?? "");
                 return (
                   <Link
                     key={item.label}
@@ -319,14 +415,14 @@ export default function SiteHeader() {
                 <CartTrigger className="h-10 w-10" />
               </div>
             </div>
-          </div>
-        </Container>
-      </div>
+            </div>
+          </Container>
+        </div>
 
-      {searchOpen ? (
-        <div className="border-b border-zinc-100 bg-white">
-          <Container>
-            <form onSubmit={submitSearch} className="flex gap-2 py-3">
+        {searchOpen ? (
+          <div className="border-b border-zinc-100 bg-white">
+            <Container>
+              <form onSubmit={submitSearch} className="flex gap-2 py-3">
               <label htmlFor="header-search" className="sr-only">
                 Buscar produtos
               </label>
@@ -343,17 +439,14 @@ export default function SiteHeader() {
               >
                 Buscar
               </button>
-            </form>
-          </Container>
-        </div>
-      ) : null}
+              </form>
+            </Container>
+          </div>
+        ) : null}
 
-      {menuOpen ? (
-        <div className="fixed inset-0 z-[60] bg-black/40 lg:hidden" onClick={() => setMenuOpen(false)}>
-          <div
-            className="h-full w-[88%] max-w-sm bg-white p-5 shadow-soft"
-            onClick={(event) => event.stopPropagation()}
-          >
+        {menuOpen ? (
+          <div className="fixed inset-0 z-[60] bg-black/40 lg:hidden" onClick={() => setMenuOpen(false)}>
+            <div className="h-full w-[88%] max-w-sm bg-white p-5 shadow-soft" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between">
               <Link
                 href="/"
@@ -407,9 +500,7 @@ export default function SiteHeader() {
             {isAuthed ? (
               <div className="mt-6 rounded-2xl bg-zinc-50 p-3 ring-1 ring-black/5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Sua conta</p>
-                <p className="mt-1 text-sm font-semibold text-zinc-900">
-                  {userLabel ? `Olá, ${userLabel}` : "Acessos da sua conta"}
-                </p>
+                <p className="mt-1 text-sm font-semibold text-zinc-900">{userLabel ? `Olá, ${userLabel}` : "Acessos da sua conta"}</p>
 
                 <div className="mt-3 grid gap-2">
                   <Link
@@ -417,7 +508,16 @@ export default function SiteHeader() {
                     onClick={() => setMenuOpen(false)}
                     className="inline-flex h-10 items-center justify-between rounded-xl bg-white px-4 text-sm font-semibold text-zinc-900 ring-1 ring-black/10 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
                   >
-                    Dados pessoais
+                    Minha conta
+                    <span className="text-xs text-zinc-500">→</span>
+                  </Link>
+
+                  <Link
+                    href="/dashboard/pedidos"
+                    onClick={() => setMenuOpen(false)}
+                    className="inline-flex h-10 items-center justify-between rounded-xl bg-white px-4 text-sm font-semibold text-zinc-900 ring-1 ring-black/10 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+                  >
+                    Pedidos
                     <span className="text-xs text-zinc-500">→</span>
                   </Link>
 
@@ -457,9 +557,9 @@ export default function SiteHeader() {
                 <CartTrigger className="h-10 w-10" />
               </div>
             </div>
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
     </header>
   );
 }

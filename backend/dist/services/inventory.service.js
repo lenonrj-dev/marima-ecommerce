@@ -4,8 +4,7 @@ exports.listInventoryItems = listInventoryItems;
 exports.getInventorySummary = getInventorySummary;
 exports.adjustInventory = adjustInventory;
 exports.listInventoryMovements = listInventoryMovements;
-const InventoryMovement_1 = require("../models/InventoryMovement");
-const Product_1 = require("../models/Product");
+const prisma_1 = require("../lib/prisma");
 const apiError_1 = require("../utils/apiError");
 const pagination_1 = require("../utils/pagination");
 const money_1 = require("../utils/money");
@@ -16,21 +15,34 @@ function canonicalCategory(value) {
         return "casual";
     return key || "outros";
 }
-function toInventoryItem(product) {
-    const sizes = Array.isArray(product.sizes)
-        ? product.sizes.map((row) => ({
-            label: String(row.label || "").trim(),
+function normalizeSizes(value) {
+    if (!Array.isArray(value))
+        return [];
+    return value
+        .map((raw) => {
+        if (!raw || typeof raw !== "object")
+            return null;
+        const row = raw;
+        const label = String(row.label || "").trim();
+        if (!label)
+            return null;
+        return {
+            label,
             stock: Math.max(0, Math.floor(Number(row.stock ?? 0))),
             sku: row.sku ? String(row.sku) : undefined,
             active: row.active === undefined ? true : Boolean(row.active),
-        }))
-        : [];
+        };
+    })
+        .filter((row) => row !== null);
+}
+function toInventoryItem(product) {
+    const sizes = normalizeSizes(product.sizes);
     const sizeType = product.sizeType || (sizes.length ? "custom" : "unico");
     const totalStock = sizes.length
-        ? sizes.reduce((acc, row) => acc + (row.active === false ? 0 : Math.max(0, Math.floor(row.stock))), 0)
+        ? sizes.reduce((acc, row) => acc + (row.active === false ? 0 : Math.max(0, row.stock)), 0)
         : product.stock;
     return {
-        id: String(product._id),
+        id: String(product.id),
         name: product.name,
         sku: product.sku,
         category: canonicalCategory(product.category),
@@ -47,7 +59,7 @@ function toInventoryItem(product) {
 }
 function toMovement(row) {
     return {
-        id: String(row._id),
+        id: String(row.id),
         productId: String(row.productId),
         variantId: row.variantId,
         sizeLabel: row.sizeLabel,
@@ -60,31 +72,32 @@ function toMovement(row) {
     };
 }
 async function listInventoryItems(input) {
-    const query = {};
+    const where = {};
     if (input.q) {
-        query.$or = [
-            { name: { $regex: input.q, $options: "i" } },
-            { sku: { $regex: input.q, $options: "i" } },
-            { tags: { $elemMatch: { $regex: input.q, $options: "i" } } },
+        where.OR = [
+            { name: { contains: input.q, mode: "insensitive" } },
+            { sku: { contains: input.q, mode: "insensitive" } },
         ];
     }
     if (input.category && input.category !== "all") {
         const key = canonicalCategory(input.category);
         if (key === "casual") {
-            query.category = { $in: ["casual", "acessorios"] };
+            where.category = { in: ["casual", "acessorios"] };
         }
         else {
-            query.category = input.category;
+            where.category = input.category;
         }
     }
     if (input.lowStockOnly)
-        query.stock = { $lte: 5 };
+        where.stock = { lte: 5 };
     const [rows, total] = await Promise.all([
-        Product_1.ProductModel.find(query)
-            .sort({ updatedAt: -1 })
-            .skip((input.page - 1) * input.limit)
-            .limit(input.limit),
-        Product_1.ProductModel.countDocuments(query),
+        prisma_1.prisma.product.findMany({
+            where,
+            orderBy: { updatedAt: "desc" },
+            skip: (input.page - 1) * input.limit,
+            take: input.limit,
+        }),
+        prisma_1.prisma.product.count({ where }),
     ]);
     return {
         data: rows.map(toInventoryItem),
@@ -93,26 +106,27 @@ async function listInventoryItems(input) {
 }
 async function getInventorySummary() {
     const [total, lowStock, outOfStock] = await Promise.all([
-        Product_1.ProductModel.countDocuments(),
-        Product_1.ProductModel.countDocuments({ stock: { $lte: 5 } }),
-        Product_1.ProductModel.countDocuments({ stock: { $lte: 0 } }),
+        prisma_1.prisma.product.count(),
+        prisma_1.prisma.product.count({ where: { stock: { lte: 5 } } }),
+        prisma_1.prisma.product.count({ where: { stock: { lte: 0 } } }),
     ]);
     return { total, lowStock, outOfStock };
 }
 async function adjustInventory(input) {
-    const product = await Product_1.ProductModel.findById(input.productId);
+    const product = await prisma_1.prisma.product.findUnique({ where: { id: input.productId } });
     if (!product)
         throw new apiError_1.ApiError(404, "Produto n�o encontrado.");
     const qty = Math.abs(Math.floor(input.quantity));
     let delta = qty;
-    if (input.type === "saida" || input.type === "reserva") {
+    if (input.type === "saida" || input.type === "reserva")
         delta = -qty;
-    }
-    if (input.type === "ajuste") {
+    if (input.type === "ajuste")
         delta = Math.floor(input.quantity);
-    }
-    const sizeType = product.sizeType || (Array.isArray(product.sizes) && product.sizes.length ? "custom" : "unico");
-    const hasSizes = sizeType !== "unico" && Array.isArray(product.sizes) && product.sizes.length > 0;
+    const sizes = normalizeSizes(product.sizes);
+    const sizeType = product.sizeType || (sizes.length ? "custom" : "unico");
+    const hasSizes = sizeType !== "unico" && sizes.length > 0;
+    let nextStock = Math.max(0, Math.floor(Number(product.stock ?? 0)));
+    let nextSizes = sizes;
     if (input.sizeLabel && !hasSizes) {
         throw new apiError_1.ApiError(400, "Este produto n�o possui estoque por tamanho.");
     }
@@ -121,55 +135,64 @@ async function adjustInventory(input) {
         if (!rawLabel)
             throw new apiError_1.ApiError(400, "Informe o tamanho para ajustar o estoque.");
         const normalized = rawLabel.toLocaleLowerCase("pt-BR");
-        const idx = product.sizes.findIndex((row) => String(row.label || "").trim().toLocaleLowerCase("pt-BR") === normalized);
+        const idx = nextSizes.findIndex((row) => row.label.toLocaleLowerCase("pt-BR") === normalized);
         if (idx === -1)
             throw new apiError_1.ApiError(400, "Tamanho inv�lido para este produto.");
-        const current = Math.max(0, Math.floor(Number(product.sizes[idx]?.stock ?? 0)));
+        const current = Math.max(0, Math.floor(Number(nextSizes[idx]?.stock ?? 0)));
         const next = current + delta;
         if (next < 0)
             throw new apiError_1.ApiError(400, "Estoque insuficiente para este tamanho.");
-        product.sizes[idx].stock = next;
-        product.stock = product.sizes.reduce((acc, row) => {
-            const isActive = row?.active === undefined ? true : Boolean(row.active);
-            const value = Math.max(0, Math.floor(Number(row?.stock ?? 0)));
-            return acc + (isActive ? value : 0);
-        }, 0);
+        nextSizes[idx] = { ...nextSizes[idx], stock: next };
+        nextStock = nextSizes.reduce((acc, row) => acc + (row.active === false ? 0 : Math.max(0, row.stock)), 0);
     }
     else {
-        const nextStock = product.stock + delta;
-        if (nextStock < 0)
+        const updatedStock = nextStock + delta;
+        if (updatedStock < 0)
             throw new apiError_1.ApiError(400, "Estoque insuficiente para esta opera��o.");
-        product.stock = nextStock;
+        nextStock = updatedStock;
     }
-    await product.save();
-    await (0, products_service_1.invalidateProductCacheByIdentity)({
-        id: String(product._id),
-        slug: String(product.slug || ""),
+    const { updatedProduct, movement } = await prisma_1.prisma.$transaction(async (tx) => {
+        const updatedProduct = await tx.product.update({
+            where: { id: product.id },
+            data: {
+                stock: nextStock,
+                sizes: nextSizes,
+            },
+        });
+        const movement = await tx.inventoryMovement.create({
+            data: {
+                productId: product.id,
+                type: input.type,
+                quantity: delta,
+                reason: input.reason,
+                sizeLabel: input.sizeLabel ? String(input.sizeLabel).trim() : undefined,
+                createdBy: input.createdBy,
+                note: input.note,
+            },
+        });
+        return { updatedProduct, movement };
     });
-    const movement = await InventoryMovement_1.InventoryMovementModel.create({
-        productId: product._id,
-        type: input.type,
-        quantity: delta,
-        reason: input.reason,
-        sizeLabel: input.sizeLabel ? String(input.sizeLabel).trim() : undefined,
-        createdBy: input.createdBy,
-        note: input.note,
+    await (0, products_service_1.invalidateProductCacheByIdentity)({
+        id: updatedProduct.id,
+        slug: String(updatedProduct.slug || ""),
     });
     return {
-        product: toInventoryItem(product),
+        product: toInventoryItem(updatedProduct),
         movement: toMovement(movement),
     };
 }
 async function listInventoryMovements(input) {
-    const query = {};
+    const where = {};
     if (input.productId)
-        query.productId = input.productId;
+        where.productId = input.productId;
     const [rows, total] = await Promise.all([
-        InventoryMovement_1.InventoryMovementModel.find(query)
-            .sort({ createdAt: -1 })
-            .skip((input.page - 1) * input.limit)
-            .limit(input.limit),
-        InventoryMovement_1.InventoryMovementModel.countDocuments(query),
+        prisma_1.prisma.inventoryMovement.findMany({
+            where,
+            orderBy: { createdAt: "desc" },
+            skip: (input.page - 1) * input.limit,
+            take: input.limit,
+        }),
+        prisma_1.prisma.inventoryMovement.count({ where }),
     ]);
     return {
         data: rows.map(toMovement),

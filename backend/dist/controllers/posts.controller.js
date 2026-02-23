@@ -30,11 +30,23 @@ function resolveListStatus(req) {
 exports.listBlogPostsHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
     const page = Math.max(1, Number(req.query.page || 1));
     const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
+    const rawTags = String(req.query.tags || "").trim();
+    const tags = rawTags
+        ? rawTags
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter(Boolean)
+        : undefined;
+    const rawSort = String(req.query.sort || "").trim().toLocaleLowerCase("pt-BR");
+    const sort = rawSort === "newest" || rawSort === "relevance" ? rawSort : undefined;
     const result = await (0, posts_service_1.listBlogPosts)({
         page,
         limit,
         q: String(req.query.search || req.query.q || "").trim() || undefined,
         status: resolveListStatus(req),
+        topic: String(req.query.topic || "").trim() || undefined,
+        tags,
+        sort,
     });
     res.json(result);
 });

@@ -1,13 +1,13 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.patchAdminUserHandler = exports.inviteAdminUserHandler = exports.listAdminUsersHandler = void 0;
-const AdminUser_1 = require("../models/AdminUser");
+const prisma_1 = require("../lib/prisma");
 const notFound_1 = require("../middlewares/notFound");
 const pagination_1 = require("../utils/pagination");
 const auth_service_1 = require("../services/auth.service");
 function toAdminUser(row) {
     return {
-        id: String(row._id),
+        id: String(row.id),
         name: row.name,
         email: row.email,
         role: row.role,
@@ -22,21 +22,23 @@ exports.listAdminUsersHandler = (0, notFound_1.asyncHandler)(async (req, res) =>
     const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
     const q = String(req.query.q || "").trim();
     const role = String(req.query.role || "").trim();
-    const query = {};
+    const where = {};
     if (q) {
-        query.$or = [
-            { name: { $regex: q, $options: "i" } },
-            { email: { $regex: q, $options: "i" } },
+        where.OR = [
+            { name: { contains: q, mode: "insensitive" } },
+            { email: { contains: q, mode: "insensitive" } },
         ];
     }
     if (role && role !== "all")
-        query.role = role;
+        where.role = role;
     const [rows, total] = await Promise.all([
-        AdminUser_1.AdminUserModel.find(query)
-            .sort({ createdAt: -1 })
-            .skip((page - 1) * limit)
-            .limit(limit),
-        AdminUser_1.AdminUserModel.countDocuments(query),
+        prisma_1.prisma.adminUser.findMany({
+            where,
+            orderBy: { createdAt: "desc" },
+            skip: (page - 1) * limit,
+            take: limit,
+        }),
+        prisma_1.prisma.adminUser.count({ where }),
     ]);
     res.json({
         data: rows.map(toAdminUser),
@@ -53,18 +55,20 @@ exports.inviteAdminUserHandler = (0, notFound_1.asyncHandler)(async (req, res) =
     res.status(201).json({ data: toAdminUser(created) });
 });
 exports.patchAdminUserHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
-    const user = await AdminUser_1.AdminUserModel.findById(String(req.params.id));
+    const id = String(req.params.id);
+    const user = await prisma_1.prisma.adminUser.findUnique({ where: { id } });
     if (!user) {
         res.status(404).json({ message: "Usu�rio n�o encontrado." });
         return;
     }
-    if (req.body.name !== undefined)
-        user.name = req.body.name;
-    if (req.body.role !== undefined)
-        user.role = req.body.role;
-    if (req.body.active !== undefined)
-        user.active = req.body.active;
-    await user.save();
-    await (0, auth_service_1.invalidateMeCacheForUser)(String(user._id));
-    res.json({ data: toAdminUser(user) });
+    const updated = await prisma_1.prisma.adminUser.update({
+        where: { id },
+        data: {
+            ...(req.body.name !== undefined ? { name: req.body.name } : {}),
+            ...(req.body.role !== undefined ? { role: req.body.role } : {}),
+            ...(req.body.active !== undefined ? { active: req.body.active } : {}),
+        },
+    });
+    await (0, auth_service_1.invalidateMeCacheForUser)(updated.id);
+    res.json({ data: toAdminUser(updated) });
 });

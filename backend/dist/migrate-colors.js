@@ -1,16 +1,24 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const db_1 = require("./config/db");
-const Product_1 = require("./models/Product");
+const prisma_1 = require("./lib/prisma");
 const colorVariants_1 = require("./utils/colorVariants");
 async function migrateColors() {
-    await (0, db_1.connectDb)();
     let scanned = 0;
     let updated = 0;
     let unchanged = 0;
     let withoutColor = 0;
-    const cursor = Product_1.ProductModel.find({}).cursor();
-    for await (const product of cursor) {
+    const products = await prisma_1.prisma.product.findMany({
+        orderBy: { createdAt: "asc" },
+        select: {
+            id: true,
+            groupKey: true,
+            colorName: true,
+            colorHex: true,
+            name: true,
+            category: true,
+        },
+    });
+    for (const product of products) {
         scanned += 1;
         const hasGroupKey = typeof product.groupKey === "string" && product.groupKey.trim().length > 0;
         const hasColorName = typeof product.colorName === "string" && product.colorName.trim().length > 0;
@@ -30,32 +38,33 @@ async function migrateColors() {
             withoutColor += 1;
             continue;
         }
-        let changed = false;
+        const data = {};
         if (!hasGroupKey) {
-            product.groupKey = normalized.inferred.groupKey;
-            changed = true;
+            data.groupKey = normalized.inferred.groupKey;
         }
         if (!hasColorName) {
-            product.colorName = normalized.inferred.colorName;
-            changed = true;
+            data.colorName = normalized.inferred.colorName;
         }
         if (!hasColorHex && normalized.inferred.colorHex) {
-            product.colorHex = normalized.inferred.colorHex;
-            changed = true;
+            data.colorHex = normalized.inferred.colorHex;
         }
-        if (!changed) {
+        if (!Object.keys(data).length) {
             unchanged += 1;
             continue;
         }
-        await product.save();
+        await prisma_1.prisma.product.update({
+            where: { id: product.id },
+            data,
+        });
         updated += 1;
     }
-    // Relatório objetivo para conferência
     console.log(JSON.stringify({ scanned, updated, unchanged, withoutColor }, null, 2));
-    await (0, db_1.disconnectDb)();
 }
-migrateColors().catch(async (err) => {
+migrateColors()
+    .catch((err) => {
     console.error(err);
-    await (0, db_1.disconnectDb)();
     process.exit(1);
+})
+    .finally(async () => {
+    await prisma_1.prisma.$disconnect();
 });

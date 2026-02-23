@@ -13,9 +13,8 @@ exports.getStoreProductVariantsBySlug = getStoreProductVariantsBySlug;
 exports.listLowStockProducts = listLowStockProducts;
 exports.getProductByIdOrFail = getProductByIdOrFail;
 exports.deleteProduct = deleteProduct;
+const prisma_1 = require("../lib/prisma");
 const cache_1 = require("../lib/cache");
-const Product_1 = require("../models/Product");
-const Favorite_1 = require("../models/Favorite");
 const apiError_1 = require("../utils/apiError");
 const colorVariants_1 = require("../utils/colorVariants");
 const money_1 = require("../utils/money");
@@ -101,7 +100,7 @@ function toAdmin(product) {
     const totalStock = sizes.length ? sumActiveSizeStock(sizes) : product.stock;
     const additionalInfo = normalizeAdditionalInfo(product.additionalInfo);
     return {
-        id: String(product._id),
+        id: String(product.id),
         name: product.name,
         sku: product.sku,
         groupKey: product.groupKey || undefined,
@@ -117,10 +116,10 @@ function toAdmin(product) {
         shortDescription: product.shortDescription,
         description: product.description,
         additionalInfo,
-        tags: product.tags,
+        tags: Array.isArray(product.tags) ? product.tags : [],
         status: product.status,
         active: product.active,
-        images: product.images,
+        images: Array.isArray(product.images) ? product.images : [],
         updatedAt: product.updatedAt?.toISOString(),
         slug: product.slug,
         createdAt: product.createdAt?.toISOString(),
@@ -133,19 +132,20 @@ function toStore(product) {
     const totalStock = sizesDetailed.length ? sizesDetailed.reduce((acc, row) => acc + Math.max(0, Math.floor(row.stock)), 0) : product.stock;
     const rating = Math.max(0, Math.min(5, Number(product.reviewAverage ?? 0)));
     const reviewCount = Math.max(0, Math.floor(Number(product.reviewCount ?? 0)));
-    const gallery = (product.images || []).map((src, index) => ({ src, alt: `${product.name} ${index + 1}` }));
+    const rawImages = Array.isArray(product.images) ? product.images : [];
+    const gallery = rawImages.map((src, index) => ({ src, alt: `${product.name} ${index + 1}` }));
     return {
-        id: String(product._id),
+        id: String(product.id),
         slug: product.slug,
         title: product.name,
         price: (0, money_1.fromCents)(product.priceCents),
         compareAtPrice: product.compareAtPriceCents ? (0, money_1.fromCents)(product.compareAtPriceCents) : undefined,
-        image: product.images?.[0] || "",
+        image: rawImages[0] || "",
         category: canonicalCategory(product.category),
         groupKey: product.groupKey || undefined,
         colorName: product.colorName || undefined,
         colorHex: product.colorHex || undefined,
-        tags: product.tags || [],
+        tags: Array.isArray(product.tags) ? product.tags : [],
         stock: Math.max(0, Math.floor(Number(totalStock ?? 0))),
         variants: [],
         badge: statusToBadge(product.status),
@@ -189,7 +189,10 @@ function mergeStoreProductStock(product, snapshot) {
 async function getCachedStockByProductId(productId) {
     const key = `cache:v1:stock:${productId}`;
     return (0, cache_1.getOrSetCache)(key, PRODUCT_STOCK_TTL_SECONDS, async () => {
-        const product = await Product_1.ProductModel.findById(productId).select("stock sizes sizeType active");
+        const product = await prisma_1.prisma.product.findUnique({
+            where: { id: productId },
+            select: { stock: true, sizes: true, sizeType: true, active: true },
+        });
         if (!product || !product.active) {
             return { stock: 0, sizes: [], sizesDetailed: [] };
         }
@@ -218,38 +221,46 @@ async function invalidateProductCacheByIdentity(input) {
     await Promise.all(Array.from(keys).map((key) => (0, cache_1.delCache)(key)));
 }
 async function listAdminProducts(input) {
-    const query = {};
+    const where = {};
     if (input.q) {
-        query.$or = [
-            { name: { $regex: input.q, $options: "i" } },
-            { sku: { $regex: input.q, $options: "i" } },
-            { shortDescription: { $regex: input.q, $options: "i" } },
-            { tags: { $elemMatch: { $regex: input.q, $options: "i" } } },
+        where.OR = [
+            { name: { contains: input.q, mode: "insensitive" } },
+            { sku: { contains: input.q, mode: "insensitive" } },
+            { shortDescription: { contains: input.q, mode: "insensitive" } },
         ];
     }
     if (input.category) {
         const key = canonicalCategory(input.category);
         if (key === "casual") {
-            query.category = { $in: ["casual", "acessorios"] };
+            where.category = { in: ["casual", "acessorios"] };
         }
         else {
-            query.category = input.category;
+            where.category = input.category;
         }
     }
     if (input.groupKey) {
-        query.groupKey = (0, slug_1.slugify)(String(input.groupKey || "").trim());
+        where.groupKey = (0, slug_1.slugify)(String(input.groupKey || "").trim());
     }
     if (input.status && input.status !== "all")
-        query.status = input.status;
+        where.status = input.status;
     if (typeof input.active === "boolean")
-        query.active = input.active;
+        where.active = input.active;
     const sort = input.sort || "-updatedAt";
+    let orderBy = { updatedAt: "desc" };
+    if (sort === "price_asc")
+        orderBy = { priceCents: "asc" };
+    if (sort === "price_desc")
+        orderBy = { priceCents: "desc" };
+    if (sort === "newest")
+        orderBy = { createdAt: "desc" };
     const [rows, total] = await Promise.all([
-        Product_1.ProductModel.find(query)
-            .sort(sort)
-            .skip((input.page - 1) * input.limit)
-            .limit(input.limit),
-        Product_1.ProductModel.countDocuments(query),
+        prisma_1.prisma.product.findMany({
+            where,
+            orderBy,
+            skip: (input.page - 1) * input.limit,
+            take: input.limit,
+        }),
+        prisma_1.prisma.product.count({ where }),
     ]);
     return {
         data: rows.map(toAdmin),
@@ -257,14 +268,14 @@ async function listAdminProducts(input) {
     };
 }
 async function getAdminProductById(id) {
-    const product = await Product_1.ProductModel.findById(id);
+    const product = await prisma_1.prisma.product.findUnique({ where: { id } });
     if (!product)
         throw new apiError_1.ApiError(404, "Produto n�o encontrado.");
     return toAdmin(product);
 }
 async function createProduct(input) {
     const sku = input.sku.trim().toUpperCase();
-    const exists = await Product_1.ProductModel.findOne({ sku });
+    const exists = await prisma_1.prisma.product.findUnique({ where: { sku } });
     if (exists)
         throw new apiError_1.ApiError(409, "SKU j� existente.");
     const slug = (0, slug_1.slugify)(`${input.name}-${sku}`);
@@ -288,68 +299,74 @@ async function createProduct(input) {
         productName: input.name,
         category: input.category,
     });
-    const created = await Product_1.ProductModel.create({
-        name: input.name.trim(),
-        slug,
-        sku,
-        groupKey: normalizedColors.groupKey,
-        colorName: normalizedColors.colorName,
-        colorHex: normalizedColors.colorHex,
-        category: canonicalCategory(input.category),
-        size: sizeText,
-        sizeType: nextSizeType,
-        sizes: usesSizes ? normalizedSizes : [],
-        stock: totalStock,
-        priceCents: (0, money_1.toCents)(input.price),
-        compareAtPriceCents: input.compareAtPrice !== undefined && input.compareAtPrice > 0 ? (0, money_1.toCents)(input.compareAtPrice) : undefined,
-        shortDescription: input.shortDescription.trim(),
-        description: input.description.trim(),
-        additionalInfo: normalizeAdditionalInfo(input.additionalInfo),
-        tags: input.tags || [],
-        status: input.status,
-        active: input.active,
-        images: input.images,
+    const created = await prisma_1.prisma.product.create({
+        data: {
+            name: input.name.trim(),
+            slug,
+            sku,
+            groupKey: normalizedColors.groupKey,
+            colorName: normalizedColors.colorName,
+            colorHex: normalizedColors.colorHex,
+            category: canonicalCategory(input.category),
+            size: sizeText,
+            sizeType: nextSizeType,
+            sizes: usesSizes ? normalizedSizes : [],
+            stock: totalStock,
+            priceCents: (0, money_1.toCents)(input.price),
+            compareAtPriceCents: input.compareAtPrice !== undefined && input.compareAtPrice > 0 ? (0, money_1.toCents)(input.compareAtPrice) : undefined,
+            shortDescription: input.shortDescription.trim(),
+            description: input.description.trim(),
+            additionalInfo: normalizeAdditionalInfo(input.additionalInfo),
+            tags: (input.tags || []),
+            status: input.status,
+            active: input.active,
+            images: input.images,
+        },
     });
     await invalidateProductCacheByIdentity({
-        id: String(created._id),
+        id: String(created.id),
         slug: created.slug,
     });
     return toAdmin(created);
 }
 async function updateProduct(id, input) {
-    const product = await Product_1.ProductModel.findById(id);
+    const product = await prisma_1.prisma.product.findUnique({ where: { id } });
     if (!product)
         throw new apiError_1.ApiError(404, "Produto n�o encontrado.");
     const previousSlug = String(product.slug || "");
+    const current = {
+        ...product,
+        sizes: normalizeSizes(product.sizes),
+    };
     if (input.name !== undefined)
-        product.name = input.name.trim();
+        current.name = input.name.trim();
     if (input.sku !== undefined)
-        product.sku = input.sku.trim().toUpperCase();
+        current.sku = input.sku.trim().toUpperCase();
     if (input.category !== undefined)
-        product.category = canonicalCategory(input.category);
+        current.category = canonicalCategory(input.category);
     const normalizedColors = (0, colorVariants_1.normalizeColorVariantInput)({
         groupKey: input.groupKey,
         colorName: input.colorName,
         colorHex: input.colorHex,
-        productName: product.name,
-        category: product.category,
+        productName: current.name,
+        category: current.category,
     });
     if (input.groupKey !== undefined)
-        product.groupKey = normalizedColors.groupKey;
+        current.groupKey = normalizedColors.groupKey;
     if (input.colorName !== undefined)
-        product.colorName = normalizedColors.colorName;
+        current.colorName = normalizedColors.colorName;
     if (input.colorHex !== undefined)
-        product.colorHex = normalizedColors.colorHex;
+        current.colorHex = normalizedColors.colorHex;
     if (input.groupKey === undefined &&
         input.colorName === undefined &&
         input.colorHex === undefined &&
-        !product.groupKey &&
-        !product.colorName &&
+        !current.groupKey &&
+        !current.colorName &&
         normalizedColors.inferred?.groupKey &&
         normalizedColors.inferred?.colorName) {
-        product.groupKey = normalizedColors.inferred.groupKey;
-        product.colorName = normalizedColors.inferred.colorName;
-        product.colorHex = normalizedColors.inferred.colorHex;
+        current.groupKey = normalizedColors.inferred.groupKey;
+        current.colorName = normalizedColors.inferred.colorName;
+        current.colorHex = normalizedColors.inferred.colorHex;
     }
     const explicitSizeType = input.sizeType;
     const sizesInput = input.sizes !== undefined ? normalizeSizes(input.sizes) : undefined;
@@ -357,9 +374,9 @@ async function updateProduct(id, input) {
         if (explicitSizeType !== "roupas" && explicitSizeType !== "numerico" && explicitSizeType !== "unico" && explicitSizeType !== "custom") {
             throw new apiError_1.ApiError(400, "Tipo de tamanho inv�lido.");
         }
-        product.sizeType = explicitSizeType;
+        current.sizeType = explicitSizeType;
         if (explicitSizeType === "unico") {
-            product.sizes = [];
+            current.sizes = [];
         }
     }
     if (sizesInput !== undefined) {
@@ -367,70 +384,96 @@ async function updateProduct(id, input) {
             throw new apiError_1.ApiError(400, "Tipo de tamanho \"�nico\" n�o aceita estoque por tamanho.");
         }
         if (sizesInput.length === 0) {
-            product.sizeType = "unico";
-            product.sizes = [];
+            current.sizeType = "unico";
+            current.sizes = [];
         }
         else {
-            product.sizes = sizesInput;
-            if (inferSizeType(product) === "unico") {
-                product.sizeType = "custom";
+            current.sizes = sizesInput;
+            if (inferSizeType(current) === "unico") {
+                current.sizeType = "custom";
             }
         }
     }
-    const finalSizeType = inferSizeType(product);
+    const finalSizeType = inferSizeType(current);
     if (finalSizeType !== "unico") {
-        const normalizedSizes = normalizeSizes(product.sizes);
+        const normalizedSizes = normalizeSizes(current.sizes);
         if (!normalizedSizes.length)
             throw new apiError_1.ApiError(400, "Informe ao menos um tamanho.");
-        product.sizes = normalizedSizes;
-        product.size = normalizedSizes.map((row) => row.label).join(", ");
-        product.stock = sumActiveSizeStock(normalizedSizes);
+        current.sizes = normalizedSizes;
+        current.size = normalizedSizes.map((row) => row.label).join(", ");
+        current.stock = sumActiveSizeStock(normalizedSizes);
     }
     else {
         if (input.size !== undefined)
-            product.size = input.size?.trim() || undefined;
+            current.size = input.size?.trim() || undefined;
         if (input.stock !== undefined)
-            product.stock = Math.max(0, Math.floor(input.stock));
+            current.stock = Math.max(0, Math.floor(input.stock));
     }
     if (input.price !== undefined)
-        product.priceCents = (0, money_1.toCents)(input.price);
+        current.priceCents = (0, money_1.toCents)(input.price);
     if (input.compareAtPrice !== undefined) {
-        product.compareAtPriceCents = input.compareAtPrice > 0 ? (0, money_1.toCents)(input.compareAtPrice) : undefined;
+        current.compareAtPriceCents = input.compareAtPrice > 0 ? (0, money_1.toCents)(input.compareAtPrice) : undefined;
     }
     if (input.shortDescription !== undefined)
-        product.shortDescription = input.shortDescription.trim();
+        current.shortDescription = input.shortDescription.trim();
     if (input.description !== undefined)
-        product.description = input.description.trim();
+        current.description = input.description.trim();
     if (input.additionalInfo !== undefined)
-        product.additionalInfo = normalizeAdditionalInfo(input.additionalInfo);
+        current.additionalInfo = normalizeAdditionalInfo(input.additionalInfo);
     if (input.tags !== undefined)
-        product.tags = input.tags;
+        current.tags = input.tags;
     if (input.status !== undefined)
-        product.status = input.status;
+        current.status = input.status;
     if (input.active !== undefined)
-        product.active = input.active;
+        current.active = input.active;
     if (input.images !== undefined)
-        product.images = input.images;
-    product.slug = (0, slug_1.slugify)(`${product.name}-${product.sku}`);
-    await product.save();
+        current.images = input.images;
+    current.slug = (0, slug_1.slugify)(`${current.name}-${current.sku}`);
+    const updated = await prisma_1.prisma.product.update({
+        where: { id },
+        data: {
+            name: current.name,
+            slug: current.slug,
+            sku: current.sku,
+            groupKey: current.groupKey,
+            colorName: current.colorName,
+            colorHex: current.colorHex,
+            category: current.category,
+            size: current.size,
+            sizeType: current.sizeType,
+            sizes: current.sizes,
+            stock: current.stock,
+            priceCents: current.priceCents,
+            compareAtPriceCents: current.compareAtPriceCents,
+            shortDescription: current.shortDescription,
+            description: current.description,
+            additionalInfo: normalizeAdditionalInfo(current.additionalInfo),
+            tags: (current.tags || []),
+            status: current.status,
+            active: current.active,
+            images: (current.images || []),
+        },
+    });
     await invalidateProductCacheByIdentity({
-        id: String(product._id),
-        slug: product.slug,
+        id: String(updated.id),
+        slug: updated.slug,
         previousSlug,
     });
-    return toAdmin(product);
+    return toAdmin(updated);
 }
 async function toggleProductActivation(id, active) {
-    const product = await Product_1.ProductModel.findById(id);
+    const product = await prisma_1.prisma.product.findUnique({ where: { id } });
     if (!product)
         throw new apiError_1.ApiError(404, "Produto n�o encontrado.");
-    product.active = active;
-    await product.save();
-    await invalidateProductCacheByIdentity({
-        id: String(product._id),
-        slug: product.slug,
+    const updated = await prisma_1.prisma.product.update({
+        where: { id },
+        data: { active },
     });
-    return toAdmin(product);
+    await invalidateProductCacheByIdentity({
+        id: String(updated.id),
+        slug: updated.slug,
+    });
+    return toAdmin(updated);
 }
 async function listStoreProducts(input) {
     const page = Math.max(1, Math.floor(input.page || 1));
@@ -449,44 +492,40 @@ async function listStoreProducts(input) {
     });
     const cacheKey = `cache:v1:products:list:v${version}:${listHash}`;
     return (0, cache_1.getOrSetCache)(cacheKey, PRODUCTS_LIST_TTL_SECONDS, async () => {
-        const query = {};
+        const where = {};
         if (input.q) {
-            query.$or = [
-                { name: { $regex: input.q, $options: "i" } },
-                { category: { $regex: input.q, $options: "i" } },
-                { tags: { $elemMatch: { $regex: input.q, $options: "i" } } },
+            where.OR = [
+                { name: { contains: input.q, mode: "insensitive" } },
+                { category: { contains: input.q, mode: "insensitive" } },
             ];
         }
         if (input.category) {
             const key = canonicalCategory(input.category);
             if (key === "casual") {
-                query.category = { $in: ["casual", "acessorios"] };
+                where.category = { in: ["casual", "acessorios"] };
             }
             else {
-                query.category = canonicalCategory(input.category);
+                where.category = canonicalCategory(input.category);
             }
         }
         if (input.status && input.status !== "all")
-            query.status = input.status;
-        query.active = input.active ?? true;
-        query.stock = { $gt: 0 };
+            where.status = input.status;
+        where.active = input.active ?? true;
+        where.stock = { gt: 0 };
         if (input.maxPrice && Number.isFinite(input.maxPrice)) {
-            query.priceCents = { $lte: (0, money_1.toCents)(input.maxPrice) };
+            where.priceCents = { lte: (0, money_1.toCents)(input.maxPrice) };
         }
-        let sort = { createdAt: -1, _id: -1 };
+        let orderBy = [{ createdAt: "desc" }, { id: "desc" }];
         if (input.sort === "price_asc")
-            sort = { priceCents: 1, _id: 1 };
+            orderBy = [{ priceCents: "asc" }, { id: "asc" }];
         if (input.sort === "price_desc")
-            sort = { priceCents: -1, _id: -1 };
+            orderBy = [{ priceCents: "desc" }, { id: "desc" }];
         if (input.sort === "newest")
-            sort = { createdAt: -1, _id: -1 };
+            orderBy = [{ createdAt: "desc" }, { id: "desc" }];
         const skip = (page - 1) * limit;
         const [rows, total] = await Promise.all([
-            Product_1.ProductModel.find(query)
-                .sort(sort)
-                .skip(skip)
-                .limit(limit),
-            Product_1.ProductModel.countDocuments(query),
+            prisma_1.prisma.product.findMany({ where, orderBy, skip, take: limit }),
+            prisma_1.prisma.product.count({ where }),
         ]);
         const base = rows.map(toStore);
         if (!input.includeVariants) {
@@ -504,14 +543,26 @@ async function listStoreProducts(input) {
                 meta: (0, pagination_1.buildMeta)(total, page, limit),
             };
         }
-        const variantDocs = await Product_1.ProductModel.find({ groupKey: { $in: groupKeys } }, { _id: 1, groupKey: 1, slug: 1, colorName: 1, colorHex: 1, active: 1, stock: 1 }).sort({ groupKey: 1, colorName: 1, slug: 1 });
+        const variantDocs = await prisma_1.prisma.product.findMany({
+            where: { groupKey: { in: groupKeys } },
+            select: {
+                id: true,
+                groupKey: true,
+                slug: true,
+                colorName: true,
+                colorHex: true,
+                active: true,
+                stock: true,
+            },
+            orderBy: [{ groupKey: "asc" }, { colorName: "asc" }, { slug: "asc" }],
+        });
         const variantsByGroup = new Map();
         for (const doc of variantDocs) {
             const groupKey = typeof doc.groupKey === "string" ? doc.groupKey.trim() : "";
             if (!groupKey)
                 continue;
             const mapped = {
-                id: String(doc._id),
+                id: String(doc.id),
                 slug: doc.slug,
                 colorName: doc.colorName || undefined,
                 colorHex: doc.colorHex || undefined,
@@ -543,7 +594,7 @@ async function listStoreProducts(input) {
 async function getStoreProductBySlug(slug) {
     const key = `cache:v1:products:item:${slug}`;
     const cached = await (0, cache_1.getOrSetCache)(key, PRODUCT_ITEM_TTL_SECONDS, async () => {
-        const product = await Product_1.ProductModel.findOne({ slug, active: true, stock: { $gt: 0 } });
+        const product = await prisma_1.prisma.product.findFirst({ where: { slug, active: true, stock: { gt: 0 } } });
         if (!product)
             throw new apiError_1.ApiError(404, "Produto n�o encontrado.");
         return toStore(product);
@@ -556,7 +607,7 @@ async function getStoreProductBySlug(slug) {
 async function getStoreProductVariantsBySlug(slug) {
     const key = `cache:v1:products:item:${slug}:variants`;
     return (0, cache_1.getOrSetCache)(key, PRODUCTS_LIST_TTL_SECONDS, async () => {
-        const product = await Product_1.ProductModel.findOne({ slug, active: true, stock: { $gt: 0 } });
+        const product = await prisma_1.prisma.product.findFirst({ where: { slug, active: true, stock: { gt: 0 } } });
         if (!product)
             throw new apiError_1.ApiError(404, "Produto n�o encontrado.");
         const groupKey = typeof product.groupKey === "string" ? product.groupKey.trim() : "";
@@ -564,7 +615,7 @@ async function getStoreProductVariantsBySlug(slug) {
             return {
                 groupKey: "",
                 current: {
-                    id: String(product._id),
+                    id: String(product.id),
                     slug: product.slug,
                     colorName: product.colorName || undefined,
                     colorHex: product.colorHex || undefined,
@@ -575,10 +626,13 @@ async function getStoreProductVariantsBySlug(slug) {
                 variants: [],
             };
         }
-        const variants = await Product_1.ProductModel.find({ groupKey }).sort({ colorName: 1, slug: 1 });
+        const variants = await prisma_1.prisma.product.findMany({
+            where: { groupKey },
+            orderBy: [{ colorName: "asc" }, { slug: "asc" }],
+        });
         const current = variants.find((item) => item.slug === product.slug) ?? product;
         const mapped = variants.map((variant) => ({
-            id: String(variant._id),
+            id: String(variant.id),
             slug: variant.slug,
             colorName: variant.colorName || undefined,
             colorHex: variant.colorHex || undefined,
@@ -589,7 +643,7 @@ async function getStoreProductVariantsBySlug(slug) {
         return {
             groupKey,
             current: {
-                id: String(current._id),
+                id: String(current.id),
                 slug: current.slug,
                 colorName: current.colorName || undefined,
                 colorHex: current.colorHex || undefined,
@@ -602,24 +656,30 @@ async function getStoreProductVariantsBySlug(slug) {
     });
 }
 async function listLowStockProducts(limit = 10) {
-    const rows = await Product_1.ProductModel.find({ stock: { $lte: 5 } }).sort({ stock: 1 }).limit(limit);
+    const rows = await prisma_1.prisma.product.findMany({
+        where: { stock: { lte: 5 } },
+        orderBy: { stock: "asc" },
+        take: limit,
+    });
     return rows.map(toAdmin);
 }
 async function getProductByIdOrFail(id) {
-    const product = await Product_1.ProductModel.findById(id);
+    const product = await prisma_1.prisma.product.findUnique({ where: { id } });
     if (!product)
         throw new apiError_1.ApiError(404, "Produto n�o encontrado.");
     return product;
 }
 async function deleteProduct(id) {
-    const product = await Product_1.ProductModel.findById(id);
+    const product = await prisma_1.prisma.product.findUnique({ where: { id } });
     if (!product)
         throw new apiError_1.ApiError(404, "Produto n�o encontrado.");
     const slug = String(product.slug || "");
-    await Promise.all([Favorite_1.FavoriteModel.deleteMany({ productId: product._id })]);
-    await product.deleteOne();
+    await prisma_1.prisma.$transaction(async (tx) => {
+        await tx.favorite.deleteMany({ where: { productId: product.id } });
+        await tx.product.delete({ where: { id: product.id } });
+    });
     await invalidateProductCacheByIdentity({
-        id: String(product._id),
+        id: String(product.id),
         slug,
     });
     return { success: true };

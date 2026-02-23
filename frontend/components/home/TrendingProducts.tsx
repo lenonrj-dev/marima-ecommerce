@@ -1,5 +1,6 @@
 import Container from "@/components/ui/Container";
 import ProductCard from "@/components/ui/ProductCard";
+import MobileProductCarousel from "@/components/home/MobileProductCarousel";
 import { fetchStoreProducts } from "@/lib/productsData";
 
 export default async function TrendingProducts() {
@@ -22,11 +23,11 @@ export default async function TrendingProducts() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <MobileProductCarousel carouselClassName="gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {products.map((product) => (
             <ProductCard key={product.id} product={product} href={`/produtos/${product.slug}`} />
           ))}
-        </div>
+        </MobileProductCarousel>
       </Container>
     </section>
   );

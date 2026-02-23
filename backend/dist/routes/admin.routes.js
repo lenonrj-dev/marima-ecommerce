@@ -18,6 +18,8 @@ const integrations_controller_1 = require("../controllers/integrations.controlle
 const settings_controller_1 = require("../controllers/settings.controller");
 const analytics_controller_1 = require("../controllers/analytics.controller");
 const reviews_controller_1 = require("../controllers/reviews.controller");
+const comments_controller_1 = require("../modules/blog/comments/comments.controller");
+const comments_validators_1 = require("../modules/blog/comments/comments.validators");
 const reports_controller_1 = require("../controllers/reports.controller");
 const adminUsers_controller_1 = require("../controllers/adminUsers.controller");
 const router = (0, express_1.Router)();
@@ -69,6 +71,10 @@ router.patch("/reviews/:id", (0, rbac_1.requireRole)("admin", "operacao", "marke
     }),
 }), reviews_controller_1.patchAdminReviewStatusHandler);
 router.delete("/reviews/:id", (0, rbac_1.requireRole)("admin", "operacao"), reviews_controller_1.deleteAdminReviewHandler);
+router.patch("/comments/:id/status", (0, rbac_1.requireRole)("admin", "marketing", "suporte"), (0, validate_1.validate)({
+    params: comments_validators_1.adminCommentParamsSchema,
+    body: comments_validators_1.adminCommentStatusBodySchema,
+}), comments_controller_1.patchAdminCommentStatusHandler);
 router.get("/categories", (0, rbac_1.requireRole)("admin", "operacao", "marketing"), categories_controller_1.listAdminCategoriesHandler);
 router.post("/categories", (0, rbac_1.requireRole)("admin", "operacao"), categories_controller_1.createCategoryHandler);
 router.patch("/categories/:id", (0, rbac_1.requireRole)("admin", "operacao"), categories_controller_1.patchCategoryHandler);

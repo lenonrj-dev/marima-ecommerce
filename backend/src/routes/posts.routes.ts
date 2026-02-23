@@ -9,9 +9,18 @@ import {
   listBlogPostsHandler,
   patchBlogPostHandler,
 } from "../controllers/posts.controller";
-import { optionalAuth, requireAdminAuth } from "../middlewares/auth";
+import { optionalAuth, requireAdminAuth, requireCustomerAuth } from "../middlewares/auth";
 import { requireRole } from "../middlewares/rbac";
 import { validate } from "../middlewares/validate";
+import {
+  createPostCommentHandler,
+  listPostCommentsHandler,
+} from "../modules/blog/comments/comments.controller";
+import {
+  postCommentBodySchema,
+  postCommentParamsSchema,
+  postCommentQuerySchema,
+} from "../modules/blog/comments/comments.validators";
 
 const router = Router();
 const idPattern = "[a-z0-9]{25}|[0-9a-fA-F-]{36}";
@@ -33,6 +42,24 @@ const postPatchSchema = z.object({
 
 router.get("/categories/counts", optionalAuth, listBlogCategoryCountsHandler);
 router.get("/posts", optionalAuth, listBlogPostsHandler);
+router.get(
+  "/posts/:slug/comments",
+  optionalAuth,
+  validate({
+    params: postCommentParamsSchema,
+    query: postCommentQuerySchema,
+  }),
+  listPostCommentsHandler,
+);
+router.post(
+  "/posts/:slug/comments",
+  requireCustomerAuth,
+  validate({
+    params: postCommentParamsSchema,
+    body: postCommentBodySchema,
+  }),
+  createPostCommentHandler,
+);
 router.get("/posts/id/:id", requireAdminAuth, requireRole("admin", "marketing"), getBlogPostByIdHandler);
 router.get(`/posts/:id(${idPattern})`, requireAdminAuth, requireRole("admin", "marketing"), getBlogPostByIdHandler);
 router.get("/posts/:slug", optionalAuth, getBlogPostBySlugHandler);

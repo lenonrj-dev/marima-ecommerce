@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: marima_pg_staging
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: marima
+      POSTGRES_PASSWORD: marima_local_123
+      POSTGRES_DB: marima_dev
+    volumes:
+      - marima_pgdata:/var/lib/postgresql/data
+
+volumes:
+  marima_pgdata:

@@ -4,8 +4,7 @@ exports.listCategories = listCategories;
 exports.createCategory = createCategory;
 exports.updateCategory = updateCategory;
 exports.listStoreCategories = listStoreCategories;
-const Category_1 = require("../models/Category");
-const Product_1 = require("../models/Product");
+const prisma_1 = require("../lib/prisma");
 const apiError_1 = require("../utils/apiError");
 const slug_1 = require("../utils/slug");
 const pagination_1 = require("../utils/pagination");
@@ -17,7 +16,7 @@ function canonicalCategorySlug(value) {
 }
 function toOutput(category) {
     return {
-        id: String(category._id),
+        id: String(category.id),
         name: category.name,
         slug: category.slug,
         active: category.active,
@@ -27,21 +26,23 @@ function toOutput(category) {
     };
 }
 async function listCategories(input) {
-    const query = {};
+    const where = {};
     if (input.q) {
-        query.$or = [
-            { name: { $regex: input.q, $options: "i" } },
-            { slug: { $regex: input.q, $options: "i" } },
+        where.OR = [
+            { name: { contains: input.q, mode: "insensitive" } },
+            { slug: { contains: input.q, mode: "insensitive" } },
         ];
     }
     if (typeof input.active === "boolean")
-        query.active = input.active;
+        where.active = input.active;
     const [rows, total] = await Promise.all([
-        Category_1.CategoryModel.find(query)
-            .sort({ sortOrder: 1, name: 1 })
-            .skip((input.page - 1) * input.limit)
-            .limit(input.limit),
-        Category_1.CategoryModel.countDocuments(query),
+        prisma_1.prisma.category.findMany({
+            where,
+            orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+            skip: (input.page - 1) * input.limit,
+            take: input.limit,
+        }),
+        prisma_1.prisma.category.count({ where }),
     ]);
     return {
         data: rows.map(toOutput),
@@ -50,43 +51,55 @@ async function listCategories(input) {
 }
 async function createCategory(input) {
     const slug = (0, slug_1.slugify)(input.slug || input.name);
-    const exists = await Category_1.CategoryModel.findOne({ $or: [{ name: input.name.trim() }, { slug }] });
+    const exists = await prisma_1.prisma.category.findFirst({
+        where: {
+            OR: [{ name: input.name.trim() }, { slug }],
+        },
+    });
     if (exists)
         throw new apiError_1.ApiError(409, "Categoria j� cadastrada.");
-    const created = await Category_1.CategoryModel.create({
-        name: input.name.trim(),
-        slug,
-        active: input.active ?? true,
-        sortOrder: input.sortOrder ?? 0,
+    const created = await prisma_1.prisma.category.create({
+        data: {
+            name: input.name.trim(),
+            slug,
+            active: input.active ?? true,
+            sortOrder: input.sortOrder ?? 0,
+        },
     });
     return toOutput(created);
 }
 async function updateCategory(id, input) {
-    const category = await Category_1.CategoryModel.findById(id);
+    const category = await prisma_1.prisma.category.findUnique({ where: { id } });
     if (!category)
         throw new apiError_1.ApiError(404, "Categoria n�o encontrada.");
-    if (input.name !== undefined)
-        category.name = input.name.trim();
-    if (input.slug !== undefined)
-        category.slug = (0, slug_1.slugify)(input.slug);
-    if (input.active !== undefined)
-        category.active = input.active;
-    if (input.sortOrder !== undefined)
-        category.sortOrder = input.sortOrder;
-    await category.save();
-    return toOutput(category);
+    const updated = await prisma_1.prisma.category.update({
+        where: { id },
+        data: {
+            ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+            ...(input.slug !== undefined ? { slug: (0, slug_1.slugify)(input.slug) } : {}),
+            ...(input.active !== undefined ? { active: input.active } : {}),
+            ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
+        },
+    });
+    return toOutput(updated);
 }
 async function listStoreCategories() {
-    const rows = await Category_1.CategoryModel.find({ active: true }).sort({ sortOrder: 1, name: 1 });
-    const counts = await Product_1.ProductModel.aggregate([
-        // Store catalog only shows active products with stock available.
-        { $match: { active: true, stock: { $gt: 0 } } },
-        { $group: { _id: "$category", count: { $sum: 1 } } },
-    ]);
+    const rows = await prisma_1.prisma.category.findMany({
+        where: { active: true },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    });
+    const counts = await prisma_1.prisma.product.groupBy({
+        by: ["category"],
+        where: {
+            active: true,
+            stock: { gt: 0 },
+        },
+        _count: { _all: true },
+    });
     const countMap = new Map();
     for (const row of counts) {
-        const key = canonicalCategorySlug(row._id);
-        countMap.set(key, (countMap.get(key) ?? 0) + row.count);
+        const key = canonicalCategorySlug(row.category);
+        countMap.set(key, (countMap.get(key) ?? 0) + row._count._all);
     }
     const seen = new Set();
     const output = [];

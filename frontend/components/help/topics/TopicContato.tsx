@@ -1,6 +1,6 @@
 import { MARIMA_INSTITUTIONAL } from "@/lib/institutionalData";
 
-export default function TopicProconRJ() {
+export default function TopicContato() {
   return (
     <article className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-5 shadow-soft sm:p-6">
       <header>

@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.startMercadoPagoPendingExpiryJob = startMercadoPagoPendingExpiryJob;
 const env_1 = require("../config/env");
-const PaymentTransaction_1 = require("../models/PaymentTransaction");
+const prisma_1 = require("../lib/prisma");
 const mercadopago_service_1 = require("../services/mercadopago.service");
 const DEFAULT_TTL_MINUTES = 30;
 const DEFAULT_INTERVAL_MS = 60_000;
@@ -15,15 +15,17 @@ function resolveTtlMinutes() {
 }
 async function expireOnce(ttlMinutes) {
     const cutoff = new Date(Date.now() - ttlMinutes * 60 * 1000);
-    const rows = await PaymentTransaction_1.PaymentTransactionModel.find({
-        provider: "mercadopago",
-        status: { $in: ["initiated", "pending"] },
-        createdAt: { $lt: cutoff },
-    })
-        .sort({ createdAt: 1 })
-        .limit(MAX_BATCH);
+    const rows = await prisma_1.prisma.paymentTransaction.findMany({
+        where: {
+            provider: "mercadopago",
+            status: { in: ["initiated", "pending"] },
+            createdAt: { lt: cutoff },
+        },
+        orderBy: { createdAt: "asc" },
+        take: MAX_BATCH,
+    });
     for (const tx of rows) {
-        const orderId = String(tx.orderId);
+        const orderId = String(tx.orderId || "");
         const cancelToken = tx.cancelToken ? String(tx.cancelToken) : "";
         if (!cancelToken)
             continue;

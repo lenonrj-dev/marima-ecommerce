@@ -71,6 +71,8 @@ import {
   listAdminReviewsHandler,
   patchAdminReviewStatusHandler,
 } from "../controllers/reviews.controller";
+import { patchAdminCommentStatusHandler } from "../modules/blog/comments/comments.controller";
+import { adminCommentParamsSchema, adminCommentStatusBodySchema } from "../modules/blog/comments/comments.validators";
 import {
   exportCustomersCsvHandler,
   exportProductsCsvHandler,
@@ -143,6 +145,15 @@ router.patch(
   patchAdminReviewStatusHandler,
 );
 router.delete("/reviews/:id", requireRole("admin", "operacao"), deleteAdminReviewHandler);
+router.patch(
+  "/comments/:id/status",
+  requireRole("admin", "marketing", "suporte"),
+  validate({
+    params: adminCommentParamsSchema,
+    body: adminCommentStatusBodySchema,
+  }),
+  patchAdminCommentStatusHandler,
+);
 
 router.get("/categories", requireRole("admin", "operacao", "marketing"), listAdminCategoriesHandler);
 router.post("/categories", requireRole("admin", "operacao"), createCategoryHandler);

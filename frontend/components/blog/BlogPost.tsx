@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, Search, Share2 } from "lucide-react";
 import BlogArticleContent from "@/components/blog/BlogArticleContent";
+import CommentsSection from "@/components/blog/CommentsSection";
 import BlogLeftNav from "@/components/blog/BlogLeftNav";
 import BlogReadingShell from "@/components/blog/BlogReadingShell";
 import BlogRightRail from "@/components/blog/BlogRightRail";
@@ -13,9 +15,19 @@ import { copyLink, getCurrentUrl, shareLink } from "@/lib/share";
 import { BLOG_TOPICS, formatBlogDate, topicLabel, type BlogArticle, type BlogPostItem } from "@/lib/blogData";
 import { cn } from "@/lib/utils";
 
-export default function BlogPost({ article, related }: { article: BlogArticle; related: BlogPostItem[] }) {
+export default function BlogPost({
+  article,
+  related,
+  slug,
+}: {
+  article: BlogArticle;
+  related: BlogPostItem[];
+  slug: string;
+}) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [searchTouched, setSearchTouched] = useState(false);
   const feedbackTimeoutRef = useRef<number | null>(null);
 
   const activeTopic = article.topic || "novidades";
@@ -33,6 +45,24 @@ export default function BlogPost({ article, related }: { article: BlogArticle; r
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!searchTouched) return;
+
+    const handle = window.setTimeout(() => {
+      const trimmed = query.trim();
+      if (!trimmed) {
+        router.push("/blog");
+        return;
+      }
+
+      router.push(`/blog?q=${encodeURIComponent(trimmed)}`);
+    }, 300);
+
+    return () => {
+      window.clearTimeout(handle);
+    };
+  }, [query, router, searchTouched]);
 
   function showShareFeedback(message: string) {
     setShareMessage(message);
@@ -87,7 +117,10 @@ export default function BlogPost({ article, related }: { article: BlogArticle; r
                   <span className="sr-only">Buscar conteudo</span>
                   <input
                     value={query}
-                    onChange={(event) => setQuery(event.target.value)}
+                    onChange={(event) => {
+                      setSearchTouched(true);
+                      setQuery(event.target.value);
+                    }}
                     placeholder="Buscar conteudo..."
                     className="w-full bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-400"
                   />
@@ -168,9 +201,7 @@ export default function BlogPost({ article, related }: { article: BlogArticle; r
               </div>
 
               <div className={cn("border-t border-zinc-200 bg-white p-5", query && "opacity-90")}>
-                <p className="text-xs text-zinc-500">
-                  Placeholder tecnico: integracao futura com busca avancada, comentarios e metricas.
-                </p>
+                <CommentsSection slug={slug} />
               </div>
             </article>
           </div>

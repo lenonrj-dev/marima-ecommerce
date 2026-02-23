@@ -1,8 +1,8 @@
-import { StoreSettingsModel } from "../models/StoreSettings";
+import { prisma } from "../lib/prisma";
 
 function toSettings(settings: any) {
   return {
-    id: String(settings._id),
+    id: String(settings.id),
     name: settings.name,
     domain: settings.domain,
     timezone: settings.timezone,
@@ -15,16 +15,18 @@ function toSettings(settings: any) {
 }
 
 export async function getStoreSettings() {
-  let settings = await StoreSettingsModel.findOne();
+  let settings = await prisma.storeSettings.findFirst();
 
   if (!settings) {
-    settings = await StoreSettingsModel.create({
-      name: "Minha Loja",
-      domain: "minhaloja.com",
-      timezone: "America/Sao_Paulo",
-      currency: "BRL",
-      supportEmail: "suporte@minhaloja.com",
-      policy: "Trocas em até 7 dias. Consulte regras no site.",
+    settings = await prisma.storeSettings.create({
+      data: {
+        name: "Minha Loja",
+        domain: "minhaloja.com",
+        timezone: "America/Sao_Paulo",
+        currency: "BRL",
+        supportEmail: "suporte@minhaloja.com",
+        policy: "Trocas em até 7 dias. Consulte regras no site.",
+      },
     });
   }
 
@@ -34,20 +36,24 @@ export async function getStoreSettings() {
 export async function updateStoreSettings(
   input: Partial<{ name: string; domain: string; timezone: string; currency: string; supportEmail: string; policy: string }>,
 ) {
-  let settings = await StoreSettingsModel.findOne();
+  let settings = await prisma.storeSettings.findFirst();
 
   if (!settings) {
-    settings = await StoreSettingsModel.create({
-      name: input.name || "Minha Loja",
-      domain: input.domain || "minhaloja.com",
-      timezone: input.timezone || "America/Sao_Paulo",
-      currency: input.currency || "BRL",
-      supportEmail: input.supportEmail || "suporte@minhaloja.com",
-      policy: input.policy || "",
+    settings = await prisma.storeSettings.create({
+      data: {
+        name: input.name || "Minha Loja",
+        domain: input.domain || "minhaloja.com",
+        timezone: input.timezone || "America/Sao_Paulo",
+        currency: input.currency || "BRL",
+        supportEmail: input.supportEmail || "suporte@minhaloja.com",
+        policy: input.policy || "",
+      },
     });
   } else {
-    Object.assign(settings, input);
-    await settings.save();
+    settings = await prisma.storeSettings.update({
+      where: { id: settings.id },
+      data: input,
+    });
   }
 
   return toSettings(settings);

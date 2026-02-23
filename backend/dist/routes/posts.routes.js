@@ -6,6 +6,8 @@ const posts_controller_1 = require("../controllers/posts.controller");
 const auth_1 = require("../middlewares/auth");
 const rbac_1 = require("../middlewares/rbac");
 const validate_1 = require("../middlewares/validate");
+const comments_controller_1 = require("../modules/blog/comments/comments.controller");
+const comments_validators_1 = require("../modules/blog/comments/comments.validators");
 const router = (0, express_1.Router)();
 const idPattern = "[a-z0-9]{25}|[0-9a-fA-F-]{36}";
 const postPatchSchema = zod_1.z.object({
@@ -25,6 +27,14 @@ const postPatchSchema = zod_1.z.object({
 });
 router.get("/categories/counts", auth_1.optionalAuth, posts_controller_1.listBlogCategoryCountsHandler);
 router.get("/posts", auth_1.optionalAuth, posts_controller_1.listBlogPostsHandler);
+router.get("/posts/:slug/comments", auth_1.optionalAuth, (0, validate_1.validate)({
+    params: comments_validators_1.postCommentParamsSchema,
+    query: comments_validators_1.postCommentQuerySchema,
+}), comments_controller_1.listPostCommentsHandler);
+router.post("/posts/:slug/comments", auth_1.requireCustomerAuth, (0, validate_1.validate)({
+    params: comments_validators_1.postCommentParamsSchema,
+    body: comments_validators_1.postCommentBodySchema,
+}), comments_controller_1.createPostCommentHandler);
 router.get("/posts/id/:id", auth_1.requireAdminAuth, (0, rbac_1.requireRole)("admin", "marketing"), posts_controller_1.getBlogPostByIdHandler);
 router.get(`/posts/:id(${idPattern})`, auth_1.requireAdminAuth, (0, rbac_1.requireRole)("admin", "marketing"), posts_controller_1.getBlogPostByIdHandler);
 router.get("/posts/:slug", auth_1.optionalAuth, posts_controller_1.getBlogPostBySlugHandler);

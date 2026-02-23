@@ -6,7 +6,6 @@ import TopCategories from "@/components/home/TopCategories";
 import FeaturesBar from "@/components/home/FeaturesBar";
 import BestSelling from "@/components/home/BestSelling";
 import DealOfDay from "@/components/home/DealOfDay";
-import Reviews from "@/components/home/Reviews";
 import Lookbook from "@/components/home/Lookbook";
 import CTAWideBanner from "@/components/home/CTAWideBanner";
 import InstagramStrip from "@/components/home/InstagramStrip";
@@ -29,7 +28,7 @@ export default function HomePage() {
       <FeaturesBar />
       <BestSelling />
       <DealOfDay />
-      <Reviews />
+
       <Lookbook />
       <CTAWideBanner />
       <InstagramStrip />

@@ -1,13 +1,11 @@
-import { Types } from "../lib/dbCompat";
-import { CashbackLedgerModel } from "../models/CashbackLedger";
-import { CashbackRuleModel } from "../models/CashbackRule";
+import { prisma } from "../lib/prisma";
 import { ApiError } from "../utils/apiError";
 import { buildMeta } from "../utils/pagination";
 import { fromCents, toCents } from "../utils/money";
 
 function toRule(rule: any) {
   return {
-    id: String(rule._id),
+    id: String(rule.id),
     name: rule.name,
     percent: rule.percent,
     validDays: rule.validDays,
@@ -21,7 +19,7 @@ function toRule(rule: any) {
 
 function toLedger(row: any) {
   return {
-    id: String(row._id),
+    id: String(row.id),
     customerId: String(row.customerId),
     orderId: row.orderId ? String(row.orderId) : undefined,
     type: row.type,
@@ -34,14 +32,22 @@ function toLedger(row: any) {
 }
 
 async function getCurrentBalanceCents(customerId: string) {
-  const last = await CashbackLedgerModel.findOne({ customerId }).sort({ createdAt: -1 });
+  const last = await prisma.cashbackLedger.findFirst({
+    where: { customerId },
+    orderBy: { createdAt: "desc" },
+    select: { balanceAfterCents: true },
+  });
   return last?.balanceAfterCents || 0;
 }
 
 export async function listCashbackRules(input: { page: number; limit: number }) {
   const [rows, total] = await Promise.all([
-    CashbackRuleModel.find().sort({ createdAt: -1 }).skip((input.page - 1) * input.limit).limit(input.limit),
-    CashbackRuleModel.countDocuments(),
+    prisma.cashbackRule.findMany({
+      orderBy: { createdAt: "desc" },
+      skip: (input.page - 1) * input.limit,
+      take: input.limit,
+    }),
+    prisma.cashbackRule.count(),
   ]);
 
   return { data: rows.map(toRule), meta: buildMeta(total, input.page, input.limit) };
@@ -55,13 +61,15 @@ export async function createCashbackRule(input: {
   maxCashback: number;
   active?: boolean;
 }) {
-  const created = await CashbackRuleModel.create({
-    name: input.name,
-    percent: input.percent,
-    validDays: input.validDays,
-    minSubtotalCents: toCents(input.minSubtotal),
-    maxCashbackCents: toCents(input.maxCashback),
-    active: input.active ?? true,
+  const created = await prisma.cashbackRule.create({
+    data: {
+      name: input.name,
+      percent: input.percent,
+      validDays: input.validDays,
+      minSubtotalCents: toCents(input.minSubtotal),
+      maxCashbackCents: toCents(input.maxCashback),
+      active: input.active ?? true,
+    },
   });
 
   return toRule(created);
@@ -71,35 +79,47 @@ export async function updateCashbackRule(
   id: string,
   input: Partial<{ name: string; percent: number; validDays: number; minSubtotal: number; maxCashback: number; active: boolean }>,
 ) {
-  const rule = await CashbackRuleModel.findById(id);
+  const rule = await prisma.cashbackRule.findUnique({ where: { id } });
   if (!rule) throw new ApiError(404, "Regra de cashback não encontrada.");
 
-  if (input.name !== undefined) rule.name = input.name;
-  if (input.percent !== undefined) rule.percent = input.percent;
-  if (input.validDays !== undefined) rule.validDays = input.validDays;
-  if (input.minSubtotal !== undefined) rule.minSubtotalCents = toCents(input.minSubtotal);
-  if (input.maxCashback !== undefined) rule.maxCashbackCents = toCents(input.maxCashback);
-  if (input.active !== undefined) rule.active = input.active;
+  const updated = await prisma.cashbackRule.update({
+    where: { id },
+    data: {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.percent !== undefined ? { percent: input.percent } : {}),
+      ...(input.validDays !== undefined ? { validDays: input.validDays } : {}),
+      ...(input.minSubtotal !== undefined ? { minSubtotalCents: toCents(input.minSubtotal) } : {}),
+      ...(input.maxCashback !== undefined ? { maxCashbackCents: toCents(input.maxCashback) } : {}),
+      ...(input.active !== undefined ? { active: input.active } : {}),
+    },
+  });
 
-  await rule.save();
-  return toRule(rule);
+  return toRule(updated);
 }
 
 export async function toggleCashbackRule(id: string) {
-  const rule = await CashbackRuleModel.findById(id);
+  const rule = await prisma.cashbackRule.findUnique({ where: { id } });
   if (!rule) throw new ApiError(404, "Regra de cashback não encontrada.");
-  rule.active = !rule.active;
-  await rule.save();
-  return toRule(rule);
+
+  const updated = await prisma.cashbackRule.update({
+    where: { id },
+    data: { active: !rule.active },
+  });
+  return toRule(updated);
 }
 
 export async function listCashbackLedger(input: { page: number; limit: number; customerId?: string }) {
-  const query: any = {};
-  if (input.customerId) query.customerId = input.customerId;
+  const where: any = {};
+  if (input.customerId) where.customerId = input.customerId;
 
   const [rows, total] = await Promise.all([
-    CashbackLedgerModel.find(query).sort({ createdAt: -1 }).skip((input.page - 1) * input.limit).limit(input.limit),
-    CashbackLedgerModel.countDocuments(query),
+    prisma.cashbackLedger.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (input.page - 1) * input.limit,
+      take: input.limit,
+    }),
+    prisma.cashbackLedger.count({ where }),
   ]);
 
   return { data: rows.map(toLedger), meta: buildMeta(total, input.page, input.limit) };
@@ -112,7 +132,10 @@ export async function grantCashbackForOrder(input: {
 }) {
   if (!input.customerId) return { grantedCents: 0 };
 
-  const rule = await CashbackRuleModel.findOne({ active: true }).sort({ percent: -1, createdAt: -1 });
+  const rule = await prisma.cashbackRule.findFirst({
+    where: { active: true },
+    orderBy: [{ percent: "desc" }, { createdAt: "desc" }],
+  });
   if (!rule) return { grantedCents: 0 };
   if (input.subtotalCents < rule.minSubtotalCents) return { grantedCents: 0 };
 
@@ -124,14 +147,16 @@ export async function grantCashbackForOrder(input: {
   const balanceAfter = current + grantedCents;
   const expiresAt = new Date(Date.now() + rule.validDays * 24 * 60 * 60 * 1000);
 
-  await CashbackLedgerModel.create({
-    customerId: input.customerId,
-    orderId: input.orderId,
-    type: "credit",
-    amountCents: grantedCents,
-    balanceAfterCents: balanceAfter,
-    expiresAt,
-    note: `Cashback do pedido ${input.orderId}`,
+  await prisma.cashbackLedger.create({
+    data: {
+      customerId: input.customerId,
+      orderId: input.orderId,
+      type: "credit",
+      amountCents: grantedCents,
+      balanceAfterCents: balanceAfter,
+      expiresAt,
+      note: `Cashback do pedido ${input.orderId}`,
+    },
   });
 
   return { grantedCents };
@@ -149,13 +174,15 @@ export async function redeemCashback(input: {
 
   const balanceAfter = current - amountCents;
 
-  await CashbackLedgerModel.create({
-    customerId: input.customerId,
-    orderId: input.orderId ? new Types.ObjectId(input.orderId) : undefined,
-    type: "debit",
-    amountCents: -amountCents,
-    balanceAfterCents: balanceAfter,
-    note: "Resgate de cashback",
+  await prisma.cashbackLedger.create({
+    data: {
+      customerId: input.customerId,
+      orderId: input.orderId,
+      type: "debit",
+      amountCents: -amountCents,
+      balanceAfterCents: balanceAfter,
+      note: "Resgate de cashback",
+    },
   });
 
   return {
@@ -171,4 +198,3 @@ export async function getCustomerCashbackBalance(customerId: string) {
 }
 
 export { toRule, toLedger };
-

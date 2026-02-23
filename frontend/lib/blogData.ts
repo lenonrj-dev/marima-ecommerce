@@ -44,7 +44,7 @@ export type BlogArticle = {
   tags: string[];
 };
 
-type ApiPost = {
+export type ApiPost = {
   id: string;
   title: string;
   slug: string;
@@ -61,6 +61,28 @@ type ApiPost = {
   createdAt?: string;
   updatedAt?: string;
   authorName?: string;
+};
+
+export type BlogListMeta = {
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+};
+
+export type BlogListingResult = {
+  posts: BlogPostItem[];
+  meta: BlogListMeta;
+};
+
+type BlogPostListOptions = {
+  page?: number;
+  limit?: number;
+  q?: string;
+  topic?: string;
+  tags?: string[];
+  sort?: "relevance" | "newest";
+  status?: "published" | "draft" | "all";
 };
 
 export const BLOG_TOPICS: BlogTopic[] = [
@@ -196,7 +218,7 @@ function parseContentBlocks(rawContent: string) {
   return blocks;
 }
 
-function toBlogPostItem(post: ApiPost): BlogPostItem {
+export function mapApiPostToBlogPostItem(post: ApiPost): BlogPostItem {
   const tags = sanitizeTags(post.tags);
   const primaryTopic = normalizeTopic(post.topic, tags);
   const secondaryTopic = post.topic2 ? normalizeTopic(post.topic2, tags) : undefined;
@@ -243,18 +265,54 @@ async function requestBlogApi<T>(path: string): Promise<T | null> {
   }
 }
 
-export async function fetchBlogPostsForListing(options?: { page?: number; limit?: number }) {
+export async function fetchBlogPostsForListing(options?: BlogPostListOptions) {
+  const result = await fetchBlogPostsListing(options);
+  return result.posts;
+}
+
+export async function fetchBlogPostsListing(options?: BlogPostListOptions): Promise<BlogListingResult> {
   const page = options?.page ?? 1;
   const limit = options?.limit ?? 48;
-  const response = await requestBlogApi<{ data: ApiPost[] }>(
-    `/api/v1/blog/posts?status=published&page=${page}&limit=${limit}`,
-  );
-
-  if (!response?.data?.length) {
-    return [] as BlogPostItem[];
+  const params = new URLSearchParams();
+  params.set("status", options?.status || "published");
+  params.set("page", String(page));
+  params.set("limit", String(limit));
+  if (options?.q?.trim()) params.set("q", options.q.trim());
+  if (options?.topic?.trim()) params.set("topic", options.topic.trim());
+  if (options?.sort) params.set("sort", options.sort);
+  if (options?.tags?.length) {
+    const tags = options.tags
+      .map((tag) => String(tag || "").trim())
+      .filter(Boolean)
+      .join(",");
+    if (tags) params.set("tags", tags);
   }
 
-  return response.data.map(toBlogPostItem);
+  const response = await requestBlogApi<{
+    data: ApiPost[];
+    meta?: {
+      total?: number;
+      page?: number;
+      limit?: number;
+      pages?: number;
+    };
+  }>(`/api/v1/blog/posts?${params.toString()}`);
+
+  const posts = Array.isArray(response?.data) ? response.data.map(mapApiPostToBlogPostItem) : [];
+  const safePage = toSafePositiveInt(response?.meta?.page, page);
+  const safeLimit = toSafePositiveInt(response?.meta?.limit, limit);
+  const safeTotal = toSafeCount(response?.meta?.total ?? posts.length);
+  const safePages = toSafePositiveInt(response?.meta?.pages, Math.max(1, Math.ceil(safeTotal / safeLimit)));
+
+  return {
+    posts,
+    meta: {
+      total: safeTotal,
+      page: safePage,
+      limit: safeLimit,
+      pages: safePages,
+    },
+  };
 }
 
 export async function fetchBlogArticleBySlug(slug: string) {
@@ -272,7 +330,7 @@ export async function fetchRelatedBlogPosts(currentSlug: string, limit = 5) {
     return [] as BlogPostItem[];
   }
 
-  return response.data.map(toBlogPostItem).filter((post) => post.slug !== currentSlug).slice(0, limit);
+  return response.data.map(mapApiPostToBlogPostItem).filter((post) => post.slug !== currentSlug).slice(0, limit);
 }
 
 export function getBlogArticle(_slug: string) {
@@ -310,6 +368,12 @@ function toSafeCount(value: unknown) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 0;
   return Math.max(0, Math.floor(numeric));
+}
+
+function toSafePositiveInt(value: unknown, fallback: number) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(1, Math.floor(numeric));
 }
 
 function normalizeTopicId(value: unknown) {
