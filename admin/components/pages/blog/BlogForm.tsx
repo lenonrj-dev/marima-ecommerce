@@ -21,7 +21,7 @@ const TOPIC_OPTIONS = [
   { value: "novidades", label: "Novidades" },
   { value: "treino", label: "Treino" },
   { value: "moda-fitness", label: "Moda fitness" },
-  { value: "tecnologia-textil", label: "Tecnologia textil" },
+  { value: "tecnologia-textil", label: "Tecnologia têxtil" },
   { value: "bem-estar", label: "Bem-estar" },
   { value: "estilo-casual", label: "Estilo casual" },
   { value: "guias", label: "Guias" },
@@ -49,7 +49,7 @@ export default function BlogForm({
     <div className="space-y-5">
       <div className="grid gap-4 lg:grid-cols-2">
         <Input
-          label="Titulo"
+          label="Título"
           placeholder="Ex.: Como escolher a legging ideal para cada treino"
           value={draft.title}
           onChange={(event) => onTitleChange(event.target.value)}
@@ -60,7 +60,7 @@ export default function BlogForm({
           placeholder="como-escolher-a-legging-ideal"
           value={draft.slug}
           onChange={(event) => onSlugChange(event.target.value)}
-          hint="Unico por post. Voce pode editar manualmente."
+          hint="Único por post. Você pode editar manualmente."
         />
 
         <Input
@@ -78,14 +78,14 @@ export default function BlogForm({
         />
 
         <Select
-          label="Topico principal"
+          label="Tópico principal"
           value={draft.topic}
           options={TOPIC_OPTIONS}
           onChange={(event) => setField("topic", event.target.value)}
         />
 
         <Select
-          label="Topico secundario"
+          label="Tópico secundário"
           value={draft.topic2}
           options={[{ value: "", label: "Nenhum" }, ...TOPIC_OPTIONS]}
           onChange={(event) => setField("topic2", event.target.value)}
@@ -102,7 +102,7 @@ export default function BlogForm({
         />
 
         <Input
-          label="Tags (separadas por virgula)"
+          label="Tags (separadas por vírgula)"
           placeholder="Ex.: treino, legging, respirabilidade"
           value={draft.tags}
           onChange={(event) => setField("tags", event.target.value)}
@@ -120,8 +120,8 @@ export default function BlogForm({
 
         <div className="lg:col-span-2">
           <Textarea
-            label="Conteudo"
-            placeholder="Digite o conteudo completo (texto/markdown)."
+            label="Conteúdo"
+            placeholder="Digite o conteúdo completo (texto/markdown)."
             value={draft.content}
             onChange={(event) => setField("content", event.target.value)}
             textareaClassName="min-h-[260px]"

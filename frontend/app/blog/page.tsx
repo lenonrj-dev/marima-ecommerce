@@ -5,9 +5,9 @@ import { fetchBlogPostsListing } from "@/lib/blogData";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Blog Marima de Moda Fitness: dicas de treino, estilo e lancamentos",
+  title: "Blog Marima de Moda Fitness: dicas de treino, estilo e lançamentos",
   description:
-    "Artigos sobre Moda Fitness, conforto, tecnologia textil e dicas para comprar com seguranca na Marima.",
+    "Artigos sobre Moda Fitness, conforto, tecnologia têxtil e dicas para comprar com segurança na Marima.",
 };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;

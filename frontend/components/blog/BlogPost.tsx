@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
@@ -114,14 +114,14 @@ export default function BlogPost({
               <div className="flex w-full max-w-md items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-700 sm:justify-self-end">
                 <Search className="h-4 w-4 text-zinc-500" />
                 <label className="w-full">
-                  <span className="sr-only">Buscar conteudo</span>
+                  <span className="sr-only">Buscar conteúdo</span>
                   <input
                     value={query}
                     onChange={(event) => {
                       setSearchTouched(true);
                       setQuery(event.target.value);
                     }}
-                    placeholder="Buscar conteudo..."
+                    placeholder="Buscar conteúdo..."
                     className="w-full bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-400"
                   />
                 </label>

@@ -122,7 +122,7 @@ export default function CommentsSection({ slug }: { slug: string }) {
         setNextCursor(null);
         setHasMore(false);
       }
-      setFeedback("Nao foi possivel carregar os comentarios agora.");
+      setFeedback("Não foi possível carregar os comentários agora.");
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -184,14 +184,14 @@ export default function CommentsSection({ slug }: { slug: string }) {
 
       setContent("");
       setItems((prev) => [response.data, ...prev]);
-      setFeedback("Comentario publicado com sucesso.");
+      setFeedback("Comentário publicado com sucesso.");
     } catch (error) {
       if (error instanceof HttpError && error.status === 401) {
         setIsCustomer(false);
-        setFeedback("Entre na sua conta para publicar comentarios.");
+        setFeedback("Entre na sua conta para publicar comentários.");
         return;
       }
-      setFeedback("Nao foi possivel publicar seu comentario agora.");
+      setFeedback("Não foi possível publicar seu comentário agora.");
     } finally {
       setSubmitting(false);
     }
@@ -200,7 +200,7 @@ export default function CommentsSection({ slug }: { slug: string }) {
   return (
     <section className="space-y-4" aria-live="polite">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-zinc-900">Comentarios</h2>
+        <h2 className="text-lg font-semibold text-zinc-900">Comentários</h2>
         <span className="text-xs font-semibold text-zinc-500">{commentsCount} publicados</span>
       </div>
 
@@ -218,14 +218,14 @@ export default function CommentsSection({ slug }: { slug: string }) {
 
       <form onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4">
         <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500" htmlFor="blog-comment-content">
-          Escreva seu comentario
+          Escreva seu comentário
         </label>
         <textarea
           id="blog-comment-content"
           name="content"
           value={content}
           onChange={(event) => setContent(event.target.value)}
-          placeholder="Compartilhe sua opiniao sobre este conteudo."
+          placeholder="Compartilhe sua opinião sobre este conteúdo."
           className="min-h-[110px] w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus-visible:ring-2 focus-visible:ring-black/20"
           maxLength={1000}
         />
@@ -236,7 +236,7 @@ export default function CommentsSection({ slug }: { slug: string }) {
             disabled={submitting || authLoading}
             className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {submitting ? "Publicando..." : "Publicar comentario"}
+            {submitting ? "Publicando..." : "Publicar comentário"}
           </button>
         </div>
       </form>
@@ -249,9 +249,9 @@ export default function CommentsSection({ slug }: { slug: string }) {
 
       <div className="space-y-3">
         {loading ? (
-          <p className="text-sm text-zinc-600">Carregando comentarios...</p>
+          <p className="text-sm text-zinc-600">Carregando comentários...</p>
         ) : items.length === 0 ? (
-          <p className="text-sm text-zinc-600">Ainda nao ha comentarios nesta postagem.</p>
+          <p className="text-sm text-zinc-600">Ainda não há comentários nesta postagem.</p>
         ) : (
           items.map((comment) => <CommentCard key={comment.id} comment={comment} />)
         )}
@@ -264,7 +264,7 @@ export default function CommentsSection({ slug }: { slug: string }) {
           disabled={loadingMore}
           className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {loadingMore ? "Carregando..." : "Carregar mais comentarios"}
+          {loadingMore ? "Carregando..." : "Carregar mais comentários"}
         </button>
       ) : null}
     </section>

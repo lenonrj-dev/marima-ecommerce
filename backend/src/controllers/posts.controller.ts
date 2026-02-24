@@ -30,7 +30,7 @@ function resolveListStatus(req: Request): BlogStatus {
   }
 
   if (!isAdmin && requested !== "published") {
-    throw new ApiError(401, "Status solicitado requer autenticacao administrativa.", "AUTH_REQUIRED");
+    throw new ApiError(401, "Status solicitado requer autenticação administrativa.", "AUTH_REQUIRED");
   }
 
   return requested;

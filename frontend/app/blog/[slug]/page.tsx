@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 
   if (!article) {
     return {
-      title: "Artigo da Marima: conteudo sobre moda fitness, treino e performance",
+      title: "Artigo da Marima: conteúdo sobre moda fitness, treino e performance",
     };
   }
 

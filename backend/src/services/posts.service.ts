@@ -68,7 +68,7 @@ const BLOG_CATEGORY_COUNTS_TTL_SECONDS = 60 * 10;
 const BLOG_TOPIC_DEFINITIONS = [
   { id: "treino", label: "Treino" },
   { id: "moda-fitness", label: "Moda fitness" },
-  { id: "tecnologia-textil", label: "Tecnologia textil" },
+  { id: "tecnologia-textil", label: "Tecnologia têxtil" },
   { id: "bem-estar", label: "Bem-estar" },
   { id: "estilo-casual", label: "Estilo casual" },
   { id: "novidades", label: "Novidades" },
@@ -155,7 +155,7 @@ function normalizeTagFilters(value: unknown) {
 function normalizeSlug(value: string | undefined, fallbackTitle: string) {
   const source = (value || "").trim() || fallbackTitle;
   const parsed = slugify(source);
-  if (!parsed) throw new ApiError(400, "Slug invalido.");
+  if (!parsed) throw new ApiError(400, "Slug inválido.");
   return parsed;
 }
 
@@ -197,7 +197,7 @@ async function ensureUniqueSlug(slug: string, ignoreId?: string) {
   const existing = await prisma.post.findUnique({ where: { slug } });
   if (!existing) return;
   if (ignoreId && String(existing.id) === ignoreId) return;
-  throw new ApiError(409, "Slug ja existente.");
+  throw new ApiError(409, "Slug já existente.");
 }
 
 function buildStatusQuery(status: BlogStatus) {
@@ -375,20 +375,20 @@ export async function getBlogPostBySlug(slug: string, options?: { includeDraft?:
 
   if (options?.includeDraft) {
     const post = await prisma.post.findUnique({ where: { slug: parsedSlug } });
-    if (!post) throw new ApiError(404, "Post nao encontrado.");
+    if (!post) throw new ApiError(404, "Post não encontrado.");
     return toPostDTO(post);
   }
 
   return getOrSetCache(`cache:v1:blog:post:${parsedSlug}`, BLOG_POST_TTL_SECONDS, async () => {
     const post = await prisma.post.findFirst({ where: { slug: parsedSlug, published: true } });
-    if (!post) throw new ApiError(404, "Post nao encontrado.");
+    if (!post) throw new ApiError(404, "Post não encontrado.");
     return toPostDTO(post);
   });
 }
 
 export async function getBlogPostById(id: string) {
   const post = await prisma.post.findUnique({ where: { id } });
-  if (!post) throw new ApiError(404, "Post nao encontrado.");
+  if (!post) throw new ApiError(404, "Post não encontrado.");
   return toPostDTO(post);
 }
 
@@ -396,8 +396,8 @@ export async function createBlogPost(input: CreatePostInput) {
   const title = normalizeOptionalString(input.title);
   const content = normalizeOptionalString(input.content);
 
-  if (!title) throw new ApiError(400, "Titulo e obrigatorio.");
-  if (!content) throw new ApiError(400, "Conteudo e obrigatorio.");
+  if (!title) throw new ApiError(400, "Título é obrigatório.");
+  if (!content) throw new ApiError(400, "Conteúdo é obrigatório.");
 
   const slug = normalizeSlug(input.slug, title);
   await ensureUniqueSlug(slug);
@@ -436,7 +436,7 @@ export async function createBlogPost(input: CreatePostInput) {
 
 export async function updateBlogPost(id: string, input: UpdatePostInput) {
   const post = await prisma.post.findUnique({ where: { id } });
-  if (!post) throw new ApiError(404, "Post nao encontrado.");
+  if (!post) throw new ApiError(404, "Post não encontrado.");
 
   const previousSlug = String(post.slug || "");
   const nextData: any = {};
@@ -444,7 +444,7 @@ export async function updateBlogPost(id: string, input: UpdatePostInput) {
   let nextTitle = post.title;
   if (input.title !== undefined) {
     const title = normalizeOptionalString(input.title);
-    if (!title) throw new ApiError(400, "Titulo e obrigatorio.");
+    if (!title) throw new ApiError(400, "Título é obrigatório.");
     nextTitle = title;
     nextData.title = title;
   }
@@ -458,7 +458,7 @@ export async function updateBlogPost(id: string, input: UpdatePostInput) {
   if (input.excerpt !== undefined) nextData.excerpt = normalizeOptionalString(input.excerpt) || "";
   if (input.content !== undefined) {
     const content = normalizeOptionalString(input.content);
-    if (!content) throw new ApiError(400, "Conteudo e obrigatorio.");
+    if (!content) throw new ApiError(400, "Conteúdo é obrigatório.");
     nextData.content = content;
     if (input.readingMinutes === undefined) {
       nextData.readingMinutes = estimateReadingMinutes(content);
@@ -473,7 +473,7 @@ export async function updateBlogPost(id: string, input: UpdatePostInput) {
 
   if (input.readingMinutes !== undefined) {
     if (!Number.isFinite(input.readingMinutes)) {
-      throw new ApiError(400, "Tempo de leitura invalido.");
+      throw new ApiError(400, "Tempo de leitura inválido.");
     }
     nextData.readingMinutes = Math.max(1, Math.floor(input.readingMinutes));
   }
@@ -501,7 +501,7 @@ export async function updateBlogPost(id: string, input: UpdatePostInput) {
 
 export async function deleteBlogPost(id: string) {
   const deleted = await prisma.post.findUnique({ where: { id } });
-  if (!deleted) throw new ApiError(404, "Post nao encontrado.");
+  if (!deleted) throw new ApiError(404, "Post não encontrado.");
 
   await prisma.post.delete({ where: { id: deleted.id } });
   await invalidateBlogCaches([deleted.slug]);

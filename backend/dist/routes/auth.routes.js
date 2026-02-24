@@ -10,6 +10,7 @@ const auth_controller_1 = require("../controllers/auth.controller");
 const auth_1 = require("../middlewares/auth");
 const env_1 = require("../config/env");
 const auth_2 = require("../lib/auth");
+const cookies_1 = require("../utils/cookies");
 const validate_1 = require("../middlewares/validate");
 const router = (0, express_1.Router)();
 const authLimiter = (0, express_rate_limit_1.default)({
@@ -51,6 +52,7 @@ router.get("/debug", auth_1.optionalAuth, (req, res) => {
     }
     const token = (0, auth_2.getToken)(req);
     const cookieNames = Object.keys(req.cookies || {});
+    const cookieOptions = (0, cookies_1.cookieBaseOptions)(req);
     res.json({
         data: {
             hasToken: Boolean(token),
@@ -58,6 +60,14 @@ router.get("/debug", auth_1.optionalAuth, (req, res) => {
             authRole: req.auth?.role || null,
             hasAccessCookie: cookieNames.includes("access_token") || cookieNames.includes("marima_access"),
             cookies: cookieNames,
+            cookieOptions: {
+                sameSite: cookieOptions.sameSite,
+                secure: cookieOptions.secure,
+                domain: cookieOptions.domain || null,
+                path: cookieOptions.path,
+            },
+            origin: req.headers.origin || null,
+            host: req.headers.host || null,
         },
     });
 });

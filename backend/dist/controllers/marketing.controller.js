@@ -8,12 +8,12 @@ function getRequestIp(req) {
     const forwarded = req.headers["x-forwarded-for"];
     if (typeof forwarded === "string") {
         const [firstIp] = forwarded.split(",");
-        return (firstIp || "").trim() || req.ip || "nao informado";
+        return (firstIp || "").trim() || req.ip || "não informado";
     }
     if (Array.isArray(forwarded) && forwarded.length > 0) {
-        return String(forwarded[0] || "").trim() || req.ip || "nao informado";
+        return String(forwarded[0] || "").trim() || req.ip || "não informado";
     }
-    return req.ip || "nao informado";
+    return req.ip || "não informado";
 }
 exports.subscribeNewsletterHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
     const result = await (0, newsletter_service_1.subscribeNewsletter)({
@@ -25,7 +25,7 @@ exports.subscribeNewsletterHandler = (0, notFound_1.asyncHandler)(async (req, re
             data: {
                 ok: true,
                 status: "already_subscribed",
-                message: "Voce ja esta inscrito na newsletter.",
+                message: "Você já está inscrito na newsletter.",
             },
         });
         return;
@@ -44,8 +44,8 @@ exports.subscribeNewsletterHandler = (0, notFound_1.asyncHandler)(async (req, re
             data: {
                 ok: true,
                 status: "subscribed",
-                message: "Inscricao realizada com sucesso.",
-                warning: "Inscricao salva, mas nao foi possivel enviar a notificacao por e-mail agora.",
+                message: "Inscrição realizada com sucesso.",
+                warning: "Inscrição salva, mas não foi possível enviar a notificação por e-mail agora.",
             },
         });
         return;
@@ -54,7 +54,7 @@ exports.subscribeNewsletterHandler = (0, notFound_1.asyncHandler)(async (req, re
         data: {
             ok: true,
             status: "subscribed",
-            message: "Inscricao realizada com sucesso.",
+            message: "Inscrição realizada com sucesso.",
         },
     });
 });

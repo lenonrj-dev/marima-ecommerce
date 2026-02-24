@@ -75,9 +75,9 @@ function toPayload(draft: BlogDraft) {
 function validateDraft(draft: BlogDraft) {
   const errors: Record<string, string> = {};
 
-  if (!draft.title.trim()) errors.title = "Informe o titulo do post.";
+  if (!draft.title.trim()) errors.title = "Informe o título do post.";
   if (!draft.slug.trim()) errors.slug = "Informe o slug do post.";
-  if (!draft.content.trim()) errors.content = "Informe o conteudo do post.";
+  if (!draft.content.trim()) errors.content = "Informe o conteúdo do post.";
 
   if (draft.readingMinutes.trim()) {
     const parsed = Number.parseInt(draft.readingMinutes, 10);
@@ -116,9 +116,9 @@ export default function BlogEditorPage({ mode, postId }: { mode: "create" | "edi
         if (!active) return;
 
         if (error instanceof HttpError) {
-          setErrors({ global: error.message || "Nao foi possivel carregar o post." });
+          setErrors({ global: error.message || "Não foi possível carregar o post." });
         } else {
-          setErrors({ global: "Nao foi possivel carregar o post." });
+          setErrors({ global: "Não foi possível carregar o post." });
         }
       } finally {
         if (active) {
@@ -172,9 +172,9 @@ export default function BlogEditorPage({ mode, postId }: { mode: "create" | "edi
       router.refresh();
     } catch (error) {
       if (error instanceof HttpError) {
-        setErrors({ global: error.message || "Nao foi possivel salvar o post." });
+        setErrors({ global: error.message || "Não foi possível salvar o post." });
       } else {
-        setErrors({ global: "Nao foi possivel salvar o post." });
+        setErrors({ global: "Não foi possível salvar o post." });
       }
     } finally {
       setSaving(false);
@@ -207,7 +207,7 @@ export default function BlogEditorPage({ mode, postId }: { mode: "create" | "edi
       </section>
 
       <Card>
-        <CardHeader title="Conteudo do post" subtitle="Campos principais para publicacao." />
+        <CardHeader title="Conteúdo do post" subtitle="Campos principais para publicação." />
         <CardBody>
           <BlogForm
             draft={draft}

@@ -12,6 +12,7 @@ import {
 import { optionalAuth, requireAuth } from "../middlewares/auth";
 import { env } from "../config/env";
 import { getToken } from "../lib/auth";
+import { cookieBaseOptions } from "../utils/cookies";
 import { validate } from "../middlewares/validate";
 
 const router = Router();
@@ -75,6 +76,7 @@ router.get("/debug", optionalAuth, (req, res) => {
 
   const token = getToken(req);
   const cookieNames = Object.keys(req.cookies || {});
+  const cookieOptions = cookieBaseOptions(req);
   res.json({
     data: {
       hasToken: Boolean(token),
@@ -82,6 +84,14 @@ router.get("/debug", optionalAuth, (req, res) => {
       authRole: req.auth?.role || null,
       hasAccessCookie: cookieNames.includes("access_token") || cookieNames.includes("marima_access"),
       cookies: cookieNames,
+      cookieOptions: {
+        sameSite: cookieOptions.sameSite,
+        secure: cookieOptions.secure,
+        domain: cookieOptions.domain || null,
+        path: cookieOptions.path,
+      },
+      origin: req.headers.origin || null,
+      host: req.headers.host || null,
     },
   });
 });

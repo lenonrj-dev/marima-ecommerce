@@ -24,15 +24,15 @@ function getTransporter() {
 async function sendNewsletterLeadEmail(input) {
     const to = env_1.env.NEWSLETTER_TO || env_1.env.GMAIL_USER;
     if (!env_1.env.GMAIL_USER || !env_1.env.GMAIL_APP_PASSWORD || !to) {
-        console.warn("[newsletter] Config de e-mail ausente. Notificacao por e-mail nao enviada.");
+        console.warn("[newsletter] Configuração de e-mail ausente. Notificação por e-mail não enviada.");
         return { ok: false, reason: "MAIL_CONFIG_MISSING" };
     }
     const subscribedAtIso = input.meta?.subscribedAtIso || new Date().toISOString();
-    const ip = input.meta?.ip || "nao informado";
-    const userAgent = input.meta?.userAgent || "nao informado";
-    const subject = `[Marima Newsletter] Nova inscricao (${input.source})`;
+    const ip = input.meta?.ip || "não informado";
+    const userAgent = input.meta?.userAgent || "não informado";
+    const subject = `[Marima Newsletter] Nova inscrição (${input.source})`;
     const text = [
-        "Nova inscricao na newsletter da Marima.",
+        "Nova inscrição na newsletter da Marima.",
         "",
         `E-mail: ${input.email}`,
         `Origem: ${input.source}`,
@@ -42,7 +42,7 @@ async function sendNewsletterLeadEmail(input) {
     ].join("\n");
     const html = `
     <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111827">
-      <h2 style="margin:0 0 12px 0">Nova inscricao na newsletter</h2>
+      <h2 style="margin:0 0 12px 0">Nova inscrição na newsletter</h2>
       <p style="margin:0 0 8px 0"><strong>E-mail:</strong> ${input.email}</p>
       <p style="margin:0 0 8px 0"><strong>Origem:</strong> ${input.source}</p>
       <p style="margin:0 0 8px 0"><strong>Data/Hora:</strong> ${subscribedAtIso}</p>

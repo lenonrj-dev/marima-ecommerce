@@ -6,7 +6,7 @@ import { env } from "../config/env";
 import { delCache, getOrSetCache } from "../lib/cache";
 import { prisma } from "../lib/prisma";
 import { ApiError } from "../utils/apiError";
-import { ACCESS_COOKIE, REFRESH_COOKIE } from "../middlewares/auth";
+import { ACCESS_COOKIE, LEGACY_ACCESS_COOKIE, LEGACY_REFRESH_COOKIE, REFRESH_COOKIE } from "../middlewares/auth";
 import { cookieBaseOptions, cookieOptions } from "../utils/cookies";
 
 const SALT_ROUNDS = 10;
@@ -65,8 +65,11 @@ export function setAuthCookies(res: Response, payload: TokenPayload, req?: Reque
 }
 
 export function clearAuthCookies(res: Response, req?: Request) {
-  res.clearCookie(ACCESS_COOKIE, cookieBaseOptions(req));
-  res.clearCookie(REFRESH_COOKIE, cookieBaseOptions(req));
+  const options = cookieBaseOptions(req);
+  res.clearCookie(ACCESS_COOKIE, options);
+  res.clearCookie(REFRESH_COOKIE, options);
+  res.clearCookie(LEGACY_ACCESS_COOKIE, options);
+  res.clearCookie(LEGACY_REFRESH_COOKIE, options);
 }
 
 export async function registerCustomer(input: {
@@ -90,7 +93,7 @@ export async function registerCustomer(input: {
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      throw new ApiError(409, "E-mail já cadastrado.");
+      throw new ApiError(409, "E-mail j\u00E1 cadastrado.");
     }
     throw error;
   }
@@ -100,10 +103,10 @@ export async function loginCustomer(input: { email: string; password: string }) 
   const email = input.email.trim().toLowerCase();
   const user = await prisma.customer.findUnique({ where: { email } });
 
-  if (!user) throw new ApiError(401, "Credenciais inválidas.", "AUTH_INVALID_CREDENTIALS");
-  if (!user.active) throw new ApiError(403, "Usuário inativo.", "FORBIDDEN");
+  if (!user) throw new ApiError(401, "Credenciais inv\u00E1lidas.", "AUTH_INVALID_CREDENTIALS");
+  if (!user.active) throw new ApiError(403, "Usu\u00E1rio inativo.", "FORBIDDEN");
   const ok = await bcrypt.compare(input.password, user.passwordHash);
-  if (!ok) throw new ApiError(401, "Credenciais inválidas.", "AUTH_INVALID_CREDENTIALS");
+  if (!ok) throw new ApiError(401, "Credenciais inv\u00E1lidas.", "AUTH_INVALID_CREDENTIALS");
 
   return user;
 }
@@ -112,10 +115,10 @@ export async function loginAdmin(input: { email: string; password: string }) {
   const email = input.email.trim().toLowerCase();
   const user = await prisma.adminUser.findUnique({ where: { email } });
 
-  if (!user) throw new ApiError(401, "Credenciais inválidas.", "AUTH_INVALID_CREDENTIALS");
-  if (!user.active) throw new ApiError(403, "Usuário inativo.", "FORBIDDEN");
+  if (!user) throw new ApiError(401, "Credenciais inv\u00E1lidas.", "AUTH_INVALID_CREDENTIALS");
+  if (!user.active) throw new ApiError(403, "Usu\u00E1rio inativo.", "FORBIDDEN");
   const ok = await bcrypt.compare(input.password, user.passwordHash);
-  if (!ok) throw new ApiError(401, "Credenciais inválidas.", "AUTH_INVALID_CREDENTIALS");
+  if (!ok) throw new ApiError(401, "Credenciais inv\u00E1lidas.", "AUTH_INVALID_CREDENTIALS");
 
   return prisma.adminUser.update({
     where: { id: user.id },
@@ -145,7 +148,7 @@ export async function inviteAdminUser(input: {
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      throw new ApiError(409, "Já existe usuário com este e-mail.");
+      throw new ApiError(409, "J\u00E1 existe usu\u00E1rio com este e-mail.");
     }
     throw error;
   }
@@ -166,7 +169,7 @@ export async function meFromPayload(payload: TokenPayload) {
         },
       });
 
-      if (!admin) throw new ApiError(401, "Sessão expirada.", "AUTH_EXPIRED");
+      if (!admin) throw new ApiError(401, "Sess\u00E3o expirada.", "AUTH_EXPIRED");
 
       return {
         id: admin.id,
@@ -192,7 +195,7 @@ export async function meFromPayload(payload: TokenPayload) {
       },
     });
 
-    if (!customer) throw new ApiError(401, "Sessão expirada.", "AUTH_EXPIRED");
+    if (!customer) throw new ApiError(401, "Sess\u00E3o expirada.", "AUTH_EXPIRED");
 
     return {
       id: customer.id,

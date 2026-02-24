@@ -16,7 +16,7 @@ const corsOriginsSet = new Set(corsOrigins.map((item) => item.replace(/\/$/, "")
 
 const corsConfig: cors.CorsOptions = {
   origin(origin, callback) {
-    if (!origin) return callback(null, false);
+    if (!origin) return callback(null, true);
 
     const normalized = origin.replace(/\/$/, "");
     const allowed = corsOriginsSet.has(normalized);
@@ -35,6 +35,12 @@ const corsConfig: cors.CorsOptions = {
 
 app.use(helmet());
 app.use(morgan("dev"));
+app.use((req, res, next) => {
+  if (req.headers.origin) {
+    res.vary("Origin");
+  }
+  next();
+});
 app.use(cors(corsConfig));
 app.options("*", cors(corsConfig));
 app.use(express.json({ limit: "2mb" }));

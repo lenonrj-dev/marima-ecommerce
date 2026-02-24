@@ -39,7 +39,7 @@ export default function BlogSidebar({ posts = BLOG_POSTS }: { posts?: BlogPostIt
         </div>
 
         <p className="mt-3 text-sm leading-relaxed text-zinc-600">
-          Conteudos com foco em moda fitness, conforto, tecnologia textil e experiencia de compra transparente.
+          Conteúdos com foco em moda fitness, conforto, tecnologia têxtil e experiência de compra transparente.
         </p>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -92,15 +92,15 @@ export default function BlogSidebar({ posts = BLOG_POSTS }: { posts?: BlogPostIt
         <ul className="space-y-2 text-sm text-zinc-700">
           <li className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-zinc-500" />
-            Tecido tecnologico e respirabilidade
+            Tecido tecnológico e respirabilidade
           </li>
           <li className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-zinc-500" />
-            Compressao com conforto real
+            Compressão com conforto real
           </li>
           <li className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-zinc-500" />
-            Transparencia do pedido ao rastreio
+            Transparência do pedido ao rastreio
           </li>
         </ul>
       </Card>

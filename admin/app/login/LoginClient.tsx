@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -101,7 +101,7 @@ export default function LoginClient({ reason }: { reason?: string }) {
               <Input
                 label="E-mail"
                 type="email"
-                placeholder="voce@empresa.com"
+                placeholder="seuemail@empresa.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"

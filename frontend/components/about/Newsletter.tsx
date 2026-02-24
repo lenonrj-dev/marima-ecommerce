@@ -64,9 +64,9 @@ export default function Newsletter() {
           ) : null}
 
           <p className="mt-4 text-xs text-zinc-500">
-            Ao se inscrever, voce concorda com nossa{" "}
+            Ao se inscrever, você concorda com nossa{" "}
             <Link href="/central-de-ajuda/privacidade" className="underline underline-offset-4 hover:text-zinc-900">
-              Politica de Privacidade
+              Política de Privacidade
             </Link>
             .
           </p>

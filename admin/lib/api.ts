@@ -1,4 +1,4 @@
-const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL;
+const RAW_API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
 
 export const API_BASE = typeof RAW_API_BASE === "string" ? RAW_API_BASE.trim().replace(/\/$/, "") : "";
 
@@ -8,13 +8,13 @@ function getApiBase() {
   if (!API_BASE) {
     if (typeof window !== "undefined" && !warnedMissingApiBase) {
       warnedMissingApiBase = true;
-      console.error("NEXT_PUBLIC_API_URL não configurado.");
+      console.error("NEXT_PUBLIC_API_BASE_URL não configurado.");
     }
-    throw new Error("NEXT_PUBLIC_API_URL não configurado.");
+    throw new Error("NEXT_PUBLIC_API_BASE_URL não configurado.");
   }
 
   if (process.env.NODE_ENV === "production" && API_BASE.startsWith("http://")) {
-    throw new Error("Config inválida: NEXT_PUBLIC_API_URL deve ser HTTPS em produção.");
+    throw new Error("Config inválida: NEXT_PUBLIC_API_BASE_URL deve usar HTTPS em produção.");
   }
 
   return API_BASE;
@@ -143,8 +143,8 @@ export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptio
     const code = getPayloadCode(payload);
     const message =
       typeof payload === "object" && payload !== null && "message" in payload
-        ? String((payload as Record<string, unknown>).message || "Falha na requisição")
-        : "Falha na requisição";
+        ? String((payload as Record<string, unknown>).message || "Falha na requisicao")
+        : "Falha na requisicao";
 
     if (response.status === 401 && code !== "AUTH_INVALID_CREDENTIALS") {
       if (code === "AUTH_EXPIRED" || code === undefined) {
@@ -162,4 +162,3 @@ export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptio
 
   return payload as T;
 }
-

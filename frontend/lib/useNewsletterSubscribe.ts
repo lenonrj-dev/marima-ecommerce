@@ -20,7 +20,7 @@ export function useNewsletterSubscribe(source: NewsletterSource) {
     async (email: string) => {
       const normalizedEmail = email.trim();
       if (!normalizedEmail) {
-        setFeedback({ type: "error", message: "Digite um e-mail valido." });
+        setFeedback({ type: "error", message: "Digite um e-mail válido." });
         return false;
       }
 
@@ -32,7 +32,7 @@ export function useNewsletterSubscribe(source: NewsletterSource) {
         if (result.status === "already_subscribed") {
           setFeedback({
             type: "info",
-            message: "Voce ja esta cadastrado para receber novidades.",
+            message: "Você já está cadastrado para receber novidades.",
           });
         } else if (result.warning) {
           setFeedback({

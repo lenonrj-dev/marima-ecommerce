@@ -65,8 +65,11 @@ function setAuthCookies(res, payload, req) {
     res.cookie(auth_1.REFRESH_COOKIE, refresh, (0, cookies_1.cookieOptions)(req, parseDurationMs(env_1.env.REFRESH_TOKEN_TTL)));
 }
 function clearAuthCookies(res, req) {
-    res.clearCookie(auth_1.ACCESS_COOKIE, (0, cookies_1.cookieBaseOptions)(req));
-    res.clearCookie(auth_1.REFRESH_COOKIE, (0, cookies_1.cookieBaseOptions)(req));
+    const options = (0, cookies_1.cookieBaseOptions)(req);
+    res.clearCookie(auth_1.ACCESS_COOKIE, options);
+    res.clearCookie(auth_1.REFRESH_COOKIE, options);
+    res.clearCookie(auth_1.LEGACY_ACCESS_COOKIE, options);
+    res.clearCookie(auth_1.LEGACY_REFRESH_COOKIE, options);
 }
 async function registerCustomer(input) {
     const email = input.email.trim().toLowerCase();
@@ -84,7 +87,7 @@ async function registerCustomer(input) {
     }
     catch (error) {
         if (error instanceof client_1.Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-            throw new apiError_1.ApiError(409, "E-mail j� cadastrado.");
+            throw new apiError_1.ApiError(409, "E-mail j\u00E1 cadastrado.");
         }
         throw error;
     }
@@ -93,24 +96,24 @@ async function loginCustomer(input) {
     const email = input.email.trim().toLowerCase();
     const user = await prisma_1.prisma.customer.findUnique({ where: { email } });
     if (!user)
-        throw new apiError_1.ApiError(401, "Credenciais inv�lidas.", "AUTH_INVALID_CREDENTIALS");
+        throw new apiError_1.ApiError(401, "Credenciais inv\u00E1lidas.", "AUTH_INVALID_CREDENTIALS");
     if (!user.active)
-        throw new apiError_1.ApiError(403, "Usu�rio inativo.", "FORBIDDEN");
+        throw new apiError_1.ApiError(403, "Usu\u00E1rio inativo.", "FORBIDDEN");
     const ok = await bcryptjs_1.default.compare(input.password, user.passwordHash);
     if (!ok)
-        throw new apiError_1.ApiError(401, "Credenciais inv�lidas.", "AUTH_INVALID_CREDENTIALS");
+        throw new apiError_1.ApiError(401, "Credenciais inv\u00E1lidas.", "AUTH_INVALID_CREDENTIALS");
     return user;
 }
 async function loginAdmin(input) {
     const email = input.email.trim().toLowerCase();
     const user = await prisma_1.prisma.adminUser.findUnique({ where: { email } });
     if (!user)
-        throw new apiError_1.ApiError(401, "Credenciais inv�lidas.", "AUTH_INVALID_CREDENTIALS");
+        throw new apiError_1.ApiError(401, "Credenciais inv\u00E1lidas.", "AUTH_INVALID_CREDENTIALS");
     if (!user.active)
-        throw new apiError_1.ApiError(403, "Usu�rio inativo.", "FORBIDDEN");
+        throw new apiError_1.ApiError(403, "Usu\u00E1rio inativo.", "FORBIDDEN");
     const ok = await bcryptjs_1.default.compare(input.password, user.passwordHash);
     if (!ok)
-        throw new apiError_1.ApiError(401, "Credenciais inv�lidas.", "AUTH_INVALID_CREDENTIALS");
+        throw new apiError_1.ApiError(401, "Credenciais inv\u00E1lidas.", "AUTH_INVALID_CREDENTIALS");
     return prisma_1.prisma.adminUser.update({
         where: { id: user.id },
         data: { lastLoginAt: new Date() },
@@ -133,7 +136,7 @@ async function inviteAdminUser(input) {
     }
     catch (error) {
         if (error instanceof client_1.Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-            throw new apiError_1.ApiError(409, "J� existe usu�rio com este e-mail.");
+            throw new apiError_1.ApiError(409, "J\u00E1 existe usu\u00E1rio com este e-mail.");
         }
         throw error;
     }
@@ -153,7 +156,7 @@ async function meFromPayload(payload) {
                 },
             });
             if (!admin)
-                throw new apiError_1.ApiError(401, "Sess�o expirada.", "AUTH_EXPIRED");
+                throw new apiError_1.ApiError(401, "Sess\u00E3o expirada.", "AUTH_EXPIRED");
             return {
                 id: admin.id,
                 type: "admin",
@@ -177,7 +180,7 @@ async function meFromPayload(payload) {
             },
         });
         if (!customer)
-            throw new apiError_1.ApiError(401, "Sess�o expirada.", "AUTH_EXPIRED");
+            throw new apiError_1.ApiError(401, "Sess\u00E3o expirada.", "AUTH_EXPIRED");
         return {
             id: customer.id,
             type: "customer",

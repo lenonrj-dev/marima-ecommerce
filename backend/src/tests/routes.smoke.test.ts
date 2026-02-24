@@ -97,7 +97,7 @@ async function seedBaseData() {
       stock: 16,
       priceCents: 15990,
       shortDescription: "Legging de teste",
-      description: "Descricao completa do produto de teste",
+      description: "Descrição completa do produto de teste",
       additionalInfo: [{ label: "Tecido", value: "Tecnologico" }],
       tags: ["teste"],
       status: "padrao",
@@ -112,7 +112,7 @@ async function seedBaseData() {
       title: "Post Publicado",
       slug: "post-publicado",
       excerpt: "Resumo publicado",
-      content: "Conteudo publicado para testes.",
+      content: "Conte?do publicado para testes.",
       coverImage: "https://example.com/post.jpg",
       tags: ["teste"],
       topic: "novidades",
@@ -130,7 +130,7 @@ async function seedBaseData() {
       title: "Post Rascunho",
       slug: "post-rascunho",
       excerpt: "Resumo rascunho",
-      content: "Conteudo rascunho para testes.",
+      content: "Conte?do rascunho para testes.",
       coverImage: "https://example.com/post-draft.jpg",
       tags: ["teste"],
       topic: "novidades",
@@ -187,7 +187,7 @@ function bodyFixture(path: string) {
   if (path.endsWith("/blog/posts")) {
     return {
       title: "Post Smoke",
-      content: "Conteudo smoke do blog para validacao.",
+      content: "Conte?do smoke do blog para validacao.",
       published: false,
     };
   }
@@ -228,7 +228,7 @@ describe.sequential("API v1 smoke routes", () => {
   it("corrige fluxo do blog por id/slug e compatibilidade de metodos", async () => {
     const created = await adminAgent.post("/api/v1/blog/posts").send({
       title: "Post Integracao",
-      content: "Conteudo de integracao do post.",
+      content: "Conte?do de integracao do post.",
       published: false,
     });
     expect(created.status).toBe(201);
@@ -247,7 +247,7 @@ describe.sequential("API v1 smoke routes", () => {
     await request(app).get(`/api/v1/blog/posts/${draftSlug}`).expect(404);
   }, 20_000);
 
-  it("processa comentarios e busca avancada do blog", async () => {
+  it("processa coment?rios e busca avancada do blog", async () => {
     const listBefore = await request(app).get(`/api/v1/blog/posts/${postSlug}/comments?limit=20`);
     expect(listBefore.status).toBe(200);
 
@@ -281,7 +281,7 @@ describe.sequential("API v1 smoke routes", () => {
   }, 20_000);
 
   it("processa inscricao de newsletter com validacao e deduplicacao", async () => {
-    await request(app).post("/api/v1/marketing/newsletter/subscribe").send({ email: "invalido", source: "blog" }).expect(400);
+    await request(app).post("/api/v1/marketing/newsletter/subscribe").send({ email: "inv?lido", source: "blog" }).expect(400);
 
     const email = "newsletter.teste@exemplo.com";
     const first = await request(app).post("/api/v1/marketing/newsletter/subscribe").send({ email, source: "blog" });

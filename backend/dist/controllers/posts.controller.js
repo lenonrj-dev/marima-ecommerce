@@ -23,7 +23,7 @@ function resolveListStatus(req) {
         return isAdmin ? "all" : "published";
     }
     if (!isAdmin && requested !== "published") {
-        throw new apiError_1.ApiError(401, "Status solicitado requer autenticacao administrativa.", "AUTH_REQUIRED");
+        throw new apiError_1.ApiError(401, "Status solicitado requer autenticação administrativa.", "AUTH_REQUIRED");
     }
     return requested;
 }

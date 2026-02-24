@@ -57,9 +57,9 @@ export default function ReviewsPage() {
         if (!active) return;
 
         if (fetchError instanceof HttpError) {
-          setError(fetchError.message || "Nao foi possivel carregar as avaliacoes.");
+          setError(fetchError.message || "Não foi possível carregar as avaliações.");
         } else {
-          setError("Nao foi possivel carregar as avaliacoes.");
+          setError("Não foi possível carregar as avaliações.");
         }
       } finally {
         if (active) {
@@ -100,9 +100,9 @@ export default function ReviewsPage() {
       setReviews((previous) => previous.map((item) => (item.id === reviewId ? response.data : item)));
     } catch (fetchError) {
       if (fetchError instanceof HttpError) {
-        setError(fetchError.message || "Nao foi possivel atualizar o status.");
+        setError(fetchError.message || "Não foi possível atualizar o status.");
       } else {
-        setError("Nao foi possivel atualizar o status.");
+        setError("Não foi possível atualizar o status.");
       }
     } finally {
       setBusyId(null);
@@ -110,7 +110,7 @@ export default function ReviewsPage() {
   }
 
   async function deleteReview(reviewId: string) {
-    const ok = window.confirm("Excluir esta avaliacao? Esta acao nao pode ser desfeita.");
+    const ok = window.confirm("Excluir esta avaliação? Esta ação não pode ser desfeita.");
     if (!ok) return;
 
     setBusyId(reviewId);
@@ -121,9 +121,9 @@ export default function ReviewsPage() {
       setReviews((previous) => previous.filter((item) => item.id !== reviewId));
     } catch (fetchError) {
       if (fetchError instanceof HttpError) {
-        setError(fetchError.message || "Nao foi possivel excluir a avaliacao.");
+        setError(fetchError.message || "Não foi possível excluir a avaliação.");
       } else {
-        setError("Nao foi possivel excluir a avaliacao.");
+        setError("Não foi possível excluir a avaliação.");
       }
     } finally {
       setBusyId(null);
@@ -134,8 +134,8 @@ export default function ReviewsPage() {
     <div className="space-y-7">
       <section className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Avaliacoes</h1>
-          <p className="mt-1 text-sm text-slate-500">Gerencie publicacao, ocultacao e exclusao de avaliacoes.</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Avaliações</h1>
+          <p className="mt-1 text-sm text-slate-500">Gerencie publicação, ocultação e exclusão de avaliações.</p>
         </div>
       </section>
 
@@ -145,25 +145,25 @@ export default function ReviewsPage() {
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
-          <CardHeader title="Total" subtitle="Avaliacoes cadastradas" />
+          <CardHeader title="Total" subtitle="Avaliações cadastradas" />
           <CardBody>
             <p className="text-3xl font-semibold text-slate-900">{totals.total}</p>
           </CardBody>
         </Card>
         <Card>
-          <CardHeader title="Publicadas" subtitle="Visiveis no site" />
+          <CardHeader title="Publicadas" subtitle="Visíveis no site" />
           <CardBody>
             <p className="text-3xl font-semibold text-slate-900">{totals.published}</p>
           </CardBody>
         </Card>
         <Card>
-          <CardHeader title="Pendentes" subtitle="Aguardando moderacao" />
+          <CardHeader title="Pendentes" subtitle="Aguardando moderação" />
           <CardBody>
             <p className="text-3xl font-semibold text-slate-900">{totals.pending}</p>
           </CardBody>
         </Card>
         <Card>
-          <CardHeader title="Ocultas" subtitle="Nao exibidas no frontend" />
+          <CardHeader title="Ocultas" subtitle="Não exibidas no frontend" />
           <CardBody>
             <p className="text-3xl font-semibold text-slate-900">{totals.hidden}</p>
           </CardBody>
@@ -171,12 +171,12 @@ export default function ReviewsPage() {
       </section>
 
       <Card>
-        <CardHeader title="Lista de avaliacoes" subtitle="Filtre por produto, cliente ou comentario." />
+        <CardHeader title="Lista de avaliações" subtitle="Filtre por produto, cliente ou comentário." />
         <CardBody className="space-y-4">
           <div className="grid gap-3 lg:grid-cols-[1fr_260px_220px]">
             <Input
-              aria-label="Buscar avaliacao"
-              placeholder="Buscar por cliente, e-mail, produto ou comentario..."
+              aria-label="Buscar avaliação"
+              placeholder="Buscar por cliente, e-mail, produto ou comentário..."
               value={q}
               onChange={(event) => setQ(event.target.value)}
             />
@@ -210,7 +210,7 @@ export default function ReviewsPage() {
                     <th className="py-3 pr-3">Nota</th>
                     <th className="py-3 pr-3">Status</th>
                     <th className="py-3 pr-3">Data</th>
-                    <th className="py-3 text-right">Acoes</th>
+                    <th className="py-3 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -279,7 +279,7 @@ export default function ReviewsPage() {
             </div>
           ) : (
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
-              Nenhuma avaliacao encontrada para os filtros atuais.
+              Nenhuma avaliação encontrada para os filtros atuais.
             </div>
           )}
         </CardBody>

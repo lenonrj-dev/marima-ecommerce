@@ -35,8 +35,8 @@ export async function subscribeNewsletter(
   const message =
     response?.data?.message ||
     (status === "already_subscribed"
-      ? "Voce ja esta inscrito na newsletter."
-      : "Inscricao realizada com sucesso.");
+      ? "Você já está inscrito na newsletter."
+      : "Inscrição realizada com sucesso.");
 
   return {
     status,
@@ -47,10 +47,10 @@ export async function subscribeNewsletter(
 
 export function getNewsletterErrorMessage(error: unknown) {
   if (error instanceof HttpError) {
-    if (error.status === 400) return "Digite um e-mail valido.";
+    if (error.status === 400) return "Digite um e-mail válido.";
     if (error.status === 429) return "Muitas tentativas. Tente novamente em alguns minutos.";
     if (typeof error.message === "string" && error.message.trim()) return error.message;
   }
 
-  return "Nao foi possivel concluir sua inscricao agora. Tente novamente.";
+  return "Não foi possível concluir sua inscrição agora. Tente novamente.";
 }

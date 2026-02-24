@@ -25,12 +25,13 @@ export function buildLoginUrl(nextPath: string) {
 
 export async function isAuthenticated() {
   try {
-    await apiFetch("/api/v1/auth/me", {
+    const response = await apiFetch<{ data?: { type?: string; userType?: string } }>("/api/v1/auth/me", {
       method: "GET",
       cache: "no-store",
       skipAuthRedirect: true,
     });
-    return true;
+    const type = response?.data?.type || response?.data?.userType;
+    return type === "customer" || type === "admin";
   } catch {
     return false;
   }

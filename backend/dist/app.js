@@ -20,7 +20,7 @@ const corsOriginsSet = new Set(env_1.corsOrigins.map((item) => item.replace(/\/$
 const corsConfig = {
     origin(origin, callback) {
         if (!origin)
-            return callback(null, false);
+            return callback(null, true);
         const normalized = origin.replace(/\/$/, "");
         const allowed = corsOriginsSet.has(normalized);
         if (!env_1.isProd) {
@@ -35,6 +35,12 @@ const corsConfig = {
 };
 exports.app.use((0, helmet_1.default)());
 exports.app.use((0, morgan_1.default)("dev"));
+exports.app.use((req, res, next) => {
+    if (req.headers.origin) {
+        res.vary("Origin");
+    }
+    next();
+});
 exports.app.use((0, cors_1.default)(corsConfig));
 exports.app.options("*", (0, cors_1.default)(corsConfig));
 exports.app.use(express_1.default.json({ limit: "2mb" }));

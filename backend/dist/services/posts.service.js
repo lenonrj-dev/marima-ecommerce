@@ -20,7 +20,7 @@ const BLOG_CATEGORY_COUNTS_TTL_SECONDS = 60 * 10;
 const BLOG_TOPIC_DEFINITIONS = [
     { id: "treino", label: "Treino" },
     { id: "moda-fitness", label: "Moda fitness" },
-    { id: "tecnologia-textil", label: "Tecnologia textil" },
+    { id: "tecnologia-textil", label: "Tecnologia têxtil" },
     { id: "bem-estar", label: "Bem-estar" },
     { id: "estilo-casual", label: "Estilo casual" },
     { id: "novidades", label: "Novidades" },
@@ -104,7 +104,7 @@ function normalizeSlug(value, fallbackTitle) {
     const source = (value || "").trim() || fallbackTitle;
     const parsed = (0, slug_1.slugify)(source);
     if (!parsed)
-        throw new apiError_1.ApiError(400, "Slug invalido.");
+        throw new apiError_1.ApiError(400, "Slug inválido.");
     return parsed;
 }
 function toIso(value) {
@@ -145,7 +145,7 @@ async function ensureUniqueSlug(slug, ignoreId) {
         return;
     if (ignoreId && String(existing.id) === ignoreId)
         return;
-    throw new apiError_1.ApiError(409, "Slug ja existente.");
+    throw new apiError_1.ApiError(409, "Slug já existente.");
 }
 function buildStatusQuery(status) {
     if (status === "published")
@@ -294,29 +294,29 @@ async function getBlogPostBySlug(slug, options) {
     if (options?.includeDraft) {
         const post = await prisma_1.prisma.post.findUnique({ where: { slug: parsedSlug } });
         if (!post)
-            throw new apiError_1.ApiError(404, "Post nao encontrado.");
+            throw new apiError_1.ApiError(404, "Post não encontrado.");
         return toPostDTO(post);
     }
     return (0, cache_1.getOrSetCache)(`cache:v1:blog:post:${parsedSlug}`, BLOG_POST_TTL_SECONDS, async () => {
         const post = await prisma_1.prisma.post.findFirst({ where: { slug: parsedSlug, published: true } });
         if (!post)
-            throw new apiError_1.ApiError(404, "Post nao encontrado.");
+            throw new apiError_1.ApiError(404, "Post não encontrado.");
         return toPostDTO(post);
     });
 }
 async function getBlogPostById(id) {
     const post = await prisma_1.prisma.post.findUnique({ where: { id } });
     if (!post)
-        throw new apiError_1.ApiError(404, "Post nao encontrado.");
+        throw new apiError_1.ApiError(404, "Post não encontrado.");
     return toPostDTO(post);
 }
 async function createBlogPost(input) {
     const title = normalizeOptionalString(input.title);
     const content = normalizeOptionalString(input.content);
     if (!title)
-        throw new apiError_1.ApiError(400, "Titulo e obrigatorio.");
+        throw new apiError_1.ApiError(400, "Título é obrigatório.");
     if (!content)
-        throw new apiError_1.ApiError(400, "Conteudo e obrigatorio.");
+        throw new apiError_1.ApiError(400, "Conteúdo é obrigatório.");
     const slug = normalizeSlug(input.slug, title);
     await ensureUniqueSlug(slug);
     const published = Boolean(input.published);
@@ -350,14 +350,14 @@ async function createBlogPost(input) {
 async function updateBlogPost(id, input) {
     const post = await prisma_1.prisma.post.findUnique({ where: { id } });
     if (!post)
-        throw new apiError_1.ApiError(404, "Post nao encontrado.");
+        throw new apiError_1.ApiError(404, "Post não encontrado.");
     const previousSlug = String(post.slug || "");
     const nextData = {};
     let nextTitle = post.title;
     if (input.title !== undefined) {
         const title = normalizeOptionalString(input.title);
         if (!title)
-            throw new apiError_1.ApiError(400, "Titulo e obrigatorio.");
+            throw new apiError_1.ApiError(400, "Título é obrigatório.");
         nextTitle = title;
         nextData.title = title;
     }
@@ -371,7 +371,7 @@ async function updateBlogPost(id, input) {
     if (input.content !== undefined) {
         const content = normalizeOptionalString(input.content);
         if (!content)
-            throw new apiError_1.ApiError(400, "Conteudo e obrigatorio.");
+            throw new apiError_1.ApiError(400, "Conteúdo é obrigatório.");
         nextData.content = content;
         if (input.readingMinutes === undefined) {
             nextData.readingMinutes = estimateReadingMinutes(content);
@@ -391,7 +391,7 @@ async function updateBlogPost(id, input) {
         nextData.authorName = normalizeOptionalString(input.authorName) || "";
     if (input.readingMinutes !== undefined) {
         if (!Number.isFinite(input.readingMinutes)) {
-            throw new apiError_1.ApiError(400, "Tempo de leitura invalido.");
+            throw new apiError_1.ApiError(400, "Tempo de leitura inválido.");
         }
         nextData.readingMinutes = Math.max(1, Math.floor(input.readingMinutes));
     }
@@ -418,7 +418,7 @@ async function updateBlogPost(id, input) {
 async function deleteBlogPost(id) {
     const deleted = await prisma_1.prisma.post.findUnique({ where: { id } });
     if (!deleted)
-        throw new apiError_1.ApiError(404, "Post nao encontrado.");
+        throw new apiError_1.ApiError(404, "Post não encontrado.");
     await prisma_1.prisma.post.delete({ where: { id: deleted.id } });
     await invalidateBlogCaches([deleted.slug]);
     return { id: String(deleted.id) };

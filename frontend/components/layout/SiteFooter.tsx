@@ -15,7 +15,7 @@ export default function SiteFooter() {
       <Container>
         <div className="grid gap-10 border-t border-zinc-100 py-12 md:grid-cols-4">
           <div>
-            <Link href="/" aria-label={`${SITE_COPY.brand} - Inicio`} className="inline-flex">
+            <Link href="/" aria-label={`${SITE_COPY.brand} - Início`} className="inline-flex">
               <span className="relative inline-flex items-center">
                 <Image
                   src={logoSrc}
@@ -34,11 +34,11 @@ export default function SiteFooter() {
           </div>
 
           <div>
-            <p className="text-sm font-semibold text-zinc-900">Navegacao</p>
+            <p className="text-sm font-semibold text-zinc-900">Navegação</p>
             <ul className="mt-3 space-y-2 text-sm text-zinc-600">
               <li>
                 <Link className="hover:underline" href="/">
-                  Inicio
+                  Início
                 </Link>
               </li>
               <li>
@@ -61,6 +61,11 @@ export default function SiteFooter() {
                   Ajuda
                 </Link>
               </li>
+              <li>
+                <Link className="hover:underline" href="/central-de-ajuda/privacidade">
+                  Privacidade e cookies
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -79,7 +84,7 @@ export default function SiteFooter() {
               </li>
               <li>
                 <Link className="hover:underline" href="/dashboard/endereco">
-                  Enderecos
+                  Endereços
                 </Link>
               </li>
               <li>
@@ -103,7 +108,7 @@ export default function SiteFooter() {
 
           <div>
             <p className="text-sm font-semibold text-zinc-900">Novidades Marima</p>
-            <p className="mt-3 text-sm text-zinc-500">Receba lancamentos e ofertas em primeira mao.</p>
+            <p className="mt-3 text-sm text-zinc-500">Receba lançamentos e ofertas em primeira mão.</p>
             <FooterNewsletterForm />
           </div>
         </div>

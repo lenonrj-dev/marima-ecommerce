@@ -32,7 +32,7 @@ const EMPTY_SUMMARY: ProductReviewSummary = {
 function Stars({ value }: { value: number }) {
   const full = Math.max(0, Math.min(5, Math.round(value)));
   return (
-    <div className="flex items-center gap-1" aria-label={`Avaliacao ${full} de 5`}>
+    <div className="flex items-center gap-1" aria-label={`Avaliação ${full} de 5`}>
       {Array.from({ length: 5 }).map((_, i) => (
         <Star
           key={i}
@@ -212,7 +212,7 @@ export default function ProductDetailsTabs({ product }: { product: ProductListIt
 
     const comment = formComment.trim();
     if (comment.length < 5) {
-      setFormError("Escreva ao menos 5 caracteres para enviar sua avaliacao.");
+      setFormError("Escreva ao menos 5 caracteres para enviar sua avaliação.");
       setFormSuccess(null);
       return;
     }
@@ -238,7 +238,7 @@ export default function ProductDetailsTabs({ product }: { product: ProductListIt
       setFormRating(5);
       setPage(1);
       setReloadTick((value) => value + 1);
-      setFormSuccess("Avaliacao enviada com sucesso.");
+      setFormSuccess("Avaliação enviada com sucesso.");
     } catch (error) {
       if (error instanceof HttpError && error.status === 401) {
         router.push(buildLoginUrl(`/produtos/${product.slug}`));
@@ -246,9 +246,9 @@ export default function ProductDetailsTabs({ product }: { product: ProductListIt
       }
 
       if (error instanceof HttpError) {
-        setFormError(error.message || "Nao foi possivel enviar a avaliacao.");
+        setFormError(error.message || "Não foi possível enviar a avaliação.");
       } else {
-        setFormError("Nao foi possivel enviar a avaliacao.");
+        setFormError("Não foi possível enviar a avaliação.");
       }
     } finally {
       setSubmitting(false);
@@ -268,7 +268,7 @@ export default function ProductDetailsTabs({ product }: { product: ProductListIt
                 (tab === "description" ? "text-zinc-900" : "")
               }
             >
-              Descricao
+              Descrição
               {tab === "description" && (
                 <span className="absolute left-0 right-0 top-full mx-auto mt-2 h-[2px] w-10 bg-zinc-900" />
               )}
@@ -282,7 +282,7 @@ export default function ProductDetailsTabs({ product }: { product: ProductListIt
                 (tab === "additional" ? "text-zinc-900" : "")
               }
             >
-              Informacoes adicionais
+              Informações adicionais
               {tab === "additional" && (
                 <span className="absolute left-0 right-0 top-full mx-auto mt-2 h-[2px] w-10 bg-zinc-900" />
               )}
@@ -296,7 +296,7 @@ export default function ProductDetailsTabs({ product }: { product: ProductListIt
                 (tab === "review" ? "text-zinc-900" : "")
               }
             >
-              Avaliacoes
+              Avaliações
               {tab === "review" && (
                 <span className="absolute left-0 right-0 top-full mx-auto mt-2 h-[2px] w-10 bg-zinc-900" />
               )}
@@ -320,7 +320,7 @@ export default function ProductDetailsTabs({ product }: { product: ProductListIt
                     ))}
                   </div>
                 ) : (
-                  <div className="px-4 py-5 text-sm text-zinc-500">Nenhuma informacao adicional para este produto.</div>
+                  <div className="px-4 py-5 text-sm text-zinc-500">Nenhuma informação adicional para este produto.</div>
                 )}
               </div>
             )}
@@ -336,7 +336,7 @@ export default function ProductDetailsTabs({ product }: { product: ProductListIt
                         <Stars value={summary.avgRating} />
                       </div>
                       <p className="mt-2 text-xs text-zinc-500">
-                        ({summary.total} avaliacao{summary.total === 1 ? "" : "es"})
+                        ({summary.total} avaliação{summary.total === 1 ? "" : "es"})
                       </p>
                       {loadingSummary ? <p className="mt-1 text-xs text-zinc-400">Atualizando...</p> : null}
                     </div>
@@ -356,7 +356,7 @@ export default function ProductDetailsTabs({ product }: { product: ProductListIt
                 </div>
 
                 <form onSubmit={onSubmitReview} className="rounded-xl border border-zinc-200 bg-white p-6">
-                  <h3 className="text-base font-semibold text-zinc-900">Escreva sua avaliacao</h3>
+                  <h3 className="text-base font-semibold text-zinc-900">Escreva sua avaliação</h3>
 
                   <div className="mt-4 grid gap-4 sm:grid-cols-[180px_1fr]">
                     <label className="space-y-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
@@ -375,11 +375,11 @@ export default function ProductDetailsTabs({ product }: { product: ProductListIt
                     </label>
 
                     <label className="space-y-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                      Comentario
+                      Comentário
                       <textarea
                         value={formComment}
                         onChange={(event) => setFormComment(event.target.value)}
-                        placeholder="Conte como foi sua experiencia com este produto."
+                        placeholder="Conte como foi sua experiência com este produto."
                         className="min-h-[110px] w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
                       />
                     </label>
@@ -394,9 +394,9 @@ export default function ProductDetailsTabs({ product }: { product: ProductListIt
                       disabled={submitting}
                       className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-900 px-5 text-sm font-semibold text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {submitting ? "Enviando..." : "Enviar avaliacao"}
+                      {submitting ? "Enviando..." : "Enviar avaliação"}
                     </button>
-                    <p className="text-xs text-zinc-500">Disponivel para clientes com conta logada.</p>
+                    <p className="text-xs text-zinc-500">Disponível para clientes com conta logada.</p>
                   </div>
                 </form>
 
@@ -422,8 +422,8 @@ export default function ProductDetailsTabs({ product }: { product: ProductListIt
                         >
                           <option value="recent">Mais recentes</option>
                           <option value="oldest">Mais antigas</option>
-                          <option value="rating_desc">Maior avaliacao</option>
-                          <option value="rating_asc">Menor avaliacao</option>
+                          <option value="rating_desc">Maior avaliação</option>
+                          <option value="rating_asc">Menor avaliação</option>
                         </select>
                         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                       </label>
@@ -440,7 +440,7 @@ export default function ProductDetailsTabs({ product }: { product: ProductListIt
                       reviews.map((review) => <ReviewRow key={review.id} review={review} />)
                     ) : (
                       <div className="rounded-md border border-dashed border-zinc-200 px-4 py-5 text-sm text-zinc-500">
-                        Ainda nao ha avaliacoes publicadas para este produto.
+                        Ainda não há avaliações publicadas para este produto.
                       </div>
                     )}
                   </div>
@@ -456,7 +456,7 @@ export default function ProductDetailsTabs({ product }: { product: ProductListIt
                         Anterior
                       </button>
                       <span className="text-xs text-zinc-500">
-                        Pagina {meta.page} de {meta.pages}
+                        Página {meta.page} de {meta.pages}
                       </span>
                       <button
                         type="button"
@@ -464,7 +464,7 @@ export default function ProductDetailsTabs({ product }: { product: ProductListIt
                         disabled={meta.page >= meta.pages}
                         className="inline-flex h-9 items-center justify-center rounded-md border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-not-allowed disabled:opacity-45"
                       >
-                        Proxima
+                        Próxima
                       </button>
                     </div>
                   ) : null}

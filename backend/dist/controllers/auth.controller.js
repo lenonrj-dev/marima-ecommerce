@@ -108,8 +108,9 @@ exports.meHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
     const me = await (0, auth_service_1.meFromPayload)(req.auth);
     res.json({
         data: {
-            userType: me.type,
             ...me,
+            type: me.type,
+            userType: me.type,
         },
     });
 });

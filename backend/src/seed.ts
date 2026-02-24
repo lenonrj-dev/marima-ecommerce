@@ -1,4 +1,4 @@
-﻿import bcrypt from "bcryptjs";
+import bcrypt from "bcryptjs";
 import { prisma } from "./lib/prisma";
 import { toCents } from "./utils/money";
 
@@ -11,7 +11,7 @@ async function upsertStoreSettings() {
     timezone: "America/Sao_Paulo",
     currency: "BRL",
     supportEmail: "suporte@minhaloja.com",
-    policy: "Trocas em ate 7 dias. Consulte regras no site.",
+    policy: "Trocas em até 7 dias. Consulte regras no site.",
   };
 
   if (existing) {
@@ -93,9 +93,9 @@ async function upsertProducts() {
       stock: 8,
       priceCents: toCents(159.9),
       compareAtPriceCents: toCents(199.9),
-      shortDescription: "Modela o corpo com alta compressao e conforto.",
-      description: "Legging seamless com alta compressao, cintura alta e tecido respiravel. Ideal para treinos e uso diario.",
-      tags: ["compressao", "cintura alta", "best-seller"],
+      shortDescription: "Modela o corpo com alta compressão e conforto.",
+      description: "Legging seamless com alta compressão, cintura alta e tecido respirável. Ideal para treinos e uso diário.",
+      tags: ["compressão", "cintura alta", "best-seller"],
       status: "destaque",
       active: true,
       images: sampleImages,
@@ -114,9 +114,9 @@ async function upsertProducts() {
       size: "P, M, G",
       stock: 6,
       priceCents: toCents(119.9),
-      shortDescription: "Sustentacao media com acabamento premium.",
-      description: "Top com sustentacao media e tecido de secagem rapida.",
-      tags: ["secagem rapida", "suporte", "novo"],
+      shortDescription: "Sustentação média com acabamento premium.",
+      description: "Top com sustentação média e tecido de secagem rápida.",
+      tags: ["secagem rápida", "suporte", "novo"],
       status: "novo",
       active: true,
       images: sampleImages,
@@ -140,9 +140,9 @@ async function upsertProducts() {
       stock: 45,
       priceCents: toCents(89.9),
       compareAtPriceCents: toCents(99.9),
-      shortDescription: "Leve, respiravel e com caimento perfeito.",
-      description: "Camiseta dry com tecido leve e respiravel.",
-      tags: ["dry", "respiravel", "oferta"],
+      shortDescription: "Leve, respirável e com caimento perfeito.",
+      description: "Camiseta dry com tecido leve e respirável.",
+      tags: ["dry", "respirável", "oferta"],
       status: "oferta",
       active: true,
       images: sampleImages,
@@ -172,38 +172,38 @@ async function upsertIntegrations() {
   const integrations = [
     {
       group: "pagamentos",
-      name: "Pix + Cartao",
-      description: "Conecte gateway para Pix, cartao e boleto.",
+      name: "Pix + Cartão",
+      description: "Conecte gateway para Pix, cartão e boleto.",
       connected: false,
     },
     {
       group: "frete",
       name: "Correios / Melhor Envio",
-      description: "Calculo de frete e geracao de etiqueta.",
+      description: "Cálculo de frete e geração de etiqueta.",
       connected: false,
     },
     {
       group: "email",
       name: "E-mail Marketing",
-      description: "Automacao para carrinhos abandonados e pos-compra.",
+      description: "Automação para carrinhos abandonados e pós-compra.",
       connected: false,
     },
     {
       group: "whatsapp",
       name: "WhatsApp",
-      description: "Recuperacao, suporte e campanhas via WhatsApp.",
+      description: "Recuperação, suporte e campanhas via WhatsApp.",
       connected: false,
     },
     {
       group: "analytics",
       name: "Google Analytics",
-      description: "Metricas de trafego e conversao transacional.",
+      description: "Métricas de tráfego e conversão transacional.",
       connected: false,
     },
     {
       group: "pixel",
       name: "Meta Pixel",
-      description: "Atribuicao de campanhas e eventos de compra.",
+      description: "Atribuição de campanhas e eventos de compra.",
       connected: false,
     },
   ] as const;
@@ -262,7 +262,7 @@ async function upsertCouponsAndCashback() {
   await prisma.coupon.upsert({
     where: { code: "FRETEGRATIS" },
     update: {
-      description: "Frete gratis acima de R$199",
+      description: "Frete grátis acima de R$199",
       type: "shipping",
       amount: 0,
       minSubtotalCents: toCents(199),
@@ -285,7 +285,7 @@ async function upsertCouponsAndCashback() {
   });
 
   const cashbackRule = await prisma.cashbackRule.findFirst({
-    where: { name: "Cashback padrao" },
+    where: { name: "Cashback padrão" },
     select: { id: true },
   });
 
@@ -303,7 +303,7 @@ async function upsertCouponsAndCashback() {
   } else {
     await prisma.cashbackRule.create({
       data: {
-        name: "Cashback padrao",
+        name: "Cashback padrão",
         percent: 5,
         validDays: 30,
         minSubtotalCents: toCents(150),
@@ -477,7 +477,7 @@ async function seed() {
   await upsertCouponsAndCashback();
   await upsertCustomerAndOrder();
 
-  console.log("Seed concluido com sucesso.");
+  console.log("Seed concluído com sucesso.");
   console.log(`Admin: ${adminEmail} / ${adminPassword}`);
 }
 

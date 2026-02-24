@@ -88,7 +88,7 @@ type BlogPostListOptions = {
 export const BLOG_TOPICS: BlogTopic[] = [
   { id: "treino", label: "Treino" },
   { id: "moda-fitness", label: "Moda fitness" },
-  { id: "tecnologia-textil", label: "Tecnologia textil" },
+  { id: "tecnologia-textil", label: "Tecnologia têxtil" },
   { id: "bem-estar", label: "Bem-estar" },
   { id: "estilo-casual", label: "Estilo casual" },
   { id: "novidades", label: "Novidades" },
@@ -98,7 +98,7 @@ export const BLOG_TOPICS: BlogTopic[] = [
 
 export const BLOG_AUTHOR: BlogAuthor = {
   name: "Time Marima",
-  role: "Conteudo e curadoria",
+  role: "Conteúdo e curadoria",
   avatar:
     "https://res.cloudinary.com/dxeooztro/image/upload/v1764855923/products/wm3vuf0hbfpmvf92ofma.png",
   location: "Volta Redonda, RJ",
@@ -167,7 +167,7 @@ function estimateReadingMinutes(content: string, explicit?: number) {
 function parseContentBlocks(rawContent: string) {
   const content = String(rawContent || "").replace(/\r/g, "").trim();
   if (!content) {
-    return [{ type: "p", text: "Conteudo indisponivel." }] as BlogArticle["content"];
+    return [{ type: "p", text: "Conteúdo indisponível." }] as BlogArticle["content"];
   }
 
   const blocks: BlogArticle["content"] = [];
@@ -212,7 +212,7 @@ function parseContentBlocks(rawContent: string) {
   flushListBuffer();
 
   if (!blocks.length) {
-    return [{ type: "p", text: "Conteudo indisponivel." }] as BlogArticle["content"];
+    return [{ type: "p", text: "Conteúdo indisponível." }] as BlogArticle["content"];
   }
 
   return blocks;

@@ -1,42 +1,47 @@
 import type { Request } from "express";
 import { env, isProd } from "../config/env";
 
-type SameSite = "lax" | "none";
+type SameSite = "lax" | "none" | "strict";
 
 function isLocalhostHost(value: string) {
   const host = value.toLowerCase();
   return host.includes("localhost") || host.includes("127.0.0.1");
 }
 
-function shouldUseCrossSiteCookies(req?: Request) {
+function resolveSameSite(req?: Request): SameSite {
+  if (env.COOKIE_SAMESITE) return env.COOKIE_SAMESITE;
+  if (isProd) return "none";
+  if (!req) return "lax";
+
+  const host = typeof req.headers.host === "string" ? req.headers.host : "";
+  const origin = typeof req.headers.origin === "string" ? req.headers.origin : "";
+  const originIsHttps = origin.toLowerCase().startsWith("https://");
+  const hostIsNgrok = host.toLowerCase().includes("ngrok");
+
+  if (originIsHttps && !isLocalhostHost(origin)) return "none";
+  if (hostIsNgrok) return "none";
+  return "lax";
+}
+
+function resolveSecure(req?: Request) {
+  if (typeof env.COOKIE_SECURE === "boolean") return env.COOKIE_SECURE;
   if (isProd) return true;
   if (!req) return false;
 
-  const host = typeof req.headers.host === "string" ? req.headers.host : "";
-  if (host.toLowerCase().includes("ngrok")) return true;
-
   const origin = typeof req.headers.origin === "string" ? req.headers.origin : "";
-  if (!origin) return false;
+  if (origin.toLowerCase().startsWith("https://") && !isLocalhostHost(origin)) return true;
 
-  const isHttpsOrigin = origin.toLowerCase().startsWith("https://");
-  if (!isHttpsOrigin) return false;
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  if (typeof forwardedProto === "string" && forwardedProto.toLowerCase().includes("https")) return true;
 
-  // Evita quebrar DEV local (http://localhost:*).
-  if (isLocalhostHost(origin)) return false;
-
-  // Para origens HTTPS externas (Vercel/produção), usa SameSite=None.
-  return true;
+  return false;
 }
 
 export function cookieBaseOptions(req?: Request) {
-  const crossSite = shouldUseCrossSiteCookies(req);
-  const sameSite: SameSite = crossSite ? "none" : "lax";
-  const secure = crossSite ? true : isProd;
-
   return {
     httpOnly: true,
-    secure,
-    sameSite,
+    secure: resolveSecure(req),
+    sameSite: resolveSameSite(req),
     domain: env.COOKIE_DOMAIN || undefined,
     path: "/",
   } as const;
@@ -48,4 +53,3 @@ export function cookieOptions(req: Request | undefined, maxAgeMs: number) {
     maxAge: maxAgeMs,
   };
 }
-

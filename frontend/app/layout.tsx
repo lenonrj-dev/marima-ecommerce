@@ -6,6 +6,8 @@ import SiteHeader from "@/components/layout/SiteHeader";
 import SiteFooter from "@/components/layout/SiteFooter";
 import { CartProvider } from "@/components/cart/CartProvider";
 import CartDrawer from "@/components/cart/CartDrawer";
+import CookieConsentBanner from "@/components/privacy/CookieConsentBanner";
+import ConsentScripts from "@/components/privacy/ConsentScripts";
 import { SITE_COPY } from "@/lib/siteCopy";
 import { SITE_URL } from "@/lib/seo";
 
@@ -32,6 +34,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
           <SiteFooter />
           <CartDrawer />
+          <CookieConsentBanner />
+          <ConsentScripts />
         </CartProvider>
       </body>
     </html>

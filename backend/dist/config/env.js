@@ -18,6 +18,20 @@ const schema = zod_1.z.object({
     ACCESS_TOKEN_TTL: zod_1.z.string().default("15m"),
     REFRESH_TOKEN_TTL: zod_1.z.string().default("7d"),
     COOKIE_DOMAIN: zod_1.z.string().optional(),
+    COOKIE_SAMESITE: zod_1.z.preprocess((value) => {
+        if (typeof value === "string" && value.trim() === "")
+            return undefined;
+        return value;
+    }, zod_1.z.enum(["none", "lax", "strict"]).optional()),
+    COOKIE_SECURE: zod_1.z.preprocess((value) => {
+        if (typeof value === "string" && value.trim() === "")
+            return undefined;
+        return value;
+    }, zod_1.z.enum(["true", "false"]).optional().transform((value) => {
+        if (value === undefined)
+            return undefined;
+        return value === "true";
+    })),
     STORE_URL: zod_1.z.string().url().optional(),
     ADMIN_URL: zod_1.z.string().url().optional(),
     API_PUBLIC_URL: zod_1.z.string().url().optional(),

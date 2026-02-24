@@ -36,7 +36,7 @@ function toDistribution() {
 async function resolveProductIdentity(input) {
     const raw = String(input || "").trim();
     if (!raw)
-        throw new apiError_1.ApiError(400, "Produto invalido.");
+        throw new apiError_1.ApiError(400, "Produto inválido.");
     const byId = await prisma_1.prisma.product.findUnique({
         where: { id: raw },
         select: { id: true, slug: true, name: true },
@@ -47,7 +47,7 @@ async function resolveProductIdentity(input) {
             select: { id: true, slug: true, name: true },
         }));
     if (!product)
-        throw new apiError_1.ApiError(404, "Produto nao encontrado.");
+        throw new apiError_1.ApiError(404, "Produto não encontrado.");
     return {
         id: String(product.id),
         slug: String(product.slug || ""),
@@ -137,7 +137,7 @@ async function createMeReview(customerId, input) {
     if (rating < 1 || rating > 5)
         throw new apiError_1.ApiError(400, "A nota deve estar entre 1 e 5.");
     if (comment.length < 5 || comment.length > 2000) {
-        throw new apiError_1.ApiError(400, "Comentario deve ter entre 5 e 2000 caracteres.");
+        throw new apiError_1.ApiError(400, "Comentário deve ter entre 5 e 2000 caracteres.");
     }
     const existing = await prisma_1.prisma.review.findUnique({
         where: {
@@ -148,7 +148,7 @@ async function createMeReview(customerId, input) {
         },
     });
     if (existing)
-        throw new apiError_1.ApiError(409, "Voce ja avaliou este produto.");
+        throw new apiError_1.ApiError(409, "Você já avaliou este produto.");
     const verifiedPurchase = Boolean(await prisma_1.prisma.orderItem.findFirst({
         where: {
             productId: product.id,
@@ -174,7 +174,7 @@ async function createMeReview(customerId, input) {
     }
     catch (error) {
         if (error?.code === "P2002")
-            throw new apiError_1.ApiError(409, "Voce ja avaliou este produto.");
+            throw new apiError_1.ApiError(409, "Você já avaliou este produto.");
         throw error;
     }
     await refreshProductReviewStats(product);
@@ -288,7 +288,7 @@ async function listMeReviews(customerId, input) {
 async function patchAdminReviewStatus(reviewId, status) {
     const review = await prisma_1.prisma.review.findUnique({ where: { id: reviewId } });
     if (!review)
-        throw new apiError_1.ApiError(404, "Avaliacao nao encontrada.");
+        throw new apiError_1.ApiError(404, "Avaliação não encontrada.");
     await prisma_1.prisma.review.update({
         where: { id: reviewId },
         data: { status },
@@ -312,7 +312,7 @@ async function patchAdminReviewStatus(reviewId, status) {
         },
     });
     if (!refreshed)
-        throw new apiError_1.ApiError(404, "Avaliacao nao encontrada.");
+        throw new apiError_1.ApiError(404, "Avaliação não encontrada.");
     return {
         id: String(refreshed.id),
         productId: String(refreshed.productId || ""),
@@ -332,7 +332,7 @@ async function patchAdminReviewStatus(reviewId, status) {
 async function deleteAdminReview(reviewId) {
     const review = await prisma_1.prisma.review.findUnique({ where: { id: reviewId } });
     if (!review)
-        throw new apiError_1.ApiError(404, "Avaliacao nao encontrada.");
+        throw new apiError_1.ApiError(404, "Avaliação não encontrada.");
     await prisma_1.prisma.review.delete({ where: { id: reviewId } });
     const product = await prisma_1.prisma.product.findUnique({
         where: { id: review.productId },

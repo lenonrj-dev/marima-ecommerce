@@ -1,4 +1,4 @@
-﻿import dotenv from "dotenv";
+import dotenv from "dotenv";
 import { z } from "zod";
 
 dotenv.config();
@@ -14,6 +14,23 @@ const schema = z.object({
   ACCESS_TOKEN_TTL: z.string().default("15m"),
   REFRESH_TOKEN_TTL: z.string().default("7d"),
   COOKIE_DOMAIN: z.string().optional(),
+  COOKIE_SAMESITE: z.preprocess(
+    (value) => {
+      if (typeof value === "string" && value.trim() === "") return undefined;
+      return value;
+    },
+    z.enum(["none", "lax", "strict"]).optional(),
+  ),
+  COOKIE_SECURE: z.preprocess(
+    (value) => {
+      if (typeof value === "string" && value.trim() === "") return undefined;
+      return value;
+    },
+    z.enum(["true", "false"]).optional().transform((value) => {
+      if (value === undefined) return undefined;
+      return value === "true";
+    }),
+  ),
   STORE_URL: z.string().url().optional(),
   ADMIN_URL: z.string().url().optional(),
   API_PUBLIC_URL: z.string().url().optional(),

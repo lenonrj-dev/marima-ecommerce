@@ -21,10 +21,10 @@ export default function BlogNewsletter() {
       <Container>
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
-            Receba conteudos exclusivos da Marima
+            Receba conteúdos exclusivos da Marima
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-zinc-600">
-            Receba os melhores artigos no seu e-mail, sem spam. Voce pode cancelar quando quiser.
+            Receba os melhores artigos no seu e-mail, sem spam. Você pode cancelar quando quiser.
           </p>
 
           <form className="mx-auto mt-7 flex max-w-xl flex-col gap-3 sm:flex-row" onSubmit={handleSubmit}>
@@ -55,7 +55,7 @@ export default function BlogNewsletter() {
             </p>
           ) : null}
 
-          <p className="mt-3 text-[11px] text-zinc-500">Conteudo util, direto e sem exageros.</p>
+          <p className="mt-3 text-[11px] text-zinc-500">Conteúdo útil, direto e sem exageros.</p>
         </div>
       </Container>
     </section>

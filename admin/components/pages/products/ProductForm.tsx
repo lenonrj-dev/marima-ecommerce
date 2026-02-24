@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useMemo } from "react";
 import { Badge, Button, Input, Select, Textarea, Toggle, cn } from "../../dashboard/ui";
@@ -558,9 +558,9 @@ export default function ProductForm({
       <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-slate-900">Informacoes adicionais</p>
+            <p className="text-sm font-semibold text-slate-900">Informações adicionais</p>
             <p className="mt-1 text-xs text-slate-500">
-              Configure os itens exibidos na aba de informacoes adicionais da pagina do produto.
+              Configure os itens exibidos na aba de informações adicionais da página do produto.
             </p>
           </div>
 

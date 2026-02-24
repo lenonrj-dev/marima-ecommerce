@@ -39,7 +39,7 @@ export async function generateMetadata({
 
   if (!topic) {
     return {
-      title: "Central de Ajuda Marima: politicas, entregas, trocas e privacidade",
+      title: "Central de Ajuda Marima: políticas, entregas, trocas e privacidade",
     };
   }
 

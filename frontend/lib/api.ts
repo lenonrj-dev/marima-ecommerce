@@ -1,5 +1,6 @@
-const RAW_PUBLIC_API_BASE = process.env.NEXT_PUBLIC_API_URL;
-const RAW_SERVER_API_BASE = process.env.API_URL;
+const RAW_PUBLIC_API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
+const RAW_SERVER_API_BASE = process.env.API_BASE_URL || process.env.API_URL;
 const PROXY_API_BASE = "/api";
 
 function normalizeApiBase(base: string) {
@@ -25,13 +26,13 @@ function getApiBase() {
   if (!API_BASE) {
     if (typeof window !== "undefined" && !warnedMissingApiBase) {
       warnedMissingApiBase = true;
-      console.error("NEXT_PUBLIC_API_URL nao configurado. Usando fallback relativo /api.");
+      console.error("NEXT_PUBLIC_API_BASE_URL não configurado. Usando fallback relativo /api.");
     }
     return PROXY_API_BASE;
   }
 
   if (process.env.NODE_ENV === "production" && /^http:\/\//i.test(API_BASE)) {
-    throw new Error("Config invalida: a base da API deve usar HTTPS em producao.");
+    throw new Error("Config inválida: a base da API deve usar HTTPS em produção.");
   }
 
   return API_BASE;
@@ -241,7 +242,7 @@ export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptio
 
     const finalMessage =
       response.status === 401 && (code === "AUTH_EXPIRED" || code === undefined)
-        ? "Sua sessao expirou. Faca login novamente para continuar."
+        ? "Sua sessão expirou. Faça login novamente para continuar."
         : message;
 
     throw new HttpError(response.status, finalMessage, payload);

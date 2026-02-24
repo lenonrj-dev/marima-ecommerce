@@ -105,7 +105,7 @@ async function enforceCreateRateLimit(customerId: string, ip?: string) {
       return;
     } catch (error) {
       if (error instanceof ApiError) throw error;
-      // Fallback em memoria quando Redis indisponivel.
+      // Fallback em memória quando Redis indisponível.
     }
   }
 
@@ -132,11 +132,11 @@ async function enforceCreateRateLimit(customerId: string, ip?: string) {
 async function resolvePostForComments(slug: string, viewer?: ViewerAuth) {
   const post = await findBlogPostBySlug(slug);
   if (!post) {
-    throw new ApiError(404, "Post nao encontrado.");
+    throw new ApiError(404, "Post não encontrado.");
   }
 
   if (!post.published && viewer?.type !== "admin") {
-    throw new ApiError(404, "Post nao encontrado.");
+    throw new ApiError(404, "Post não encontrado.");
   }
 
   return post;
@@ -156,7 +156,7 @@ async function loadCommentsFromDatabase(input: ListCommentsInput) {
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
-      throw new ApiError(400, "Cursor invalido.");
+      throw new ApiError(400, "Cursor inválido.");
     }
     throw error;
   }
@@ -203,17 +203,17 @@ export async function createPostComment(input: CreateCommentInput) {
 
   const content = String(input.content || "").trim();
   if (content.length < 3 || content.length > 1000) {
-    throw new ApiError(400, "Comentario deve ter entre 3 e 1000 caracteres.");
+    throw new ApiError(400, "Comentário deve ter entre 3 e 1000 caracteres.");
   }
 
   let parentId: string | undefined;
   if (input.parentId) {
     const parent = await findCommentById(String(input.parentId));
     if (!parent || String(parent.postId) !== post.id) {
-      throw new ApiError(404, "Comentario pai nao encontrado.");
+      throw new ApiError(404, "Comentário pai não encontrado.");
     }
     if (parent.parentId) {
-      throw new ApiError(400, "Respostas em multiplos niveis nao sao permitidas.");
+      throw new ApiError(400, "Respostas em múltiplos níveis não são permitidas.");
     }
     parentId = String(parent.id);
   }
@@ -236,11 +236,10 @@ export async function createPostComment(input: CreateCommentInput) {
 export async function patchCommentStatus(input: { id: string; status: CommentStatus }) {
   const existing = await findCommentById(input.id);
   if (!existing) {
-    throw new ApiError(404, "Comentario nao encontrado.");
+    throw new ApiError(404, "Comentário não encontrado.");
   }
 
   const updated = await patchCommentStatusById(input.id, input.status);
   await invalidateCommentCaches(String(existing.postId));
   return buildCommentDto(updated, { sub: "", type: "admin" });
 }
-

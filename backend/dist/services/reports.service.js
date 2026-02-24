@@ -53,7 +53,7 @@ async function exportProductsCsv() {
         slug: product.slug,
         category: product.category,
         status: product.status,
-        active: product.active ? "sim" : "nao",
+        active: product.active ? "sim" : "não",
         stock: product.stock,
         price: (0, money_1.fromCents)(product.priceCents),
         compareAtPrice: product.compareAtPriceCents ? (0, money_1.fromCents)(product.compareAtPriceCents) : "",

@@ -122,9 +122,9 @@ export default function BlogListPage() {
         if (!active) return;
 
         if (fetchError instanceof HttpError) {
-          setError(fetchError.message || "Nao foi possivel carregar os posts.");
+          setError(fetchError.message || "Não foi possível carregar os posts.");
         } else {
-          setError("Nao foi possivel carregar os posts.");
+          setError("Não foi possível carregar os posts.");
         }
       } finally {
         if (active) {
@@ -163,9 +163,9 @@ export default function BlogListPage() {
       setPosts((previous) => previous.map((item) => (item.id === post.id ? response.data : item)));
     } catch (fetchError) {
       if (fetchError instanceof HttpError) {
-        setError(fetchError.message || "Nao foi possivel atualizar o status.");
+        setError(fetchError.message || "Não foi possível atualizar o status.");
       } else {
-        setError("Nao foi possivel atualizar o status.");
+        setError("Não foi possível atualizar o status.");
       }
     } finally {
       setBusyId(null);
@@ -173,7 +173,7 @@ export default function BlogListPage() {
   }
 
   async function handleDelete(post: BlogPost) {
-    const ok = window.confirm(`Excluir o post "${post.title}"? Esta acao nao pode ser desfeita.`);
+    const ok = window.confirm(`Excluir o post "${post.title}"? Esta ação não pode ser desfeita.`);
     if (!ok) return;
 
     setBusyId(post.id);
@@ -185,9 +185,9 @@ export default function BlogListPage() {
       setPosts((previous) => previous.filter((item) => item.id !== post.id));
     } catch (fetchError) {
       if (fetchError instanceof HttpError) {
-        setError(fetchError.message || "Nao foi possivel excluir o post.");
+        setError(fetchError.message || "Não foi possível excluir o post.");
       } else {
-        setError("Nao foi possivel excluir o post.");
+        setError("Não foi possível excluir o post.");
       }
     } finally {
       setBusyId(null);
@@ -247,7 +247,7 @@ export default function BlogListPage() {
       }
     }
 
-    setNotice(`Importacao concluida: ${imported} importado(s), ${failed} com falha.`);
+    setNotice(`Importação concluída: ${imported} importado(s), ${failed} com falha.`);
 
     try {
       const response = await apiFetch<ApiListResponse<BlogPost>>("/api/v1/blog/posts", {
@@ -264,7 +264,7 @@ export default function BlogListPage() {
       <section className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Blog</h1>
-          <p className="mt-1 text-sm text-slate-500">Gerencie criacao, edicao e publicacao de posts.</p>
+          <p className="mt-1 text-sm text-slate-500">Gerencie criação, edição e publicação de posts.</p>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -292,14 +292,14 @@ export default function BlogListPage() {
         </Card>
 
         <Card>
-          <CardHeader title="Publicados" subtitle="Visiveis no blog" />
+          <CardHeader title="Publicados" subtitle="Visíveis no blog" />
           <CardBody>
             <p className="text-3xl font-semibold text-slate-900">{totals.published}</p>
           </CardBody>
         </Card>
 
         <Card>
-          <CardHeader title="Rascunhos" subtitle="Ainda nao publicados" />
+          <CardHeader title="Rascunhos" subtitle="Ainda não publicados" />
           <CardBody>
             <p className="text-3xl font-semibold text-slate-900">{totals.draft}</p>
           </CardBody>
@@ -317,7 +317,7 @@ export default function BlogListPage() {
           <div className="grid gap-3 lg:grid-cols-[1fr_240px]">
             <Input
               aria-label="Buscar post"
-              placeholder="Buscar por titulo, slug ou tag..."
+              placeholder="Buscar por título, slug ou tag..."
               value={q}
               onChange={(event) => setQ(event.target.value)}
             />
@@ -341,12 +341,12 @@ export default function BlogListPage() {
               <table className="min-w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                    <th className="py-3 pr-3">Titulo</th>
+                    <th className="py-3 pr-3">Título</th>
                     <th className="py-3 pr-3">Slug</th>
                     <th className="py-3 pr-3">Autor</th>
                     <th className="py-3 pr-3">Status</th>
                     <th className="py-3 pr-3">Atualizado</th>
-                    <th className="py-3 text-right">Acoes</th>
+                    <th className="py-3 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody>

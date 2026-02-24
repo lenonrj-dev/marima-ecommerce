@@ -140,8 +140,10 @@ export const meHandler = asyncHandler(async (req: Request, res: Response) => {
   const me = await meFromPayload(req.auth as any);
   res.json({
     data: {
-      userType: me.type,
       ...me,
+      type: me.type,
+      userType: me.type,
     },
   });
 });
+
