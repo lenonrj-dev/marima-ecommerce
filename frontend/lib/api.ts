@@ -2,6 +2,7 @@ const RAW_PUBLIC_API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
 const RAW_SERVER_API_BASE = process.env.API_BASE_URL || process.env.API_URL;
 const PROXY_API_BASE = "/api";
+const PRODUCTION_API_BASE = "https://api.usemarima.com.br";
 
 function normalizeApiBase(base: string) {
   return base.trim().replace(/\/+$/, "");
@@ -10,12 +11,13 @@ function normalizeApiBase(base: string) {
 function resolveApiBase() {
   const publicBase = typeof RAW_PUBLIC_API_BASE === "string" ? normalizeApiBase(RAW_PUBLIC_API_BASE) : "";
   const serverBase = typeof RAW_SERVER_API_BASE === "string" ? normalizeApiBase(RAW_SERVER_API_BASE) : "";
+  const fallbackBase = process.env.NODE_ENV === "production" ? PRODUCTION_API_BASE : PROXY_API_BASE;
 
   if (typeof window === "undefined") {
-    return publicBase || serverBase || PROXY_API_BASE;
+    return publicBase || serverBase || fallbackBase;
   }
 
-  return publicBase || PROXY_API_BASE;
+  return publicBase || fallbackBase;
 }
 
 export const API_BASE = resolveApiBase();
@@ -28,7 +30,7 @@ function getApiBase() {
       warnedMissingApiBase = true;
       console.error("NEXT_PUBLIC_API_BASE_URL não configurado. Usando fallback relativo /api.");
     }
-    return PROXY_API_BASE;
+    return process.env.NODE_ENV === "production" ? PRODUCTION_API_BASE : PROXY_API_BASE;
   }
 
   if (process.env.NODE_ENV === "production" && /^http:\/\//i.test(API_BASE)) {
