@@ -20,6 +20,27 @@ type TokenPayload = {
   type: "admin" | "customer";
 };
 
+function toCleanTokenPayload(input: unknown): TokenPayload {
+  if (!input || typeof input !== "object") {
+    throw new ApiError(401, "Sessão expirada.", "AUTH_EXPIRED");
+  }
+
+  const raw = input as Partial<Record<keyof TokenPayload, unknown>>;
+  const sub = typeof raw.sub === "string" ? raw.sub.trim() : "";
+  const role = typeof raw.role === "string" ? raw.role.trim() : "";
+  const type = raw.type;
+
+  if (!sub || !role || (type !== "admin" && type !== "customer")) {
+    throw new ApiError(401, "Sessão expirada.", "AUTH_EXPIRED");
+  }
+
+  return {
+    sub,
+    role: role as TokenPayload["role"],
+    type,
+  };
+}
+
 function meCacheKey(payload: TokenPayload) {
   return `cache:v1:user:me:${payload.type}:${payload.sub}`;
 }
@@ -32,19 +53,22 @@ export async function invalidateMeCacheForUser(userId: string) {
 }
 
 export function signAccessToken(payload: TokenPayload) {
-  return jwt.sign(payload, env.JWT_ACCESS_SECRET, {
+  const cleanPayload = toCleanTokenPayload(payload);
+  return jwt.sign(cleanPayload, env.JWT_ACCESS_SECRET, {
     expiresIn: env.ACCESS_TOKEN_TTL as SignOptions["expiresIn"],
   });
 }
 
 export function signRefreshToken(payload: TokenPayload) {
-  return jwt.sign(payload, env.JWT_REFRESH_SECRET, {
+  const cleanPayload = toCleanTokenPayload(payload);
+  return jwt.sign(cleanPayload, env.JWT_REFRESH_SECRET, {
     expiresIn: env.REFRESH_TOKEN_TTL as SignOptions["expiresIn"],
   });
 }
 
 export function verifyRefreshToken(token: string) {
-  return jwt.verify(token, env.JWT_REFRESH_SECRET) as TokenPayload;
+  const decoded = jwt.verify(token, env.JWT_REFRESH_SECRET);
+  return toCleanTokenPayload(decoded);
 }
 
 function parseDurationMs(text: string) {
@@ -57,8 +81,9 @@ function parseDurationMs(text: string) {
 }
 
 export function setAuthCookies(res: Response, payload: TokenPayload, req?: Request) {
-  const access = signAccessToken(payload);
-  const refresh = signRefreshToken(payload);
+  const cleanPayload = toCleanTokenPayload(payload);
+  const access = signAccessToken(cleanPayload);
+  const refresh = signRefreshToken(cleanPayload);
 
   res.cookie(ACCESS_COOKIE, access, cookieOptions(req, parseDurationMs(env.ACCESS_TOKEN_TTL)));
   res.cookie(REFRESH_COOKIE, refresh, cookieOptions(req, parseDurationMs(env.REFRESH_TOKEN_TTL)));
