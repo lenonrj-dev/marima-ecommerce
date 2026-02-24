@@ -25,6 +25,23 @@ const auth_1 = require("../middlewares/auth");
 const cookies_1 = require("../utils/cookies");
 const SALT_ROUNDS = 10;
 const ME_CACHE_TTL_SECONDS = 60;
+function toCleanTokenPayload(input) {
+    if (!input || typeof input !== "object") {
+        throw new apiError_1.ApiError(401, "Sessão expirada.", "AUTH_EXPIRED");
+    }
+    const raw = input;
+    const sub = typeof raw.sub === "string" ? raw.sub.trim() : "";
+    const role = typeof raw.role === "string" ? raw.role.trim() : "";
+    const type = raw.type;
+    if (!sub || !role || (type !== "admin" && type !== "customer")) {
+        throw new apiError_1.ApiError(401, "Sessão expirada.", "AUTH_EXPIRED");
+    }
+    return {
+        sub,
+        role: role,
+        type,
+    };
+}
 function meCacheKey(payload) {
     return `cache:v1:user:me:${payload.type}:${payload.sub}`;
 }
@@ -35,17 +52,20 @@ async function invalidateMeCacheForUser(userId) {
     ]);
 }
 function signAccessToken(payload) {
-    return jsonwebtoken_1.default.sign(payload, env_1.env.JWT_ACCESS_SECRET, {
+    const cleanPayload = toCleanTokenPayload(payload);
+    return jsonwebtoken_1.default.sign(cleanPayload, env_1.env.JWT_ACCESS_SECRET, {
         expiresIn: env_1.env.ACCESS_TOKEN_TTL,
     });
 }
 function signRefreshToken(payload) {
-    return jsonwebtoken_1.default.sign(payload, env_1.env.JWT_REFRESH_SECRET, {
+    const cleanPayload = toCleanTokenPayload(payload);
+    return jsonwebtoken_1.default.sign(cleanPayload, env_1.env.JWT_REFRESH_SECRET, {
         expiresIn: env_1.env.REFRESH_TOKEN_TTL,
     });
 }
 function verifyRefreshToken(token) {
-    return jsonwebtoken_1.default.verify(token, env_1.env.JWT_REFRESH_SECRET);
+    const decoded = jsonwebtoken_1.default.verify(token, env_1.env.JWT_REFRESH_SECRET);
+    return toCleanTokenPayload(decoded);
 }
 function parseDurationMs(text) {
     const unit = text.slice(-1);
@@ -59,8 +79,9 @@ function parseDurationMs(text) {
     return 15 * 60 * 1000;
 }
 function setAuthCookies(res, payload, req) {
-    const access = signAccessToken(payload);
-    const refresh = signRefreshToken(payload);
+    const cleanPayload = toCleanTokenPayload(payload);
+    const access = signAccessToken(cleanPayload);
+    const refresh = signRefreshToken(cleanPayload);
     res.cookie(auth_1.ACCESS_COOKIE, access, (0, cookies_1.cookieOptions)(req, parseDurationMs(env_1.env.ACCESS_TOKEN_TTL)));
     res.cookie(auth_1.REFRESH_COOKIE, refresh, (0, cookies_1.cookieOptions)(req, parseDurationMs(env_1.env.REFRESH_TOKEN_TTL)));
 }
