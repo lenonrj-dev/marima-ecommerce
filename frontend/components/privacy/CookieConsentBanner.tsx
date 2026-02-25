@@ -87,6 +87,9 @@ export default function CookieConsentBanner() {
     setOpen(false);
     try {
       setConsent(choice);
+      if (process.env.NODE_ENV !== "production") {
+        console.info("[cookie-consent] choice", { choice, openAfterClick: false });
+      }
     } catch {
       // Keep UI responsive even if storage fails.
     }
@@ -97,7 +100,7 @@ export default function CookieConsentBanner() {
 
   return createPortal(
     <div
-      className="fixed inset-x-0 z-[2147483647] pointer-events-none opacity-100"
+      className="fixed left-1/2 z-[2147483647] w-[calc(100%-32px)] max-w-[720px] -translate-x-1/2 pointer-events-auto opacity-100"
       style={{ bottom: "max(16px, env(safe-area-inset-bottom))" }}
     >
       <section
@@ -106,7 +109,7 @@ export default function CookieConsentBanner() {
         aria-live="polite"
         aria-label="Preferências de cookies"
         aria-describedby="cookie-consent-description"
-        className="pointer-events-auto mx-auto w-[calc(100%-32px)] max-w-[720px] rounded-3xl border border-zinc-200 bg-white p-4 shadow-[0_16px_48px_rgba(0,0,0,0.14)] sm:p-5"
+        className="w-full rounded-3xl border border-zinc-200 bg-white p-4 shadow-[0_16px_48px_rgba(0,0,0,0.14)] sm:p-5"
       >
         <div className="flex flex-col gap-4">
           <div className="space-y-2">

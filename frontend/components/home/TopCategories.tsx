@@ -3,6 +3,7 @@
 import { useRef } from "react";
 
 import Image from "next/image";
+import Link from "next/link";
 
 import Container from "@/components/ui/Container";
 
@@ -13,6 +14,34 @@ import IconButton from "@/components/ui/IconButton";
 import { categories } from "@/lib/homeData";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
+
+function buildCategoryHref(title: string) {
+  const normalized = title.trim().toLowerCase();
+  const params = new URLSearchParams();
+
+  switch (normalized) {
+    case "leggings":
+      params.set("search", "legging");
+      break;
+    case "tops":
+      params.set("search", "top");
+      break;
+    case "novidades":
+      params.set("sort", "newest");
+      break;
+    case "conjuntos":
+      params.set("search", "conjunto");
+      break;
+    case "mais vendidos":
+      params.set("sort", "rating_desc");
+      break;
+    default:
+      params.set("search", title);
+      break;
+  }
+
+  return `/produtos?${params.toString()}`;
+}
 
 export default function TopCategories() {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -54,7 +83,12 @@ export default function TopCategories() {
           className="mt-8 flex gap-6 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {categories.map((c) => (
-            <div key={c.id} className="relative mr-30 shrink-0">
+            <Link
+              key={c.id}
+              href={buildCategoryHref(c.title)}
+              aria-label={`Ver produtos de ${c.title}`}
+              className="relative mr-30 shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/25"
+            >
               <div className="relative h-[120px] w-[120px] overflow-hidden rounded-full bg-zinc-100">
                 <Image
                   src={c.image}
@@ -72,7 +106,7 @@ export default function TopCategories() {
                   <p className="text-sm font-semibold text-white">{c.title}</p>
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </Container>
