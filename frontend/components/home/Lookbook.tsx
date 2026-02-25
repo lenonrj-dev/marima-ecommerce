@@ -19,10 +19,22 @@ export default function Lookbook() {
 
         <div className="mt-8 grid gap-6 lg:grid-cols-2">
           <div className="relative min-h-[360px] overflow-hidden rounded-3xl bg-zinc-100">
-            <Image src={LOOK_BANNER} alt="Lookbook Marima 1" fill className="object-cover" />
+            <Image
+              src={LOOK_BANNER}
+              alt="Lookbook Marima 1"
+              fill
+              className="object-cover"
+              sizes="(min-width: 1024px) 50vw, 100vw"
+            />
           </div>
           <div className="relative min-h-[360px] overflow-hidden rounded-3xl bg-zinc-100">
-            <Image src={LOOK_BANNER2} alt="Lookbook Marima 2" fill className="object-cover" />
+            <Image
+              src={LOOK_BANNER2}
+              alt="Lookbook Marima 2"
+              fill
+              className="object-cover"
+              sizes="(min-width: 1024px) 50vw, 100vw"
+            />
           </div>
         </div>
       </Container>

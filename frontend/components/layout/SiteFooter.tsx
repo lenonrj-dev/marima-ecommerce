@@ -23,7 +23,7 @@ export default function SiteFooter() {
                   width={160}
                   height={42}
                   priority
-                  className="h-15 w-15 select-none"
+                  className="h-auto w-[160px] select-none"
                 />
               </span>
             </Link>

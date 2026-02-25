@@ -34,9 +34,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
           <SiteFooter />
           <CartDrawer />
-          <CookieConsentBanner />
           <ConsentScripts />
         </CartProvider>
+        <CookieConsentBanner />
       </body>
     </html>
   );

@@ -60,6 +60,7 @@ export default function TopCategories() {
                   src={c.image}
                   alt={c.title}
                   fill
+                  sizes="120px"
                   className="object-cover"
                 />
 

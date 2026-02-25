@@ -1,46 +1,52 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useSyncExternalStore } from "react";
-import {
-  CONSENT_CHANGED_EVENT,
-  getConsent,
-  setConsent,
-  type CookieConsentValue,
-} from "@/lib/privacy/cookieConsent";
-
-function subscribeConsent(onStoreChange: () => void) {
-  if (typeof window === "undefined") return () => {};
-  window.addEventListener(CONSENT_CHANGED_EVENT, onStoreChange);
-  return () => {
-    window.removeEventListener(CONSENT_CHANGED_EVENT, onStoreChange);
-  };
-}
-
-function getConsentSnapshot() {
-  return getConsent() === null;
-}
-
-function getConsentServerSnapshot() {
-  return false;
-}
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { getConsent, setConsent, type CookieConsentValue } from "@/lib/privacy/cookieConsent";
 
 export default function CookieConsentBanner() {
-  const isVisible = useSyncExternalStore(subscribeConsent, getConsentSnapshot, getConsentServerSnapshot);
-  const titleRef = useRef<HTMLHeadingElement>(null);
+  const [mounted, setMounted] = useState(false);
+  const [open, setOpen] = useState(false);
   const firstButtonRef = useRef<HTMLButtonElement>(null);
   const bannerRef = useRef<HTMLElement>(null);
   const previousBodyPaddingRef = useRef<string | null>(null);
+  const devLoggedRef = useRef(false);
 
   useEffect(() => {
-    if (!isVisible) return;
+    if (typeof window === "undefined") return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const consent = getConsent();
+      const shouldOpen = consent === null;
+      setMounted(true);
+      setOpen(shouldOpen);
+
+      if (process.env.NODE_ENV !== "production" && !devLoggedRef.current) {
+        devLoggedRef.current = true;
+        console.info("[cookie-consent] mount", {
+          mounted: true,
+          consent,
+          shouldOpen,
+          open: shouldOpen,
+        });
+      }
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!mounted || !open) return;
     firstButtonRef.current?.focus();
-  }, [isVisible]);
+  }, [mounted, open]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
 
-    if (!isVisible) {
+    if (!mounted || !open) {
       if (previousBodyPaddingRef.current !== null) {
         if (previousBodyPaddingRef.current) {
           document.body.style.paddingBottom = previousBodyPaddingRef.current;
@@ -75,35 +81,36 @@ export default function CookieConsentBanner() {
         previousBodyPaddingRef.current = null;
       }
     };
-  }, [isVisible]);
+  }, [mounted, open]);
 
   function handleChoice(choice: CookieConsentValue) {
+    setOpen(false);
     try {
       setConsent(choice);
     } catch {
-      // Ignore persistence failures and keep UX responsive.
+      // Keep UI responsive even if storage fails.
     }
   }
 
-  if (!isVisible) return null;
+  if (!mounted || !open) return null;
+  if (typeof document === "undefined") return null;
 
-  return (
-    <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+16px)] left-1/2 z-[90] w-[calc(100%-1.5rem)] max-w-[720px] -translate-x-1/2 sm:bottom-[calc(env(safe-area-inset-bottom)+24px)] sm:w-[calc(100%-2rem)]">
+  return createPortal(
+    <div
+      className="fixed inset-x-0 z-[2147483647] pointer-events-none opacity-100"
+      style={{ bottom: "max(16px, env(safe-area-inset-bottom))" }}
+    >
       <section
         ref={bannerRef}
         role="dialog"
         aria-live="polite"
         aria-label="Preferências de cookies"
         aria-describedby="cookie-consent-description"
-        className="w-full rounded-3xl border border-zinc-200 bg-white p-4 shadow-[0_16px_48px_rgba(0,0,0,0.14)] sm:p-5"
+        className="pointer-events-auto mx-auto w-[calc(100%-32px)] max-w-[720px] rounded-3xl border border-zinc-200 bg-white p-4 shadow-[0_16px_48px_rgba(0,0,0,0.14)] sm:p-5"
       >
         <div className="flex flex-col gap-4">
           <div className="space-y-2">
-            <h2
-              ref={titleRef}
-              tabIndex={-1}
-              className="text-sm font-semibold tracking-tight text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/25 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-            >
+            <h2 className="text-sm font-semibold tracking-tight text-zinc-900">
               Usamos cookies para manter sua sessão e melhorar sua experiência.
             </h2>
             <p id="cookie-consent-description" className="text-sm leading-relaxed text-zinc-600">
@@ -122,14 +129,14 @@ export default function CookieConsentBanner() {
             <button
               ref={firstButtonRef}
               type="button"
-              onClick={() => handleChoice("necessary")}
+              onClick={() => handleChoice("declined")}
               className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-300 px-5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/25"
             >
               Recusar
             </button>
             <button
               type="button"
-              onClick={() => handleChoice("all")}
+              onClick={() => handleChoice("accepted")}
               className="inline-flex h-10 items-center justify-center rounded-full bg-zinc-900 px-5 text-sm font-semibold text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/25"
             >
               Aceitar
@@ -137,6 +144,7 @@ export default function CookieConsentBanner() {
           </div>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Script from "next/script";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import {
   CONSENT_CHANGED_EVENT,
   getConsent,
@@ -10,25 +10,25 @@ import {
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
+function subscribeConsent(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(CONSENT_CHANGED_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener(CONSENT_CHANGED_EVENT, onStoreChange);
+  };
+}
+
+function getConsentSnapshot() {
+  return getConsent();
+}
+
+function getConsentServerSnapshot() {
+  return null as CookieConsentValue | null;
+}
+
 export default function ConsentScripts() {
-  const [consent, setConsent] = useState<CookieConsentValue | null>(() => {
-    if (typeof document === "undefined") return null;
-    return getConsent();
-  });
-
-  useEffect(() => {
-    function onConsentChanged(event: Event) {
-      const customEvent = event as CustomEvent<CookieConsentValue | null>;
-      setConsent(customEvent.detail ?? getConsent());
-    }
-
-    window.addEventListener(CONSENT_CHANGED_EVENT, onConsentChanged as EventListener);
-    return () => {
-      window.removeEventListener(CONSENT_CHANGED_EVENT, onConsentChanged as EventListener);
-    };
-  }, []);
-
-  if (consent !== "all") return null;
+  const consent = useSyncExternalStore(subscribeConsent, getConsentSnapshot, getConsentServerSnapshot);
+  if (consent !== "accepted") return null;
   if (!GA_MEASUREMENT_ID) return null;
 
   return (

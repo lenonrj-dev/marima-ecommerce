@@ -23,7 +23,13 @@ export default function DealOfDay() {
       <Container>
         <div className= "grid gap-6 overflow-hidden rounded-3xl bg-zinc-50 shadow-soft lg:grid-cols-12">
           <div className="relative min-h-[520px] lg:col-span-6">
-            <Image src={DEAL_BANNER2} alt="Oferta especial Marima" fill className="object-cover" />
+            <Image
+              src={DEAL_BANNER2}
+              alt="Oferta especial Marima"
+              fill
+              className="object-cover"
+              sizes="(min-width: 1024px) 50vw, 100vw"
+            />
           </div>
 
           <div className="relative mt-20 px-7 py-10 lg:col-span-6 lg:px-10">

@@ -84,7 +84,7 @@ export default function SiteHeader() {
 
   const logo = (
     <span className="relative inline-flex items-center">
-      <Image src={logoSrc} alt={SITE_COPY.brand} width={160} height={42} priority className="h-15 w-15 select-none" />
+      <Image src={logoSrc} alt={SITE_COPY.brand} width={160} height={42} priority className="h-auto w-[160px] select-none" />
     </span>
   );
 
