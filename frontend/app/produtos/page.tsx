@@ -1,7 +1,14 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import CollectionBanner from "@/components/products/CollectionBanner";
 import ProductListShell from "@/components/products/ProductListShell";
-import { fetchStoreProducts, type ProductSearchFilters } from "@/lib/productsData";
+import {
+  buildCategoryFacets,
+  fetchStoreCategories,
+  fetchStoreProducts,
+  fetchStoreProductsForFacets,
+  normalizeCategoryKey,
+  type ProductSearchFilters,
+} from "@/lib/productsData";
 import { pageMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = pageMetadata({
@@ -21,17 +28,34 @@ function toStringValue(value?: string | string[]) {
 export default async function ProdutosPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const search = toStringValue(params.search).trim();
-  const category = toStringValue(params.category).trim();
+  const requestedCategory = normalizeCategoryKey(toStringValue(params.category).trim());
   const sort = toStringValue(params.sort).trim() as ProductSearchFilters["sort"] | "";
   const maxPrice = Number.parseFloat(toStringValue(params.maxPrice));
+  const hasMaxPrice = Number.isFinite(maxPrice);
   const page = Math.max(1, Number.parseInt(toStringValue(params.page), 10) || 1);
   const limit = 100;
+
+  const [storeCategories, productsForFacets] = await Promise.all([
+    fetchStoreCategories(),
+    fetchStoreProductsForFacets({
+      q: search || undefined,
+      maxPrice: hasMaxPrice ? maxPrice : undefined,
+      active: true,
+    }),
+  ]);
+
+  const categoryFacets = buildCategoryFacets({
+    products: productsForFacets,
+    categories: storeCategories,
+  });
+  const availableCategoryKeys = new Set(categoryFacets.map((item) => item.key));
+  const category = requestedCategory && availableCategoryKeys.has(requestedCategory) ? requestedCategory : "";
 
   const response = await fetchStoreProducts({
     q: search || undefined,
     category: category || undefined,
     sort: sort || undefined,
-    maxPrice: Number.isFinite(maxPrice) ? maxPrice : undefined,
+    maxPrice: hasMaxPrice ? maxPrice : undefined,
     includeVariants: true,
     page,
     limit,
@@ -46,7 +70,7 @@ export default async function ProdutosPage({ searchParams }: { searchParams: Sea
     if (search) query.set("search", search);
     if (category) query.set("category", category);
     if (sort) query.set("sort", sort);
-    if (Number.isFinite(maxPrice)) query.set("maxPrice", String(maxPrice));
+    if (hasMaxPrice) query.set("maxPrice", String(maxPrice));
     if (targetPage > 1) query.set("page", String(targetPage));
     const qs = query.toString();
     return qs ? `/produtos?${qs}` : "/produtos";
@@ -70,6 +94,10 @@ export default async function ProdutosPage({ searchParams }: { searchParams: Sea
         total={totalProducts}
         query={search}
         category={category || undefined}
+        sort={sort || undefined}
+        maxPrice={hasMaxPrice ? maxPrice : undefined}
+        categoryFacets={categoryFacets}
+        categoriesTotalCount={productsForFacets.length}
         pagination={pagination}
       />
     </main>

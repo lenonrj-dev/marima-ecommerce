@@ -130,6 +130,31 @@ export type StoreCategory = {
   productCount?: number;
 };
 
+export type CategoryFacet = {
+  key: string;
+  slug: string;
+  label: string;
+  count: number;
+};
+
+type ProductCategorySource = Partial<Product> & {
+  category?: unknown;
+  categoryId?: unknown;
+  categorySlug?: unknown;
+  categoryName?: unknown;
+  categoryRef?: {
+    id?: unknown;
+    slug?: unknown;
+    name?: unknown;
+  } | null;
+};
+
+const CATEGORY_ALIASES: Record<string, string> = {
+  acessorio: "casual",
+  acessorios: "casual",
+  "acessorios-e-complementos": "casual",
+};
+
 const BASE_COLORS = [
   { name: "Preto", hex: "#111111" },
   { name: "Grafite", hex: "#3f3f46" },
@@ -149,17 +174,146 @@ export function formatMoneyBRL(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+export function normalizeCategoryKey(value: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const normalized = raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .replace(/[_/]+/g, " ")
+    .replace(/[^a-z0-9 -]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\s+/g, "-");
+
+  if (!normalized) return "";
+  return CATEGORY_ALIASES[normalized] ?? normalized;
+}
+
+function toTitleCaseWords(value: string) {
+  return value
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toLocaleUpperCase("pt-BR") + word.slice(1))
+    .join(" ");
+}
+
 export function formatCategoryLabel(value: string) {
-  const key = String(value || "").trim().toLocaleLowerCase("pt-BR");
+  const key = normalizeCategoryKey(value);
+  if (!key) return String(value || "");
 
   if (key === "fitness") return "Fitness";
   if (key === "moda") return "Moda";
   if (key === "casual") return "Casual";
-  if (key === "acessorios") return "Casual";
   if (key === "suplementos") return "Suplementos";
   if (key === "outros") return "Outros";
 
-  return value;
+  return toTitleCaseWords(key.replace(/-/g, " "));
+}
+
+export function resolveProductCategory(
+  product: ProductCategorySource,
+  options?: {
+    categoriesById?: Map<string, StoreCategory>;
+    categoriesByKey?: Map<string, StoreCategory>;
+  },
+): { key: string; label: string } | null {
+  const categoryId = typeof product.categoryId === "string" ? product.categoryId.trim() : "";
+  const fromId = categoryId ? options?.categoriesById?.get(categoryId) : undefined;
+
+  const categoryRef =
+    product.categoryRef && typeof product.categoryRef === "object" ? product.categoryRef : undefined;
+  const fromCategoryRefSlug =
+    categoryRef && typeof categoryRef.slug === "string" ? categoryRef.slug.trim() : "";
+  const fromCategoryRefName =
+    categoryRef && typeof categoryRef.name === "string" ? categoryRef.name.trim() : "";
+
+  const fromCategorySlug = typeof product.categorySlug === "string" ? product.categorySlug.trim() : "";
+  const fromCategoryName = typeof product.categoryName === "string" ? product.categoryName.trim() : "";
+  const fromCategory = typeof product.category === "string" ? product.category.trim() : "";
+
+  const keyCandidates = [
+    fromCategoryRefSlug,
+    fromCategorySlug,
+    fromId?.slug || "",
+    fromCategory,
+    fromCategoryRefName,
+    fromCategoryName,
+    fromId?.name || "",
+  ];
+
+  let key = "";
+  for (const candidate of keyCandidates) {
+    key = normalizeCategoryKey(candidate);
+    if (key) break;
+  }
+  if (!key) return null;
+
+  const mappedCategory = options?.categoriesByKey?.get(key);
+  const mappedLabel = mappedCategory?.name?.trim();
+  const labelCandidates = [mappedLabel, fromCategoryRefName, fromCategoryName, fromCategory];
+  const label = labelCandidates.find((candidate) => {
+    if (!candidate) return false;
+    return normalizeCategoryKey(candidate) === key;
+  });
+
+  return {
+    key,
+    label: label?.trim() || formatCategoryLabel(key),
+  };
+}
+
+export function buildCategoryFacets(input: {
+  products: ProductCategorySource[];
+  categories?: StoreCategory[];
+}): CategoryFacet[] {
+  const categories = input.categories ?? [];
+  const categoriesById = new Map<string, StoreCategory>();
+  const categoriesByKey = new Map<string, StoreCategory>();
+  const categoryOrder = new Map<string, number>();
+
+  for (const [index, category] of categories.entries()) {
+    const key = normalizeCategoryKey(category.slug || category.name);
+    if (!key) continue;
+    categoriesById.set(String(category.id), category);
+    if (!categoriesByKey.has(key)) categoriesByKey.set(key, category);
+    if (!categoryOrder.has(key)) categoryOrder.set(key, index);
+  }
+
+  const countMap = new Map<string, number>();
+  const labelMap = new Map<string, string>();
+
+  for (const product of input.products) {
+    const resolved = resolveProductCategory(product, { categoriesById, categoriesByKey });
+    if (!resolved) continue;
+
+    countMap.set(resolved.key, (countMap.get(resolved.key) ?? 0) + 1);
+    if (!labelMap.has(resolved.key)) labelMap.set(resolved.key, resolved.label);
+  }
+
+  const facets: CategoryFacet[] = [];
+  for (const [key, count] of countMap.entries()) {
+    if (count <= 0) continue;
+    facets.push({
+      key,
+      slug: key,
+      label: labelMap.get(key) || categoriesByKey.get(key)?.name || formatCategoryLabel(key),
+      count,
+    });
+  }
+
+  facets.sort((a, b) => {
+    const orderA = categoryOrder.get(a.key);
+    const orderB = categoryOrder.get(b.key);
+    if (orderA !== undefined && orderB !== undefined) return orderA - orderB;
+    if (orderA !== undefined) return -1;
+    if (orderB !== undefined) return 1;
+    return a.label.localeCompare(b.label, "pt-BR", { sensitivity: "base" });
+  });
+
+  return facets;
 }
 
 export function formatIDR(value: number) {
@@ -181,7 +335,10 @@ function normalizeGallery(product: Partial<Product>) {
   return [{ src: product.image || PRODUCT_FALLBACK_IMAGE, alt: `${product.title || "Produto"} - foto 1` }];
 }
 
-export function normalizeProductFromApi(product: Partial<Product>): Product {
+export function normalizeProductFromApi(
+  product: ProductCategorySource,
+  options?: { categoriesById?: Map<string, StoreCategory>; categoriesByKey?: Map<string, StoreCategory> },
+): Product {
   const title = product.title?.trim() || "Produto";
   const image = product.image?.trim() || PRODUCT_FALLBACK_IMAGE;
   const tags = Array.isArray(product.tags) ? product.tags : [];
@@ -233,6 +390,11 @@ export function normalizeProductFromApi(product: Partial<Product>): Product {
         .filter((item) => item.label && item.value)
     : [];
 
+  const resolvedCategory = resolveProductCategory(product, {
+    categoriesById: options?.categoriesById,
+    categoriesByKey: options?.categoriesByKey,
+  });
+
   return {
     id: String(product.id || ""),
     slug: String(product.slug || ""),
@@ -240,7 +402,7 @@ export function normalizeProductFromApi(product: Partial<Product>): Product {
     price: Number(product.price || 0),
     compareAtPrice: typeof product.compareAtPrice === "number" ? Number(product.compareAtPrice) : undefined,
     image,
-    category: String(product.category || "outros"),
+    category: resolvedCategory?.key || "outros",
     groupKey: groupKey || undefined,
     colorName: colorName || undefined,
     colorHex: colorHex || undefined,
@@ -292,7 +454,7 @@ export async function fetchStoreProducts(
     });
 
     return {
-      data: (response.data || []).map((item) => normalizeProductFromApi(item)),
+      data: (response.data || []).map((item) => normalizeProductFromApi(item as ProductCategorySource)),
       meta: response.meta,
     };
   } catch {
@@ -308,6 +470,42 @@ export async function fetchStoreProducts(
       },
     };
   }
+}
+
+export async function fetchStoreProductsForFacets(
+  query?: Partial<{
+    q: string;
+    status: string;
+    active: boolean;
+    maxPrice: number;
+  }>,
+) {
+  const limit = 100;
+  const maxPages = 20;
+  const all: Product[] = [];
+  let page = 1;
+  let pages = 1;
+
+  while (page <= pages && page <= maxPages) {
+    const response = await fetchStoreProducts({
+      q: query?.q,
+      status: query?.status,
+      active: query?.active,
+      maxPrice: query?.maxPrice,
+      page,
+      limit,
+      includeVariants: false,
+    });
+
+    all.push(...response.data);
+
+    const nextPages = Math.max(1, Number(response.meta?.pages || 1));
+    pages = Math.min(nextPages, maxPages);
+    if (response.data.length === 0) break;
+    page += 1;
+  }
+
+  return all;
 }
 
 export async function fetchStoreProductBySlug(slug: string): Promise<Product | null> {
@@ -364,7 +562,25 @@ export async function fetchStoreProductVariantsBySlug(slug: string): Promise<Pro
 export async function fetchStoreCategories(): Promise<StoreCategory[]> {
   try {
     const response = await apiFetch<{ data: StoreCategory[] }>("/api/v1/store/categories");
-    return response.data || [];
+    const rows = Array.isArray(response.data) ? response.data : [];
+    const byKey = new Map<string, StoreCategory>();
+
+    for (const row of rows) {
+      const key = normalizeCategoryKey(row.slug || row.name);
+      if (!key) continue;
+      if (byKey.has(key)) continue;
+      byKey.set(key, {
+        id: String(row.id || key),
+        name: String(row.name || formatCategoryLabel(key)),
+        slug: key,
+        productCount:
+          typeof row.productCount === "number" && Number.isFinite(row.productCount)
+            ? Math.max(0, Math.floor(row.productCount))
+            : undefined,
+      });
+    }
+
+    return Array.from(byKey.values());
   } catch {
     return [];
   }

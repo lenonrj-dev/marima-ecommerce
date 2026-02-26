@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Product } from "@/lib/productsData";
+import type { CategoryFacet, Product } from "@/lib/productsData";
 import FiltersSidebar from "@/components/products/FiltersSidebar";
 import ProductsGrid from "@/components/products/ProductsGrid";
 
@@ -8,6 +8,10 @@ type ProductListShellProps = {
   total: number;
   query?: string;
   category?: string;
+  sort?: string;
+  maxPrice?: number;
+  categoryFacets: CategoryFacet[];
+  categoriesTotalCount?: number;
   pagination?: {
     page: number;
     pages: number;
@@ -21,6 +25,10 @@ export default function ProductListShell({
   total,
   query,
   category,
+  sort,
+  maxPrice,
+  categoryFacets,
+  categoriesTotalCount,
   pagination,
 }: ProductListShellProps) {
   const hasFilters = Boolean(query || category);
@@ -59,7 +67,14 @@ export default function ProductListShell({
         </div>
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[240px_1fr]">
-          <FiltersSidebar category={category} />
+          <FiltersSidebar
+            category={category}
+            categories={categoryFacets}
+            search={query}
+            sort={sort}
+            maxPrice={maxPrice}
+            totalCount={categoriesTotalCount}
+          />
           <ProductsGrid products={products} />
         </div>
 
