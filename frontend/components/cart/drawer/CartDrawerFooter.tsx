@@ -11,7 +11,7 @@ export default function CartDrawerFooter() {
   const empty = items.length === 0;
 
   return (
-    <footer className="sticky bottom-0 border-t border-zinc-200 bg-white px-4 py-4 sm:px-6">
+    <footer className="sticky bottom-0 shrink-0 border-t border-zinc-200 bg-white px-4 py-4 sm:px-6">
       <div className="space-y-2 text-sm">
         <div className="flex items-center justify-between">
           <span className="text-zinc-600">Subtotal</span>
@@ -38,10 +38,10 @@ export default function CartDrawerFooter() {
         <span className="text-lg font-semibold text-zinc-900">{formatMoney(totals.total)}</span>
       </div>
 
-      <div className="mt-2 flex items-center gap-2 text-xs text-zinc-500">
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
         <Lock className="h-4 w-4" />
         SSL seguro • finalização protegida
-        {isQuoting ? <span className="ml-auto">recalculando...</span> : null}
+        {isQuoting ? <span className="sm:ml-auto">recalculando...</span> : null}
       </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -76,8 +76,8 @@ export default function CartDrawerFooter() {
         </button>
       ) : null}
 
-      <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
-        <span className="inline-flex items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
+        <span className="inline-flex min-w-0 items-center gap-2">
           <Gift className="h-4 w-4" />
           Frete grátis acima de {formatMoney(29900)}
         </span>

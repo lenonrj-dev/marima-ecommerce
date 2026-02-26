@@ -64,6 +64,24 @@ export default function CartDrawer() {
     requestAnimationFrame(() => target?.focus?.());
   }, [isOpen, triggerRef]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousBodyTouchAction = document.body.style.touchAction;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.body.style.touchAction = previousBodyTouchAction;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [isOpen]);
+
   return (
     <>
       <button
@@ -71,7 +89,7 @@ export default function CartDrawer() {
         aria-label="Fechar carrinho"
         onClick={close}
         className={[
-          "fixed inset-0 z-[60] bg-black/45 transition-opacity duration-300",
+          "fixed inset-0 z-[70] bg-black/45 transition-opacity duration-300",
           isOpen ? "opacity-100" : "pointer-events-none opacity-0",
         ].join(" ")}
       />
@@ -79,8 +97,7 @@ export default function CartDrawer() {
       <aside
         aria-hidden={!isOpen}
         className={[
-          "fixed right-0 top-0 z-[70] h-full w-[440px] transform transition-transform duration-300 ease-in-out",
-          "lg:w-[440px] lg:max-w-[440px]",
+          "fixed right-0 top-0 z-[80] h-full w-full max-w-[420px] transform overflow-hidden transition-transform duration-300 ease-in-out",
           isOpen ? "translate-x-0 pointer-events-auto" : "translate-x-full pointer-events-none",
         ].join(" ")}
       >
@@ -89,7 +106,7 @@ export default function CartDrawer() {
           role="dialog"
           aria-modal="true"
           aria-label="Carrinho de compras"
-          className="flex h-full flex-col bg-white shadow-[0_36px_100px_rgba(0,0,0,0.28)]"
+          className="flex h-full flex-col overflow-hidden bg-white shadow-[0_36px_100px_rgba(0,0,0,0.28)]"
         >
           <CartDrawerHeader closeBtnRef={closeBtnRef} />
           <CartDrawerContent />

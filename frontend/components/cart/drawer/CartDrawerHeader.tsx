@@ -14,7 +14,7 @@ export default function CartDrawerHeader({
   const itemCount = useMemo(() => items.reduce((acc, item) => acc + item.qty, 0), [items]);
 
   return (
-    <header className="flex items-center justify-between border-b border-zinc-200 px-5 py-4 sm:px-6">
+    <header className="shrink-0 flex items-center justify-between border-b border-zinc-200 px-5 py-4 sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
         <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-zinc-900 text-white">
           <ShoppingBag className="h-5 w-5" />
