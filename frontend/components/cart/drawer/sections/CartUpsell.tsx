@@ -64,7 +64,7 @@ export default function CartUpsell() {
   if (suggestions.length === 0) return null;
 
   return (
-    <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-4">
+    <div className="mt-6 overflow-hidden rounded-2xl border border-zinc-200 bg-white p-4">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold text-zinc-900">Upgrade seu pedido</p>
         <span className="inline-flex items-center gap-1 rounded-full bg-zinc-900 px-2 py-1 text-[11px] font-semibold text-white">
@@ -75,41 +75,44 @@ export default function CartUpsell() {
 
       <div className="mt-3 space-y-3">
         {suggestions.map((product) => (
-          <div key={product.id} className="flex items-center gap-3 rounded-xl bg-zinc-50 p-3">
-            <div className="relative h-12 w-12 overflow-hidden rounded-lg bg-white ring-1 ring-black/5">
-              <Image src={product.image} alt={product.title} fill className="object-cover" sizes="48px" />
-            </div>
+          <div key={product.id} className="min-w-0 overflow-hidden rounded-xl bg-zinc-50 p-3">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-white ring-1 ring-black/5">
+                  <Image src={product.image} alt={product.title} fill className="object-cover" sizes="48px" />
+                </div>
 
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-zinc-900">{product.title}</p>
-              <p className="truncate text-xs text-zinc-600">{product.description}</p>
-              <p className="mt-1 text-xs font-semibold text-zinc-900">
-                + {formatMoney(Math.round(product.price * 100))}
-                {typeof product.compareAtPrice === "number" ? (
-                  <span className="ml-2 font-medium text-zinc-500 line-through">
-                    {formatMoney(Math.round(product.compareAtPrice * 100))}
-                  </span>
-                ) : null}
-              </p>
-            </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-zinc-900">{product.title}</p>
+                  <p className="truncate text-xs text-zinc-600">{product.description}</p>
+                  <p className="mt-1 text-xs font-semibold text-zinc-900">
+                    + {formatMoney(Math.round(product.price * 100))}
+                    {typeof product.compareAtPrice === "number" ? (
+                      <span className="ml-2 font-medium text-zinc-500 line-through">
+                        {formatMoney(Math.round(product.compareAtPrice * 100))}
+                      </span>
+                    ) : null}
+                  </p>
+                </div>
+              </div>
 
-            <button
-              type="button"
-              onClick={() => addProduct(product, { qty: 1 })}
-              disabled={product.stock <= 0}
-              className={[
-                "inline-flex h-10 items-center justify-center rounded-full px-4 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20",
-                product.stock <= 0
-                  ? "cursor-not-allowed border border-zinc-200 bg-zinc-100 text-zinc-400"
-                  : "bg-zinc-900 text-white hover:bg-zinc-800",
-              ].join(" ")}
-            >
-              Adicionar
-            </button>
+              <button
+                type="button"
+                onClick={() => addProduct(product, { qty: 1 })}
+                disabled={product.stock <= 0}
+                className={[
+                  "inline-flex h-10 w-full shrink-0 items-center justify-center rounded-full px-4 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 sm:w-auto",
+                  product.stock <= 0
+                    ? "cursor-not-allowed border border-zinc-200 bg-zinc-100 text-zinc-400"
+                    : "bg-zinc-900 text-white hover:bg-zinc-800",
+                ].join(" ")}
+              >
+                Adicionar
+              </button>
+            </div>
           </div>
         ))}
       </div>
     </div>
   );
 }
-

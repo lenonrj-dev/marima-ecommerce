@@ -14,7 +14,7 @@ export default function CartDrawerContent() {
   const empty = items.length === 0;
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+    <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6" style={{ overflowX: "hidden" }}>
       <CartErrorBanner />
 
       {empty ? (

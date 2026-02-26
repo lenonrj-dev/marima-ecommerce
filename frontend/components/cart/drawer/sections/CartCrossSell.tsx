@@ -39,7 +39,7 @@ export default function CartCrossSell() {
   if (loading) {
     return (
       <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
-        <p className="text-sm font-semibold text-zinc-900">Você também pode gostar</p>
+        <p className="text-sm font-semibold text-zinc-900">VocÃª tambÃ©m pode gostar</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div className="h-28 animate-pulse rounded-xl bg-zinc-100" />
           <div className="h-28 animate-pulse rounded-xl bg-zinc-100" />
@@ -51,14 +51,14 @@ export default function CartCrossSell() {
   if (suggestions.length === 0) return null;
 
   return (
-    <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
-      <p className="text-sm font-semibold text-zinc-900">Você também pode gostar</p>
+    <div className="mt-4 overflow-hidden rounded-2xl border border-zinc-200 bg-white p-4">
+      <p className="text-sm font-semibold text-zinc-900">VocÃª tambÃ©m pode gostar</p>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+      <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2">
         {suggestions.map((product) => (
-          <div key={product.id} className="rounded-xl bg-zinc-50 p-3">
-            <div className="flex items-center gap-3">
-              <div className="relative h-12 w-12 overflow-hidden rounded-lg bg-white ring-1 ring-black/5">
+          <div key={product.id} className="min-w-0 overflow-hidden rounded-xl bg-zinc-50 p-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-white ring-1 ring-black/5">
                 <Image src={product.image} alt={product.title} fill className="object-cover" sizes="48px" />
               </div>
 
@@ -76,7 +76,7 @@ export default function CartCrossSell() {
               onClick={() => addProduct(product, { qty: 1 })}
               disabled={product.stock <= 0}
               className={[
-                "mt-3 inline-flex h-10 w-full items-center justify-center rounded-md text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20",
+                "mt-3 inline-flex h-10 w-full min-w-0 items-center justify-center rounded-md text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20",
                 product.stock <= 0
                   ? "cursor-not-allowed border border-zinc-200 bg-zinc-100 text-zinc-400"
                   : "border border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50",
@@ -90,4 +90,3 @@ export default function CartCrossSell() {
     </div>
   );
 }
-

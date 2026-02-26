@@ -11,7 +11,7 @@ export default function CartDrawerFooter() {
   const empty = items.length === 0;
 
   return (
-    <footer className="sticky bottom-0 shrink-0 border-t border-zinc-200 bg-white px-4 py-4 sm:px-6">
+    <footer className="sticky bottom-0 shrink-0 border-t border-zinc-200 bg-white px-4 py-4 sm:px-6" style={{ overflowX: "hidden" }}>
       <div className="space-y-2 text-sm">
         <div className="flex items-center justify-between">
           <span className="text-zinc-600">Subtotal</span>
