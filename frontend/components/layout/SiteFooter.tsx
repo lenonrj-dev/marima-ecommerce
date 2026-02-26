@@ -114,24 +114,24 @@ export default function SiteFooter() {
             <p className="mt-3 text-sm text-zinc-500">Receba lançamentos e ofertas em primeira mão.</p>
             <FooterNewsletterForm />
 
-            <div className="mt-20">
-  <Link
-    href="https://www.ateliux.com.br"
-    target="_blank"
-    rel="noopener noreferrer"
-    aria-label="Desenvolvido por Ateliux"
-    className="inline-flex items-center gap-2 text-xs text-zinc-500 transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20"
-  >
-    <span className="uppercase tracking-[0.14em]">Desenvolvido por</span>
-    <Image
-      src={ateliuxLogoSrc}
-      alt="Ateliux"
-      width={110}
-      height={38}
-      className="h-auto w-[140px] object-contain"
-    />
-  </Link>
-</div>
+            <div className="mt-5 flex justify-center md:mt-20 md:justify-start">
+              <Link
+                href="https://www.ateliux.com.br"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Desenvolvido por Ateliux"
+                className="inline-flex flex-col items-center justify-center gap-2 text-center text-xs text-zinc-500 transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20 md:flex-row md:items-center md:justify-start md:text-left"
+              >
+                <span className="uppercase tracking-[0.14em]">Desenvolvido por</span>
+                <Image
+                  src={ateliuxLogoSrc}
+                  alt="Ateliux"
+                  width={110}
+                  height={38}
+                  className="h-auto w-[140px] object-contain"
+                />
+              </Link>
+            </div>
           </div>
         </div>
 
