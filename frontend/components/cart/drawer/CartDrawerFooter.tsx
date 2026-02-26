@@ -31,10 +31,6 @@ export default function CartDrawerFooter() {
           <span className="font-semibold text-zinc-900">{formatMoney(totals.shipping)}</span>
         </div>
 
-        <div className="flex items-center justify-between">
-          <span className="text-zinc-600">Impostos (estimado)</span>
-          <span className="font-semibold text-zinc-900">{formatMoney(totals.tax)}</span>
-        </div>
       </div>
 
       <div className="mt-3 flex items-center justify-between border-t border-zinc-100 pt-3">

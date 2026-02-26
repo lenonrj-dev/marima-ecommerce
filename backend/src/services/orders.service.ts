@@ -322,7 +322,7 @@ export async function createStoreOrder(input: {
       ? 0
       : shippingMethod?.priceCents ?? 990;
   const taxable = Math.max(0, subtotalCents - discountCents);
-  const taxCents = Math.round(taxable * 0.08);
+  const taxCents = 0;
   const totalCents = taxable + shippingCents + taxCents;
 
   const code = await nextOrderCode();
@@ -481,4 +481,5 @@ export async function createOrderFromCart(cartId: string) {
 }
 
 export { toOrder };
+
 

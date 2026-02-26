@@ -7,7 +7,6 @@ import { ApiError } from "../utils/apiError";
 
 const SHIPPING_FLAT_CENTS = 990;
 const FREE_SHIPPING_THRESHOLD_CENTS = 29900;
-const TAX_RATE = 0.08;
 const SHARED_CART_TTL_DAYS = 1;
 const CART_CACHE_TTL_SECONDS = 60 * 5;
 export const GUEST_CART_COOKIE = "marima_guest_cart";
@@ -141,7 +140,7 @@ function totals(cart: MutableCart, forceFreeShipping?: boolean) {
   const taxable = Math.max(0, subtotal - discount);
   const freeShipping = forceFreeShipping ?? Boolean(cart.freeShippingCouponApplied);
   const shipping = freeShipping || subtotal >= FREE_SHIPPING_THRESHOLD_CENTS || subtotal === 0 ? 0 : SHIPPING_FLAT_CENTS;
-  const tax = Math.round(taxable * TAX_RATE);
+  const tax = 0;
   cart.subtotalCents = subtotal;
   cart.shippingCents = shipping;
   cart.taxCents = tax;

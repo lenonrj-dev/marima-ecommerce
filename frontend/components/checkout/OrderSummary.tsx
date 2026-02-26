@@ -40,8 +40,7 @@ export default function OrderSummary({ shippingCents }: { shippingCents: number 
 
   const subtotal = totals.subtotal;
   const discount = totals.discount;
-  const tax = totals.tax;
-  const total = Math.max(0, subtotal - discount + shippingCents + tax);
+  const total = Math.max(0, subtotal - discount + shippingCents);
 
   return (
     <aside className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-soft sm:p-6">
@@ -143,11 +142,6 @@ export default function OrderSummary({ shippingCents }: { shippingCents: number 
               <span>Frete</span>
               <span className="font-semibold text-zinc-900">{formatMoneyBRL(shippingCents)}</span>
             </div>
-            <div className="flex items-center justify-between text-zinc-600">
-              <span>Impostos (estimado)</span>
-              <span className="font-semibold text-zinc-900">{formatMoneyBRL(tax)}</span>
-            </div>
-
             <div className="mt-3 h-px w-full bg-zinc-200" aria-hidden />
 
             <div className="flex items-end justify-between">

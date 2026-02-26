@@ -31,7 +31,7 @@ export function calcTotals(params: { items : CartItem[];
     Boolean(params.forceFreeShipping) || discounted >= params.freeShipThreshold;
 
   const shipping = params.items.length === 0 ? 0 : shouldFreeShip ? 0 : params.shippingFlat;
-  const tax = Math.round(discounted * params.taxRate);
+  const tax = 0;
   const total = Math.max(0, discounted + shipping + tax);
 
   return { subtotal, discount, shipping, tax, total };

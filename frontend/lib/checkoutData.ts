@@ -48,7 +48,6 @@ export const CHECKOUT_COPY = {
       savings: "Desconto",
       subtotal: "Subtotal",
       shipping: "Frete",
-      taxes: "Impostos (estimado)",
       total: "Total",
     },
     note:

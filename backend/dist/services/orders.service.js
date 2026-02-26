@@ -94,7 +94,7 @@ const SHIPPING_METHODS = {
     "sul-fluminense": {
         id: "sul-fluminense",
         label: "Envio r�pido Sul Fluminense",
-        priceCents: 1290,
+        priceCents: 990,
     },
     "padrao-br": {
         id: "padrao-br",
@@ -268,9 +268,9 @@ async function createStoreOrder(input) {
     const shippingMethod = resolveShippingMethod(input.shippingMethod);
     const shippingCents = subtotalCents >= FREE_SHIPPING_THRESHOLD_CENTS
         ? 0
-        : shippingMethod?.priceCents ?? 1290;
+        : shippingMethod?.priceCents ?? 990;
     const taxable = Math.max(0, subtotalCents - discountCents);
-    const taxCents = Math.round(taxable * 0.08);
+    const taxCents = 0;
     const totalCents = taxable + shippingCents + taxCents;
     const code = await nextOrderCode();
     const touchedProducts = new Map();

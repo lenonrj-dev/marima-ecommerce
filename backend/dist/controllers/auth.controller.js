@@ -12,7 +12,9 @@ exports.registerCustomerHandler = (0, notFound_1.asyncHandler)(async (req, res) 
     if (typeof guestToken === "string" && guestToken) {
         try {
             await (0, carts_service_1.bindGuestCartToCustomer)(guestToken, String(user.id));
-            res.clearCookie(carts_service_1.GUEST_CART_COOKIE, (0, cookies_1.cookieBaseOptions)(req));
+            for (const options of (0, cookies_1.cookieClearOptions)(req)) {
+                res.clearCookie(carts_service_1.GUEST_CART_COOKIE, options);
+            }
         }
         catch {
             // Ignore cart merge failures.
@@ -40,7 +42,9 @@ exports.loginCustomerHandler = (0, notFound_1.asyncHandler)(async (req, res) => 
     if (typeof guestToken === "string" && guestToken) {
         try {
             await (0, carts_service_1.bindGuestCartToCustomer)(guestToken, String(user.id));
-            res.clearCookie(carts_service_1.GUEST_CART_COOKIE, (0, cookies_1.cookieBaseOptions)(req));
+            for (const options of (0, cookies_1.cookieClearOptions)(req)) {
+                res.clearCookie(carts_service_1.GUEST_CART_COOKIE, options);
+            }
         }
         catch {
             // Ignore cart merge failures.
@@ -85,7 +89,8 @@ exports.logoutHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
 exports.refreshHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
     const refresh = req.cookies?.[auth_1.REFRESH_COOKIE] || req.cookies?.[auth_1.LEGACY_REFRESH_COOKIE];
     if (!refresh) {
-        res.status(401).json({ code: "AUTH_REQUIRED", message: "N�o autenticado." });
+        (0, auth_service_1.clearAuthCookies)(res, req);
+        res.status(401).json({ code: "AUTH_REQUIRED", message: "Não autenticado." });
         return;
     }
     let payload;
@@ -94,7 +99,7 @@ exports.refreshHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
     }
     catch {
         (0, auth_service_1.clearAuthCookies)(res, req);
-        res.status(401).json({ code: "AUTH_EXPIRED", message: "Sess�o expirada." });
+        res.status(401).json({ code: "AUTH_EXPIRED", message: "Sessão expirada." });
         return;
     }
     (0, auth_service_1.setAuthCookies)(res, payload, req);
@@ -102,7 +107,7 @@ exports.refreshHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
 });
 exports.meHandler = (0, notFound_1.asyncHandler)(async (req, res) => {
     if (!req.auth) {
-        res.status(401).json({ code: "AUTH_REQUIRED", message: "N�o autenticado." });
+        res.status(401).json({ code: "AUTH_REQUIRED", message: "Não autenticado." });
         return;
     }
     const me = await (0, auth_service_1.meFromPayload)(req.auth);

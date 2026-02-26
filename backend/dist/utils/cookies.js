@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.cookieBaseOptions = cookieBaseOptions;
 exports.cookieOptions = cookieOptions;
+exports.cookieClearOptions = cookieClearOptions;
 const env_1 = require("../config/env");
 function isLocalhostHost(value) {
     const host = value.toLowerCase();
@@ -53,4 +54,29 @@ function cookieOptions(req, maxAgeMs) {
         ...cookieBaseOptions(req),
         maxAge: maxAgeMs,
     };
+}
+function clearOptionKey(options) {
+    return [
+        options.domain || "",
+        options.path || "/",
+        options.sameSite || "",
+        options.secure ? "1" : "0",
+        options.httpOnly ? "1" : "0",
+    ].join("|");
+}
+function cookieClearOptions(req) {
+    const base = cookieBaseOptions(req);
+    const variants = [base];
+    // Compatibilidade para cookies legados host-only (sem domain explícito).
+    if (base.domain) {
+        variants.push({
+            ...base,
+            domain: undefined,
+        });
+    }
+    const unique = new Map();
+    for (const options of variants) {
+        unique.set(clearOptionKey(options), options);
+    }
+    return Array.from(unique.values());
 }

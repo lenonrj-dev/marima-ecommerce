@@ -86,11 +86,13 @@ function setAuthCookies(res, payload, req) {
     res.cookie(auth_1.REFRESH_COOKIE, refresh, (0, cookies_1.cookieOptions)(req, parseDurationMs(env_1.env.REFRESH_TOKEN_TTL)));
 }
 function clearAuthCookies(res, req) {
-    const options = (0, cookies_1.cookieBaseOptions)(req);
-    res.clearCookie(auth_1.ACCESS_COOKIE, options);
-    res.clearCookie(auth_1.REFRESH_COOKIE, options);
-    res.clearCookie(auth_1.LEGACY_ACCESS_COOKIE, options);
-    res.clearCookie(auth_1.LEGACY_REFRESH_COOKIE, options);
+    const cookieNames = [auth_1.ACCESS_COOKIE, auth_1.REFRESH_COOKIE, auth_1.LEGACY_ACCESS_COOKIE, auth_1.LEGACY_REFRESH_COOKIE];
+    const clearOptions = (0, cookies_1.cookieClearOptions)(req);
+    for (const cookieName of cookieNames) {
+        for (const options of clearOptions) {
+            res.clearCookie(cookieName, options);
+        }
+    }
 }
 async function registerCustomer(input) {
     const email = input.email.trim().toLowerCase();

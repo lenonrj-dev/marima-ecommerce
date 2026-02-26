@@ -3,7 +3,7 @@ import type { Product } from "@/lib/productsData";
 export const CART_STORAGE_KEY = "marima_cart_v1";
 export const DEFAULT_SHIPPING_CENTS = 990;
 export const FREE_SHIPPING_THRESHOLD_CENTS = 29900;
-export const DEFAULT_TAX_RATE = 0.08;
+export const DEFAULT_TAX_RATE = 0;
 
 export type CartItem = {
   id: string;
@@ -204,12 +204,11 @@ export function calculateCartTotals(
 ): CartTotals {
   const subtotal = items.reduce((acc, item) => acc + item.unitPrice * item.qty, 0);
   const discount = Math.max(0, options?.discountCents ?? 0);
-  const taxRate = options?.taxRate ?? DEFAULT_TAX_RATE;
   const shipping =
     options?.shippingCents ??
     (subtotal >= FREE_SHIPPING_THRESHOLD_CENTS ? 0 : items.length > 0 ? DEFAULT_SHIPPING_CENTS : 0);
   const taxable = Math.max(0, subtotal - discount);
-  const tax = Math.round(taxable * taxRate);
+  const tax = 0;
 
   return {
     subtotal,

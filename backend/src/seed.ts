@@ -350,7 +350,7 @@ async function upsertCustomerAndOrder() {
   const item2 = productRows[1]!;
   const subtotal = item1.priceCents + item2.priceCents;
   const tax = Math.round(subtotal * 0.08);
-  const shipping = 1290;
+  const shipping = 990;
   const total = subtotal + tax + shipping;
 
   const order = await prisma.order.create({
