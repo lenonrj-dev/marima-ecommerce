@@ -39,7 +39,7 @@ export default function CartCrossSell() {
   if (loading) {
     return (
       <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
-        <p className="text-sm font-semibold text-zinc-900">VocÃª tambÃ©m pode gostar</p>
+        <p className="text-sm font-semibold text-zinc-900">Você também pode gostar</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div className="h-28 animate-pulse rounded-xl bg-zinc-100" />
           <div className="h-28 animate-pulse rounded-xl bg-zinc-100" />
@@ -52,7 +52,7 @@ export default function CartCrossSell() {
 
   return (
     <div className="mt-4 overflow-hidden rounded-2xl border border-zinc-200 bg-white p-4">
-      <p className="text-sm font-semibold text-zinc-900">VocÃª tambÃ©m pode gostar</p>
+      <p className="text-sm font-semibold text-zinc-900">Você também pode gostar</p>
 
       <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2">
         {suggestions.map((product) => (
