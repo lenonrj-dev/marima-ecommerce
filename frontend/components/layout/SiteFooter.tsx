@@ -7,7 +7,10 @@ import { SITE_COPY } from "@/lib/siteCopy";
 const CURRENT_YEAR = 2026;
 
 const logoSrc =
-  "https://res.cloudinary.com/dhcaw7ipf/image/upload/v1771339219/MARIMA._1_hrjb8k.png";
+  "https://res.cloudinary.com/dhcaw7ipf/image/upload/v1772142515/MARIMA._2_njmiac.png";
+
+const ateliuxLogoSrc =
+  "https://res.cloudinary.com/df4wjugxk/image/upload/v1772142334/Ateliux_Logo_kuv8bo.png";
 
 export default function SiteFooter() {
   return (
@@ -110,13 +113,30 @@ export default function SiteFooter() {
             <p className="text-sm font-semibold text-zinc-900">Novidades Marima</p>
             <p className="mt-3 text-sm text-zinc-500">Receba lançamentos e ofertas em primeira mão.</p>
             <FooterNewsletterForm />
+
+            <div className="mt-20">
+  <Link
+    href="https://www.ateliux.com.br"
+    target="_blank"
+    rel="noopener noreferrer"
+    aria-label="Desenvolvido por Ateliux"
+    className="inline-flex items-center gap-2 text-xs text-zinc-500 transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20"
+  >
+    <span className="uppercase tracking-[0.14em]">Desenvolvido por</span>
+    <Image
+      src={ateliuxLogoSrc}
+      alt="Ateliux"
+      width={110}
+      height={38}
+      className="h-auto w-[140px] object-contain"
+    />
+  </Link>
+</div>
           </div>
         </div>
 
         <div className="flex flex-col items-center justify-between gap-3 border-t border-zinc-100 py-6 text-xs text-zinc-500 md:flex-row">
-          <p>
-            {CURRENT_YEAR} Marima. Todos os direitos reservados.
-          </p>
+          <p>{CURRENT_YEAR} Marima. Todos os direitos reservados.</p>
           <p>Marima - Moda Fitness</p>
         </div>
       </Container>
