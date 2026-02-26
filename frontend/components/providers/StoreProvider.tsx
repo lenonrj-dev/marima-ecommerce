@@ -351,7 +351,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
       void (async () => {
         try {
-          await apiFetch("/api/v1/auth/logout", { method: "POST" });
+          try {
+            await apiFetch("/api/v1/auth/customer/logout", {
+              method: "POST",
+              skipAuthRedirect: true,
+            });
+          } catch {
+            await apiFetch("/api/v1/auth/logout", {
+              method: "POST",
+              skipAuthRedirect: true,
+            });
+          }
         } catch {
           // Ignore logout failures.
         } finally {

@@ -58,8 +58,7 @@ export default function LoginCard({ reason, nextPath }: { reason?: string; nextP
 
   return (
     <div
-      className="w-full max-w-[420px] rounded-[28px] border border-zinc-200 bg-white p-6 shadow-[0_28px_80px_rgba(24,24,27,0.14)] sm:p-8"
-      style={{ marginLeft: 65 }}
+      className="mx-auto w-full max-w-[420px] rounded-[28px] border border-zinc-200 bg-white p-6 shadow-[0_28px_80px_rgba(24,24,27,0.14)] sm:p-8 md:mx-0 md:ml-[65px]"
       role="region"
       aria-label="Entrar na conta"
     >
@@ -85,7 +84,9 @@ export default function LoginCard({ reason, nextPath }: { reason?: string; nextP
           />
         </div>
 
-        <h1 className="mt-4 text-[22px] font-semibold tracking-tight text-zinc-900 sm:text-[26px]">{LOGIN_COPY.title}</h1>
+        <h1 className="mt-4 text-[22px] font-semibold tracking-tight text-zinc-900 sm:text-[26px]">
+          {LOGIN_COPY.title}
+        </h1>
         <p className="mt-1 max-w-[28ch] text-sm text-zinc-600">{LOGIN_COPY.helper}</p>
       </div>
 

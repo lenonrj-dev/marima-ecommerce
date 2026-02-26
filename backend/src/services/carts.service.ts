@@ -5,7 +5,7 @@ import { delCache, getOrSetCache } from "../lib/cache";
 import { env } from "../config/env";
 import { ApiError } from "../utils/apiError";
 
-const SHIPPING_FLAT_CENTS = 1290;
+const SHIPPING_FLAT_CENTS = 990;
 const FREE_SHIPPING_THRESHOLD_CENTS = 29900;
 const TAX_RATE = 0.08;
 const SHARED_CART_TTL_DAYS = 1;
@@ -724,3 +724,4 @@ export async function getCartForConversion(cartId: string) {
   if (!cart.items.length) throw new ApiError(400, "Carrinho sem itens.");
   return cart;
 }
+

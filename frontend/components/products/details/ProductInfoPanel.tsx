@@ -1,6 +1,5 @@
-"use client";
+﻿"use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Heart, Minus, Plus, Star } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -12,7 +11,7 @@ import { useCart, useFavorites } from "@/components/cart/CartProvider";
 function Stars({ value }: { value: number }) {
   const full = Math.max(0, Math.min(5, Math.round(value)));
   return (
-    <div className="flex items-center gap-1" aria-label={`Avaliação ${full} de 5`}>
+    <div className="flex items-center gap-1" aria-label={`AvaliaÃ§Ã£o ${full} de 5`}>
       {Array.from({ length: 5 }).map((_, i) => (
         <Star
           key={i}
@@ -114,7 +113,7 @@ export default function ProductInfoPanel({
         <Stars value={product.rating} />
         <span className="text-zinc-400">|</span>
         <span>
-          {product.rating.toFixed(1)} ({product.reviewCount} avaliações)
+          {product.rating.toFixed(1)} ({product.reviewCount} avaliaÃ§Ãµes)
         </span>
       </div>
 
@@ -146,7 +145,7 @@ export default function ProductInfoPanel({
                     disabled={disabled}
                     aria-disabled={disabled ? "true" : undefined}
                     aria-label={`Selecionar cor ${item.colorName}`}
-                    title={disabled ? "Indisponível" : undefined}
+                    title={disabled ? "IndisponÃ­vel" : undefined}
                     className={[
                       "inline-flex h-8 w-8 items-center justify-center rounded-full ring-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25",
                       disabled ? "cursor-not-allowed opacity-45" : "",
@@ -188,41 +187,23 @@ export default function ProductInfoPanel({
                           ? "border-[#d1a35a] bg-[#d1a35a] text-white"
                           : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50",
                     ].join(" ")}
-                    title={disabled ? "Indisponível" : undefined}
+                    title={disabled ? "IndisponÃ­vel" : undefined}
                   >
                     {row.label}
                   </button>
                 );
               })}
             </div>
-
-            <Link
-              href="/central-de-ajuda/como-comprar"
-              className="inline-flex text-xs font-medium text-zinc-600 underline underline-offset-4 hover:text-zinc-900"
-            >
-              Ver guia de medidas
-            </Link>
           </div>
         ) : (
           <div className="space-y-2">
             <p className="text-sm text-zinc-700">
-              <span className="font-medium">Tamanho</span>: Único
+              <span className="font-medium">Tamanho</span>: Ãšnico
             </p>
           </div>
         )}
 
-        <div className="flex items-center gap-3 text-sm">
-          <button
-            type="button"
-            onClick={() => {
-              setSize(initialSize);
-              setQty(1);
-            }}
-            className="font-medium text-zinc-600 underline underline-offset-4 hover:text-zinc-900"
-          >
-            Limpar seleção
-          </button>
-          <span className="text-zinc-400">x</span>
+        <div className="flex items-center text-sm">
           <span
             className={[
               "inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold ring-1",
@@ -308,3 +289,4 @@ export default function ProductInfoPanel({
     </div>
   );
 }
+

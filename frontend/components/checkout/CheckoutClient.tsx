@@ -19,6 +19,51 @@ import {
 import MercadoPagoWalletBrick from "@/components/checkout/MercadoPagoWalletBrick";
 import { cancelPendingMercadoPagoOrder } from "@/lib/payments/mercadoPago";
 import { buildLoginUrl, isAuthenticated } from "@/lib/authSession";
+import { apiFetch } from "@/lib/api";
+import type { DashboardAddress } from "@/lib/dashboardData";
+
+const CHECKOUT_ADDRESS_PROMPT_SESSION_KEY = "marima:checkout:saved-address-prompt:v1";
+
+type AddressPromptDecision = "accepted" | "declined";
+
+function pickPreferredAddress(addresses: DashboardAddress[]) {
+  if (!Array.isArray(addresses) || addresses.length === 0) return null;
+  return addresses.find((address) => Boolean(address.isDefault)) || addresses[0] || null;
+}
+
+function splitFullName(fullName: string) {
+  const trimmed = fullName.trim();
+  if (!trimmed) {
+    return { firstName: "", lastName: "" };
+  }
+
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  const firstName = parts[0] || "";
+  const lastName = parts.slice(1).join(" ");
+  return { firstName, lastName };
+}
+
+function readAddressPromptDecision(): AddressPromptDecision | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.sessionStorage.getItem(CHECKOUT_ADDRESS_PROMPT_SESSION_KEY);
+    if (raw === "accepted" || raw === "declined") return raw;
+  } catch {
+    // Ignore sessionStorage failures.
+  }
+
+  return null;
+}
+
+function saveAddressPromptDecision(decision: AddressPromptDecision) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(CHECKOUT_ADDRESS_PROMPT_SESSION_KEY, decision);
+  } catch {
+    // Ignore sessionStorage failures.
+  }
+}
 
 export default function CheckoutClient() {
   const router = useRouter();
@@ -45,7 +90,31 @@ export default function CheckoutClient() {
     };
   } | null>(null);
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
+  const [savedAddressPrompt, setSavedAddressPrompt] = useState<{
+    open: boolean;
+    address: DashboardAddress | null;
+  }>({
+    open: false,
+    address: null,
+  });
+  const [addressToastMessage, setAddressToastMessage] = useState<string | null>(null);
   const nextPath = pathname || "/checkout";
+  const [hasManualAddressInput, setHasManualAddressInput] = useState(false);
+
+  const hasAnyCheckoutAddressValue = useMemo(() => {
+    return (
+      values.firstName.trim().length > 0 ||
+      values.lastName.trim().length > 0 ||
+      values.phone.trim().length > 0 ||
+      values.zip.trim().length > 0 ||
+      values.state.trim().length > 0 ||
+      values.city.trim().length > 0 ||
+      values.neighborhood.trim().length > 0 ||
+      values.street.trim().length > 0 ||
+      values.number.trim().length > 0 ||
+      values.complement.trim().length > 0
+    );
+  }, [values]);
 
   useEffect(() => {
     let active = true;
@@ -109,7 +178,94 @@ export default function CheckoutClient() {
   );
 
   function updateField(field: keyof CheckoutFormValues, value: string) {
+    setHasManualAddressInput(true);
     setValues((previous) => ({ ...previous, [field]: value }));
+  }
+
+  function applySavedAddress(address: DashboardAddress) {
+    const { firstName, lastName } = splitFullName(address.fullName || "");
+
+    setValues((previous) => ({
+      ...previous,
+      firstName: firstName || previous.firstName,
+      lastName: lastName || previous.lastName,
+      phone: previous.phone,
+      zip: address.zip || previous.zip,
+      state: address.state || previous.state,
+      city: address.city || previous.city,
+      neighborhood: address.neighborhood || previous.neighborhood,
+      street: address.street || previous.street,
+      number: address.number || previous.number,
+      complement: address.complement || "",
+    }));
+  }
+
+  useEffect(() => {
+    if (!authChecked || !isAuthed) return;
+
+    const sessionDecision = readAddressPromptDecision();
+    if (sessionDecision === "declined") return;
+
+    let active = true;
+
+    void (async () => {
+      try {
+        const response = await apiFetch<{ data: DashboardAddress[] }>("/api/v1/me/addresses", {
+          method: "GET",
+          cache: "no-store",
+          skipAuthRedirect: true,
+        });
+        if (!active) return;
+
+        const preferredAddress = pickPreferredAddress(response.data || []);
+        if (!preferredAddress) return;
+
+        if (sessionDecision === "accepted") {
+          // Respeita edição manual do cliente nesta sessão de checkout.
+          if (!hasManualAddressInput && !hasAnyCheckoutAddressValue) {
+            applySavedAddress(preferredAddress);
+          }
+          return;
+        }
+
+        setSavedAddressPrompt({
+          open: true,
+          address: preferredAddress,
+        });
+      } catch {
+        // Sem endereço salvo ou falha pontual: checkout segue normalmente.
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [authChecked, hasAnyCheckoutAddressValue, hasManualAddressInput, isAuthed]);
+
+  useEffect(() => {
+    if (!addressToastMessage) return;
+    const timeoutId = window.setTimeout(() => {
+      setAddressToastMessage(null);
+    }, 3000);
+    return () => window.clearTimeout(timeoutId);
+  }, [addressToastMessage]);
+
+  function handleUseSavedAddress() {
+    if (!savedAddressPrompt.address) {
+      setSavedAddressPrompt({ open: false, address: null });
+      return;
+    }
+
+    applySavedAddress(savedAddressPrompt.address);
+    saveAddressPromptDecision("accepted");
+    setSavedAddressPrompt({ open: false, address: null });
+    setAddressToastMessage("Endereço salvo aplicado no checkout.");
+  }
+
+  function handleManualAddress() {
+    saveAddressPromptDecision("declined");
+    setSavedAddressPrompt({ open: false, address: null });
+    setAddressToastMessage("Tudo certo. Você pode preencher o endereço manualmente.");
   }
 
   async function handleContinueToPayment() {
@@ -199,6 +355,42 @@ export default function CheckoutClient() {
 
   return (
     <div className="space-y-6">
+      {savedAddressPrompt.open && savedAddressPrompt.address ? (
+        <div
+          role="dialog"
+          aria-live="polite"
+          aria-label="Confirmação de endereço salvo"
+          className="fixed bottom-[max(16px,env(safe-area-inset-bottom))] left-1/2 z-[90] w-[min(720px,calc(100%-32px))] -translate-x-1/2 rounded-2xl border border-zinc-200 bg-white p-4 shadow-[0_20px_50px_rgba(0,0,0,0.14)]"
+        >
+          <p className="text-sm font-semibold text-zinc-900">Encontramos um endereço salvo</p>
+          <p className="mt-1 text-xs text-zinc-600">
+            Deseja usar o endereço salvo da sua conta para preencher o checkout?
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleUseSavedAddress}
+              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-900 px-4 text-xs font-semibold text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+            >
+              Usar endereço salvo
+            </button>
+            <button
+              type="button"
+              onClick={handleManualAddress}
+              className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-200 bg-white px-4 text-xs font-semibold text-zinc-800 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+            >
+              Preencher manualmente
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {addressToastMessage ? (
+        <div className="fixed bottom-[max(16px,env(safe-area-inset-bottom))] left-1/2 z-[89] w-[min(560px,calc(100%-32px))] -translate-x-1/2 rounded-xl border border-zinc-200 bg-zinc-900 px-4 py-3 text-sm font-medium text-white shadow-[0_18px_40px_rgba(0,0,0,0.24)]">
+          {addressToastMessage}
+        </div>
+      ) : null}
+
       <div className="bg-white">
         <div className="mx-auto w-full max-w-[1180px] px-4 sm:px-6 lg:px-8">
           <CheckoutHeader />

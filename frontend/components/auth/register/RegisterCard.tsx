@@ -59,8 +59,7 @@ export default function RegisterCard({ nextPath }: { nextPath?: string }) {
 
   return (
     <div
-      className="w-full max-w-[420px] rounded-[28px] border border-zinc-200 bg-white p-6 shadow-[0_28px_80px_rgba(24,24,27,0.14)] sm:p-8"
-      style={{ marginLeft: 65 }}
+      className="mx-auto w-full max-w-[420px] rounded-[28px] border border-zinc-200 bg-white p-6 shadow-[0_28px_80px_rgba(24,24,27,0.14)] sm:p-8 md:mx-0 md:ml-[65px]"
       role="region"
       aria-label="Criar conta"
     >
@@ -87,7 +86,9 @@ export default function RegisterCard({ nextPath }: { nextPath?: string }) {
         </div>
 
         <h1 className="mt-4 text-[22px] font-semibold tracking-tight text-zinc-900 sm:text-[26px]">Criar conta</h1>
-        <p className="mt-1 max-w-[32ch] text-sm text-zinc-600">Crie sua conta para salvar favoritos e acompanhar pedidos.</p>
+        <p className="mt-1 max-w-[32ch] text-sm text-zinc-600">
+          Crie sua conta para salvar favoritos e acompanhar pedidos.
+        </p>
       </div>
 
       <form className="mt-6 space-y-3" onSubmit={handleSubmit}>

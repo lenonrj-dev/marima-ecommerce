@@ -61,7 +61,7 @@ export const SHIPPING_METHODS: ShippingMethod[] = [
     id: "sul-fluminense",
     label: "Envio rápido Sul Fluminense",
     eta: "Prazo estimado: 2 a 7 dias úteis",
-    priceCents: 1290,
+    priceCents: 990,
   },
   {
     id: "padrao-br",
@@ -116,3 +116,4 @@ export function validateCheckoutForm(values: CheckoutFormValues) {
 
   return { ok: true as const, missing: [] };
 }
+

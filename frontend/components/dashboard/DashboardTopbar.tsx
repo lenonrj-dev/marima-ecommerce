@@ -11,7 +11,7 @@ type DashboardTopbarProps = {
 
 export default function DashboardTopbar({ user }: DashboardTopbarProps) {
   return (
-    <div className="sticky top-[72px] z-30 border-b border-zinc-200 bg-white/90 backdrop-blur">
+    <div className="relative z-10 border-b border-zinc-200 bg-white md:sticky md:top-[72px] md:z-30 md:bg-white/95 md:backdrop-blur">
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
         <div className="flex min-h-[72px] items-center justify-between gap-4">
           <div className="min-w-0">
@@ -36,7 +36,6 @@ export default function DashboardTopbar({ user }: DashboardTopbarProps) {
             </Link>
           </div>
         </div>
-
       </div>
     </div>
   );

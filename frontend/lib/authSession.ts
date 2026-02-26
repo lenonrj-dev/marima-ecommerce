@@ -31,7 +31,7 @@ export async function isAuthenticated() {
       skipAuthRedirect: true,
     });
     const type = response?.data?.type || response?.data?.userType;
-    return type === "customer" || type === "admin";
+    return type === "customer";
   } catch {
     return false;
   }

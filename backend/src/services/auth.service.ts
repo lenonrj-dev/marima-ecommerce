@@ -7,7 +7,7 @@ import { delCache, getOrSetCache } from "../lib/cache";
 import { prisma } from "../lib/prisma";
 import { ApiError } from "../utils/apiError";
 import { ACCESS_COOKIE, LEGACY_ACCESS_COOKIE, LEGACY_REFRESH_COOKIE, REFRESH_COOKIE } from "../middlewares/auth";
-import { cookieBaseOptions, cookieOptions } from "../utils/cookies";
+import { cookieClearOptions, cookieOptions } from "../utils/cookies";
 
 const SALT_ROUNDS = 10;
 const ME_CACHE_TTL_SECONDS = 60;
@@ -90,11 +90,14 @@ export function setAuthCookies(res: Response, payload: TokenPayload, req?: Reque
 }
 
 export function clearAuthCookies(res: Response, req?: Request) {
-  const options = cookieBaseOptions(req);
-  res.clearCookie(ACCESS_COOKIE, options);
-  res.clearCookie(REFRESH_COOKIE, options);
-  res.clearCookie(LEGACY_ACCESS_COOKIE, options);
-  res.clearCookie(LEGACY_REFRESH_COOKIE, options);
+  const cookieNames = [ACCESS_COOKIE, REFRESH_COOKIE, LEGACY_ACCESS_COOKIE, LEGACY_REFRESH_COOKIE];
+  const clearOptions = cookieClearOptions(req);
+
+  for (const cookieName of cookieNames) {
+    for (const options of clearOptions) {
+      res.clearCookie(cookieName, options);
+    }
+  }
 }
 
 export async function registerCustomer(input: {

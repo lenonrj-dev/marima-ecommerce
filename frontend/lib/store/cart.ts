@@ -1,7 +1,7 @@
 import type { Product } from "@/lib/productsData";
 
 export const CART_STORAGE_KEY = "marima_cart_v1";
-export const DEFAULT_SHIPPING_CENTS = 1290;
+export const DEFAULT_SHIPPING_CENTS = 990;
 export const FREE_SHIPPING_THRESHOLD_CENTS = 29900;
 export const DEFAULT_TAX_RATE = 0.08;
 
@@ -219,3 +219,4 @@ export function calculateCartTotals(
     total: Math.max(0, taxable + shipping + tax),
   };
 }
+

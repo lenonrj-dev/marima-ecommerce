@@ -53,3 +53,35 @@ export function cookieOptions(req: Request | undefined, maxAgeMs: number) {
     maxAge: maxAgeMs,
   };
 }
+
+type ClearCookieOptions = ReturnType<typeof cookieBaseOptions>;
+
+function clearOptionKey(options: ClearCookieOptions) {
+  return [
+    options.domain || "",
+    options.path || "/",
+    options.sameSite || "",
+    options.secure ? "1" : "0",
+    options.httpOnly ? "1" : "0",
+  ].join("|");
+}
+
+export function cookieClearOptions(req?: Request) {
+  const base = cookieBaseOptions(req);
+  const variants: ClearCookieOptions[] = [base];
+
+  // Compatibilidade para cookies legados host-only (sem domain explícito).
+  if (base.domain) {
+    variants.push({
+      ...base,
+      domain: undefined,
+    });
+  }
+
+  const unique = new Map<string, ClearCookieOptions>();
+  for (const options of variants) {
+    unique.set(clearOptionKey(options), options);
+  }
+
+  return Array.from(unique.values());
+}

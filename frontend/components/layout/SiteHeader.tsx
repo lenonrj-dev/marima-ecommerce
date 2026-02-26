@@ -25,6 +25,8 @@ import { apiFetch } from "@/lib/api";
 
 type AuthMeResponse = {
   data?: {
+    type?: string | null;
+    userType?: string | null;
     name?: string | null;
     customer?: { name?: string | null } | null;
   } | null;
@@ -43,6 +45,11 @@ function resolveUserName(payload: AuthMeResponse) {
     null;
 
   return typeof rawName === "string" && rawName.trim() ? rawName.trim() : null;
+}
+
+function resolveAuthType(payload: AuthMeResponse) {
+  const maybeType = payload?.data?.type || payload?.data?.userType;
+  return typeof maybeType === "string" ? maybeType : null;
 }
 
 function getInitials(name: string | null) {
@@ -93,11 +100,20 @@ export default function SiteHeader() {
       const me = await apiFetch<AuthMeResponse>("/api/v1/auth/me", {
         method: "GET",
         cache: "no-store",
+        skipAuthRedirect: true,
       });
+      const authType = resolveAuthType(me);
       const maybeName = resolveUserName(me);
 
-      setIsAuthed(true);
-      setUserLabel(maybeName);
+      if (authType === "customer") {
+        setIsAuthed(true);
+        setUserLabel(maybeName);
+        return;
+      }
+
+      setIsAuthed(false);
+      setUserLabel(null);
+      setAccountOpen(false);
     } catch {
       setIsAuthed(false);
       setUserLabel(null);
@@ -108,24 +124,22 @@ export default function SiteHeader() {
   async function handleLogout() {
     if (logoutLoading) return;
     setLogoutLoading(true);
+    setIsAuthed(false);
+    setUserLabel(null);
+    setAccountOpen(false);
+    setMenuOpen(false);
+    setSearchOpen(false);
 
     try {
       try {
-        await apiFetch("/api/v1/auth/customer/logout", { method: "POST" });
+        await apiFetch("/api/v1/auth/customer/logout", { method: "POST", skipAuthRedirect: true });
       } catch {
-        await apiFetch("/api/v1/auth/logout", { method: "POST" });
+        await apiFetch("/api/v1/auth/logout", { method: "POST", skipAuthRedirect: true });
       }
-
+    } finally {
       window.dispatchEvent(new Event("marima:auth-changed"));
-      setAccountOpen(false);
-      setMenuOpen(false);
-      setSearchOpen(false);
       router.replace("/login");
       router.refresh();
-    } catch {
-      window.dispatchEvent(new Event("marima:auth-changed"));
-      await refreshAuth();
-    } finally {
       setLogoutLoading(false);
     }
   }
@@ -261,7 +275,7 @@ export default function SiteHeader() {
             </Link>
 
             <Link
-              href="/dashboard/enderecos"
+              href="/dashboard/endereco"
               role="menuitem"
               className="group mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20"
               onClick={() => {
