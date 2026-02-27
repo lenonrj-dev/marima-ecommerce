@@ -59,7 +59,7 @@ export type CartApiHooks = {
 
   /**
    * Hook para recalcular frete/impostos no backend (opcional).
-   * Se no passar, usamos clculo mock local.
+   * Se não passar, usamos cálculo local.
    */
   quote: (payload: { items : CartItem[];
     coupon: string;
@@ -67,7 +67,7 @@ export type CartApiHooks = {
   }) => Promise<Partial<CartTotals>>;
 
   /**
-   * Hook de checkout (integrar com criao de pedido, pagamento, etc).
+   * Hook de checkout (integrar com criação de pedido, pagamento etc.).
    */
   checkout: (payload: { items : CartItem[];
     totals: CartTotals;

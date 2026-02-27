@@ -6,15 +6,13 @@ import { ArrowRight } from "lucide-react";
 
 import Container from "@/components/ui/Container";
 
-import { ABOUT_COPY, ABOUT_IMAGES } from "@/lib/aboutData";
+import { ABOUT_COPY } from "@/lib/aboutData";
 
 export default function LatestCollection() {
   return (
     <section className="bg-white py-14 sm:py-16">
       <Container>
         <div className="grid items-center gap-12 lg:grid-cols-[0.9fr_1.1fr]">
-          {/* Left image */}
-
           <div className="overflow-hidden rounded-3xl bg-zinc-100 shadow-soft ring-1 ring-black/5">
             <div className="relative aspect-[4/5] w-full sm:aspect-[3/4]">
               <Image
@@ -26,8 +24,6 @@ export default function LatestCollection() {
               />
             </div>
           </div>
-
-          {/* Right content */}
 
           <div className="space-y-6">
             <h3 className="whitespace-pre-line font-serif text-4xl leading-tight text-zinc-900 sm:text-5xl">

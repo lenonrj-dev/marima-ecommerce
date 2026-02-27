@@ -1,5 +1,3 @@
-// Placeholders para upsell / cross-sell (trocar por dados do backend).
-
 const PRODUCT_IMG =
   "https://res.cloudinary.com/dxeooztro/image/upload/v1764855923/products/wm3vuf0hbfpmvf92ofma.png";
 

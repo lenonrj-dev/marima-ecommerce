@@ -67,9 +67,7 @@ export default function CartPayment() {
         </label>
       </div>
 
-      <p className="mt-2 text-xs text-zinc-500">
-        Placeholder técnico: integração futura com gateway de pagamento.
-      </p>
+      <p className="mt-2 text-xs text-zinc-500">Pagamento processado com segurança no ambiente de checkout.</p>
     </div>
   );
 }

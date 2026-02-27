@@ -6,15 +6,13 @@ import { ArrowRight } from "lucide-react";
 
 import Container from "@/components/ui/Container";
 
-import { ABOUT_COPY, ABOUT_IMAGES } from "@/lib/aboutData";
+import { ABOUT_COPY } from "@/lib/aboutData";
 
 export default function WhoWeAre() {
   return (
     <section className="bg-white py-14 sm:py-16">
       <Container>
         <div className="grid gap-12 lg:grid-cols-[0.95fr_1.05fr]">
-          {/* Left */}
-
           <div className="space-y-6">
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-900">
@@ -41,8 +39,6 @@ export default function WhoWeAre() {
               ))}
             </div>
           </div>
-
-          {/* Right */}
 
           <div className="relative">
             <div className="flex items-center justify-between gap-4">

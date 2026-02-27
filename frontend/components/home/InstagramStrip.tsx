@@ -125,7 +125,6 @@ export function InstagramStrip() {
     >
       <Container className="space-y-12 sm:space-y-16">
         <motion.div className="flex justify-center" variants={enableMotion ? slideInRight() : undefined}>
-          {/* Desktop layout (IMAGENS ORIGINAIS) */}
           <div className="relative hidden h-[560px] w-full max-w-[1100px] lg:block">
             <motion.div
               className="absolute left-[427px] top-[-30px] h-[120px] w-[120px] overflow-hidden"
@@ -204,7 +203,6 @@ export function InstagramStrip() {
             </motion.div>
           </div>
 
-          {/* Mobile layout (IMAGENS SEPARADAS) */}
           <motion.div
             className="grid w-full max-w-[740px] grid-cols-2 gap-4 sm:grid-cols-3 lg:hidden"
             variants={enableMotion ? slideInLeft() : undefined}

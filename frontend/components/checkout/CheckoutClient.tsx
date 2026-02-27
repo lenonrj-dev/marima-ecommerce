@@ -437,7 +437,7 @@ export default function CheckoutClient() {
                   Continuar para pagamento
                 </button>
                 <p className="text-xs leading-relaxed text-zinc-500">
-                  Esta etapa cria o pedido no backend e gera a preferência do Mercado Pago.
+                  Em dispositivos móveis com o app Mercado Pago instalado, você poderá concluir o pagamento diretamente no aplicativo.
                 </p>
               </div>
             )}

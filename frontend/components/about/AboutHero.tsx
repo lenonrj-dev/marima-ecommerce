@@ -3,26 +3,19 @@ import Image from "next/image";
 import Link from "next/link";
 
 import {
-  ArrowRight,
-  Play,
   Facebook,
-  Twitter,
-  Youtube,
-  Linkedin,
   Instagram,
 } from "lucide-react";
 
 import Container from "@/components/ui/Container";
 
-import { ABOUT_COPY, ABOUT_IMAGES } from "@/lib/aboutData";
+import { ABOUT_COPY } from "@/lib/aboutData";
 
 export default function AboutHero() {
   return (
     <section className="bg-[#f7f2ea]">
       <Container className="py-10 sm:py-14 lg:py-16">
         <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
-          {/* Left */}
-
           <div className="space-y-6">
             <h1 className="whitespace-pre-line font-serif text-4xl leading-[1.05] tracking-tight text-zinc-900 sm:text-5xl">
               {ABOUT_COPY.hero.title}
@@ -61,8 +54,6 @@ export default function AboutHero() {
 
             </div>
           </div>
-
-          {/* Right */}
 
           <div className="relative">
             <div className="relative overflow-hidden rounded-3xl bg-white shadow-soft ring-1 ring-black/5">

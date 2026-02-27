@@ -24,7 +24,7 @@ export default function MercadoPagoPlaceholderModal({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
-          <p className="text-sm font-semibold text-zinc-900">Mercado Pago (placeholder)</p>
+          <p className="text-sm font-semibold text-zinc-900">Mercado Pago</p>
           <button
             type="button"
             onClick={onClose}
@@ -37,10 +37,9 @@ export default function MercadoPagoPlaceholderModal({
 
         <div className="space-y-4 p-5 sm:p-6">
           <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
-            Aqui você vai encaixar o fluxo de pagamento do Mercado Pago (não transparente).
+            Você será direcionado ao ambiente do Mercado Pago para concluir seu pagamento com segurança.
             <span className="block mt-2 text-xs text-zinc-500">
-              Sugestão: renderizar o componente do Mercado Pago somente depois que o usuário preencher o formulário e
-              clicar em “Continuar”.
+              Revise seus dados antes de continuar para evitar divergências na finalização.
             </span>
           </div>
 

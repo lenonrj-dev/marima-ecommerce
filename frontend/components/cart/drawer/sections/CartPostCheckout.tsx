@@ -7,7 +7,7 @@ import { SITE_COPY } from "@/lib/siteCopy";
 export default function CartPostCheckout() {
   return (
     <div className="mt-6 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-      <p className="text-sm font-semibold text-zinc-900">Pós-compra (placeholders)</p>
+      <p className="text-sm font-semibold text-zinc-900">Pós-compra</p>
 
       <div className="mt-3 grid gap-2">
         <div className="flex items-start gap-3 rounded-xl bg-white p-3 ring-1 ring-black/5">
@@ -23,7 +23,7 @@ export default function CartPostCheckout() {
           <div>
             <p className="text-sm font-semibold text-zinc-900">Rastreamento</p>
             <p className="text-xs text-zinc-600">
-              Integração com transportadora para {SITE_COPY.ctas.trackOrder.toLowerCase()}.
+              Acompanhe atualizações de entrega e {SITE_COPY.ctas.trackOrder.toLowerCase()}.
             </p>
           </div>
         </div>

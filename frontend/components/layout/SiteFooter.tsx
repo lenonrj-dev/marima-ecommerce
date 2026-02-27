@@ -100,7 +100,7 @@ export default function SiteFooter() {
                   type="button"
                   disabled
                   aria-disabled
-                  title="Sair em breve"
+                  title="Sair indisponível neste menu"
                   className="cursor-not-allowed text-zinc-500"
                 >
                   Sair

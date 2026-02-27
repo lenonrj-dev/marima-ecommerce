@@ -51,7 +51,7 @@ export const CHECKOUT_COPY = {
       total: "Total",
     },
     note:
-      "O pagamento será conectado ao Mercado Pago em breve. Seus dados já são validados e o pedido fica pronto para envio ao gateway.",
+      "Ao continuar, você será direcionado para concluir o pagamento no ambiente seguro do Mercado Pago.",
   },
 };
 
