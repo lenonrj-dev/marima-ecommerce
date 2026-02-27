@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Script from "next/script";
+import { Suspense } from "react";
 import "./globals.css";
 
 import SiteHeader from "@/components/layout/SiteHeader";
@@ -81,7 +82,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </noscript>
 
         <CartProvider>
-          <PixelRouteTracker googleAdsId={GOOGLE_ADS_ID} />
+          <Suspense fallback={null}>
+            <PixelRouteTracker googleAdsId={GOOGLE_ADS_ID} />
+          </Suspense>
 
           <SiteHeader />
           {children}
