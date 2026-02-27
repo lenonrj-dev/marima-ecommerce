@@ -119,8 +119,9 @@ export default function CookieConsentBanner() {
 
   return createPortal(
     <div
-      className="fixed inset-x-0 bottom-0 z-[2147483647] flex justify-center px-4 pointer-events-auto"
+      className="fixed inset-x-0 bottom-0 flex justify-center px-4 pointer-events-none"
       style={{
+        zIndex: 2147483647,
         paddingBottom: "max(16px, env(safe-area-inset-bottom))",
       }}
     >
