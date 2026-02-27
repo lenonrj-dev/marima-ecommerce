@@ -237,7 +237,7 @@ export function InstagramStrip() {
                 </span>
                 <p className="text-xs font-semibold text-[#111111]">@use.marima.ofc</p>
               </div>
-              <span className="text-[11px] font-semibold text-[#111111]/70">Abrir no Instagram</span>
+              
             </motion.div>
           </motion.div>
         </motion.div>
