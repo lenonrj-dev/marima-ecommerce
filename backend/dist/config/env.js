@@ -15,8 +15,9 @@ const schema = zod_1.z.object({
     JWT_ACCESS_SECRET: zod_1.z.string().min(10),
     JWT_REFRESH_SECRET: zod_1.z.string().min(10),
     CORS_ORIGINS: zod_1.z.string().default("http://localhost:3000,http://localhost:3001"),
+    SESSION_MAX_TTL: zod_1.z.string().default("1h"),
     ACCESS_TOKEN_TTL: zod_1.z.string().default("15m"),
-    REFRESH_TOKEN_TTL: zod_1.z.string().default("7d"),
+    REFRESH_TOKEN_TTL: zod_1.z.string().default("1h"),
     COOKIE_DOMAIN: zod_1.z.string().optional(),
     COOKIE_SAMESITE: zod_1.z.preprocess((value) => {
         if (typeof value === "string" && value.trim() === "")

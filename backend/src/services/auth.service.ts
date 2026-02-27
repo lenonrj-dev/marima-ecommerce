@@ -14,13 +14,71 @@ const ME_CACHE_TTL_SECONDS = 60;
 
 export type Role = AdminRole;
 
-type TokenPayload = {
+type AuthPrincipal = {
   sub: string;
   role: Role | "customer";
   type: "admin" | "customer";
 };
 
-function toCleanTokenPayload(input: unknown): TokenPayload {
+type TokenPayload = AuthPrincipal & {
+  sessionExpiresAt: number;
+};
+
+type TokenPayloadInput = AuthPrincipal & {
+  sessionExpiresAt?: number;
+};
+
+function parseDurationMs(text: string, fallbackMs: number) {
+  if (typeof text !== "string" || !text.trim()) return fallbackMs;
+
+  const raw = text.trim().toLowerCase();
+  const match = raw.match(/^(\d+)\s*(ms|s|m|h|d)$/);
+  if (!match) return fallbackMs;
+
+  const value = Number(match[1]);
+  if (!Number.isFinite(value) || value <= 0) return fallbackMs;
+
+  const unit = match[2];
+  if (unit === "ms") return value;
+  if (unit === "s") return value * 1000;
+  if (unit === "m") return value * 60 * 1000;
+  if (unit === "h") return value * 60 * 60 * 1000;
+  if (unit === "d") return value * 24 * 60 * 60 * 1000;
+
+  return fallbackMs;
+}
+
+function resolveSessionMaxTtlMs() {
+  return parseDurationMs(env.SESSION_MAX_TTL, 60 * 60 * 1000);
+}
+
+function parseSessionExpiresAt(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.trunc(value);
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return Math.trunc(parsed);
+    }
+  }
+
+  return null;
+}
+
+function isSessionExpired(sessionExpiresAt: number, nowMs = Date.now()) {
+  return nowMs >= sessionExpiresAt;
+}
+
+function toExpiresInSeconds(maxAgeMs: number) {
+  return Math.max(1, Math.floor(maxAgeMs / 1000));
+}
+
+function toCleanTokenPayload(
+  input: unknown,
+  options: { requireSessionExpiresAt?: boolean; nowMs?: number } = {},
+): TokenPayload {
   if (!input || typeof input !== "object") {
     throw new ApiError(401, "Sessão expirada.", "AUTH_EXPIRED");
   }
@@ -30,7 +88,17 @@ function toCleanTokenPayload(input: unknown): TokenPayload {
   const role = typeof raw.role === "string" ? raw.role.trim() : "";
   const type = raw.type;
 
-  if (!sub || !role || (type !== "admin" && type !== "customer")) {
+  const nowMs = options.nowMs ?? Date.now();
+  const parsedSessionExpiresAt = parseSessionExpiresAt(raw.sessionExpiresAt);
+
+  const sessionExpiresAt =
+    parsedSessionExpiresAt && parsedSessionExpiresAt > nowMs
+      ? parsedSessionExpiresAt
+      : options.requireSessionExpiresAt
+        ? null
+        : nowMs + resolveSessionMaxTtlMs();
+
+  if (!sub || !role || (type !== "admin" && type !== "customer") || !sessionExpiresAt) {
     throw new ApiError(401, "Sessão expirada.", "AUTH_EXPIRED");
   }
 
@@ -38,10 +106,11 @@ function toCleanTokenPayload(input: unknown): TokenPayload {
     sub,
     role: role as TokenPayload["role"],
     type,
+    sessionExpiresAt,
   };
 }
 
-function meCacheKey(payload: TokenPayload) {
+function meCacheKey(payload: AuthPrincipal) {
   return `cache:v1:user:me:${payload.type}:${payload.sub}`;
 }
 
@@ -52,41 +121,52 @@ export async function invalidateMeCacheForUser(userId: string) {
   ]);
 }
 
-export function signAccessToken(payload: TokenPayload) {
+export function signAccessToken(payload: TokenPayloadInput, expiresIn?: SignOptions["expiresIn"]) {
   const cleanPayload = toCleanTokenPayload(payload);
   return jwt.sign(cleanPayload, env.JWT_ACCESS_SECRET, {
-    expiresIn: env.ACCESS_TOKEN_TTL as SignOptions["expiresIn"],
+    expiresIn: expiresIn ?? (env.ACCESS_TOKEN_TTL as SignOptions["expiresIn"]),
   });
 }
 
-export function signRefreshToken(payload: TokenPayload) {
+export function signRefreshToken(payload: TokenPayloadInput, expiresIn?: SignOptions["expiresIn"]) {
   const cleanPayload = toCleanTokenPayload(payload);
   return jwt.sign(cleanPayload, env.JWT_REFRESH_SECRET, {
-    expiresIn: env.REFRESH_TOKEN_TTL as SignOptions["expiresIn"],
+    expiresIn: expiresIn ?? (env.REFRESH_TOKEN_TTL as SignOptions["expiresIn"]),
   });
 }
 
 export function verifyRefreshToken(token: string) {
   const decoded = jwt.verify(token, env.JWT_REFRESH_SECRET);
-  return toCleanTokenPayload(decoded);
+  const payload = toCleanTokenPayload(decoded, { requireSessionExpiresAt: true });
+
+  if (isSessionExpired(payload.sessionExpiresAt)) {
+    throw new ApiError(401, "Sessão expirada.", "AUTH_EXPIRED");
+  }
+
+  return payload;
 }
 
-function parseDurationMs(text: string) {
-  const unit = text.slice(-1);
-  const value = Number(text.slice(0, -1));
-  if (unit === "m") return value * 60 * 1000;
-  if (unit === "h") return value * 60 * 60 * 1000;
-  if (unit === "d") return value * 24 * 60 * 60 * 1000;
-  return 15 * 60 * 1000;
-}
-
-export function setAuthCookies(res: Response, payload: TokenPayload, req?: Request) {
+export function setAuthCookies(res: Response, payload: TokenPayloadInput, req?: Request) {
   const cleanPayload = toCleanTokenPayload(payload);
-  const access = signAccessToken(cleanPayload);
-  const refresh = signRefreshToken(cleanPayload);
+  const nowMs = Date.now();
 
-  res.cookie(ACCESS_COOKIE, access, cookieOptions(req, parseDurationMs(env.ACCESS_TOKEN_TTL)));
-  res.cookie(REFRESH_COOKIE, refresh, cookieOptions(req, parseDurationMs(env.REFRESH_TOKEN_TTL)));
+  if (isSessionExpired(cleanPayload.sessionExpiresAt, nowMs)) {
+    throw new ApiError(401, "Sessão expirada.", "AUTH_EXPIRED");
+  }
+
+  const remainingSessionMs = cleanPayload.sessionExpiresAt - nowMs;
+  if (remainingSessionMs <= 0) {
+    throw new ApiError(401, "Sessão expirada.", "AUTH_EXPIRED");
+  }
+
+  const accessMaxAgeMs = Math.min(parseDurationMs(env.ACCESS_TOKEN_TTL, 15 * 60 * 1000), remainingSessionMs);
+  const refreshMaxAgeMs = Math.min(parseDurationMs(env.REFRESH_TOKEN_TTL, 60 * 60 * 1000), remainingSessionMs);
+
+  const access = signAccessToken(cleanPayload, toExpiresInSeconds(accessMaxAgeMs));
+  const refresh = signRefreshToken(cleanPayload, toExpiresInSeconds(refreshMaxAgeMs));
+
+  res.cookie(ACCESS_COOKIE, access, cookieOptions(req, accessMaxAgeMs));
+  res.cookie(REFRESH_COOKIE, refresh, cookieOptions(req, refreshMaxAgeMs));
 }
 
 export function clearAuthCookies(res: Response, req?: Request) {
@@ -121,7 +201,7 @@ export async function registerCustomer(input: {
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      throw new ApiError(409, "E-mail j\u00E1 cadastrado.");
+      throw new ApiError(409, "E-mail já cadastrado.");
     }
     throw error;
   }
@@ -131,10 +211,10 @@ export async function loginCustomer(input: { email: string; password: string }) 
   const email = input.email.trim().toLowerCase();
   const user = await prisma.customer.findUnique({ where: { email } });
 
-  if (!user) throw new ApiError(401, "Credenciais inv\u00E1lidas.", "AUTH_INVALID_CREDENTIALS");
-  if (!user.active) throw new ApiError(403, "Usu\u00E1rio inativo.", "FORBIDDEN");
+  if (!user) throw new ApiError(401, "Credenciais inválidas.", "AUTH_INVALID_CREDENTIALS");
+  if (!user.active) throw new ApiError(403, "Usuário inativo.", "FORBIDDEN");
   const ok = await bcrypt.compare(input.password, user.passwordHash);
-  if (!ok) throw new ApiError(401, "Credenciais inv\u00E1lidas.", "AUTH_INVALID_CREDENTIALS");
+  if (!ok) throw new ApiError(401, "Credenciais inválidas.", "AUTH_INVALID_CREDENTIALS");
 
   return user;
 }
@@ -143,10 +223,10 @@ export async function loginAdmin(input: { email: string; password: string }) {
   const email = input.email.trim().toLowerCase();
   const user = await prisma.adminUser.findUnique({ where: { email } });
 
-  if (!user) throw new ApiError(401, "Credenciais inv\u00E1lidas.", "AUTH_INVALID_CREDENTIALS");
-  if (!user.active) throw new ApiError(403, "Usu\u00E1rio inativo.", "FORBIDDEN");
+  if (!user) throw new ApiError(401, "Credenciais inválidas.", "AUTH_INVALID_CREDENTIALS");
+  if (!user.active) throw new ApiError(403, "Usuário inativo.", "FORBIDDEN");
   const ok = await bcrypt.compare(input.password, user.passwordHash);
-  if (!ok) throw new ApiError(401, "Credenciais inv\u00E1lidas.", "AUTH_INVALID_CREDENTIALS");
+  if (!ok) throw new ApiError(401, "Credenciais inválidas.", "AUTH_INVALID_CREDENTIALS");
 
   return prisma.adminUser.update({
     where: { id: user.id },
@@ -176,13 +256,13 @@ export async function inviteAdminUser(input: {
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      throw new ApiError(409, "J\u00E1 existe usu\u00E1rio com este e-mail.");
+      throw new ApiError(409, "Já existe usuário com este e-mail.");
     }
     throw error;
   }
 }
 
-export async function meFromPayload(payload: TokenPayload) {
+export async function meFromPayload(payload: AuthPrincipal) {
   return getOrSetCache(meCacheKey(payload), ME_CACHE_TTL_SECONDS, async () => {
     if (payload.type === "admin") {
       const admin = await prisma.adminUser.findUnique({
@@ -197,7 +277,7 @@ export async function meFromPayload(payload: TokenPayload) {
         },
       });
 
-      if (!admin) throw new ApiError(401, "Sess\u00E3o expirada.", "AUTH_EXPIRED");
+      if (!admin) throw new ApiError(401, "Sessão expirada.", "AUTH_EXPIRED");
 
       return {
         id: admin.id,
@@ -223,7 +303,7 @@ export async function meFromPayload(payload: TokenPayload) {
       },
     });
 
-    if (!customer) throw new ApiError(401, "Sess\u00E3o expirada.", "AUTH_EXPIRED");
+    if (!customer) throw new ApiError(401, "Sessão expirada.", "AUTH_EXPIRED");
 
     return {
       id: customer.id,

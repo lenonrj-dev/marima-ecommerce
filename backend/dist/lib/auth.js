@@ -38,7 +38,11 @@ function decodeAuth(req) {
     if (!token)
         return { payload: null, reason: "missing" };
     try {
-        return { payload: verifyToken(token), reason: "ok" };
+        const payload = verifyToken(token);
+        if (!Number.isFinite(payload.sessionExpiresAt) || Date.now() >= payload.sessionExpiresAt) {
+            return { payload: null, reason: "expired" };
+        }
+        return { payload, reason: "ok" };
     }
     catch (error) {
         if (isTokenExpiredError(error))

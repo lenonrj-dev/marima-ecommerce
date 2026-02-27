@@ -11,8 +11,9 @@ const schema = z.object({
   JWT_ACCESS_SECRET: z.string().min(10),
   JWT_REFRESH_SECRET: z.string().min(10),
   CORS_ORIGINS: z.string().default("http://localhost:3000,http://localhost:3001"),
+  SESSION_MAX_TTL: z.string().default("1h"),
   ACCESS_TOKEN_TTL: z.string().default("15m"),
-  REFRESH_TOKEN_TTL: z.string().default("7d"),
+  REFRESH_TOKEN_TTL: z.string().default("1h"),
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SAMESITE: z.preprocess(
     (value) => {
