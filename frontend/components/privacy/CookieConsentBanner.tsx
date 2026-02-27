@@ -119,13 +119,13 @@ export default function CookieConsentBanner() {
 
   return createPortal(
     <div
-      className="fixed inset-x-0 bottom-0 flex justify-center px-4 pointer-events-none"
+      className="fixed inset-x-0 bottom-0 flex justify-center px-4 pointer-events-auto"
       style={{
         zIndex: 2147483647,
         paddingBottom: "max(16px, env(safe-area-inset-bottom))",
       }}
     >
-      <div className="w-full max-w-[720px] pointer-events-auto">
+      <div className="w-full max-w-[720px]">
         <section
           ref={bannerRef}
           role="dialog"
