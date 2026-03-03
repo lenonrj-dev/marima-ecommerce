@@ -48,6 +48,10 @@ export default function MobileProductCarousel({
         ref={ref}
         aria-label={ariaLabel}
         tabIndex={0}
+        style={{
+          touchAction: "pan-y",
+          WebkitOverflowScrolling: "touch",
+        }}
         className={cn("mobile-products-carousel", carouselClassName)}
       >
         {children}
@@ -55,4 +59,3 @@ export default function MobileProductCarousel({
     </div>
   );
 }
-
