@@ -1,56 +1,107 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import Container from "@/components/ui/Container";
-import Button from "@/components/ui/Button";
-import { Play } from "lucide-react";
-import { CLOUD_BANNER, HERO_BANNER } from "@/lib/homeData";
-import { SITE_COPY } from "@/lib/siteCopy";
+
+const HERO_SLIDES = [
+  "https://res.cloudinary.com/dyuhostmv/image/upload/v1772656062/Instinct_Marima_roktwt.png",
+  "https://res.cloudinary.com/dyuhostmv/image/upload/v1772656063/Banner_Marima_instinct_1_zgflnt.png",
+  "https://res.cloudinary.com/dyuhostmv/image/upload/v1772656063/Instinct_Lil%C3%A1s_wtrlwx.png",
+] as const;
+
+const AUTO_MS = 4500;
 
 export default function Hero() {
+  const [active, setActive] = useState(0);
+  const total = HERO_SLIDES.length;
+
+  useEffect(() => {
+    if (total <= 1) return;
+
+    const id = window.setInterval(() => {
+      setActive((prev) => (prev + 1) % total);
+    }, AUTO_MS);
+
+    return () => window.clearInterval(id);
+  }, [total]);
+
+  const currentIndex = useMemo(() => {
+    if (active < 0) return 0;
+    if (active >= total) return total - 1;
+    return active;
+  }, [active, total]);
+
   return (
     <section className="bg-white">
       <Container>
-        <div className="overflow-hidden rounded-2xl bg-zinc-100 shadow-soft">
-          <div className="grid items-stretch gap-0 lg:grid-cols-12">
-            <div className="flex flex-col justify-center px-8 py-10 lg:col-span-5 lg:px-14 lg:py-16">
-              <p className="text-sm font-medium text-zinc-600">
-                Marima • Moda Fitness com conforto e performance
-              </p>
+        <div className="relative overflow-hidden rounded-2xl shadow-soft">
+          <Link href="/produtos" aria-label="Ir para produtos da Marima" className="group block">
+            <div className="relative w-full overflow-hidden bg-zinc-100 rounded-2xl">
+              <div
+                className="relative w-full"
+                style={{
+                  minHeight: "340px",
+                  height: "clamp(340px, 46vw, 610px)",
+                }}
+              >
+                {HERO_SLIDES.map((src, index) => {
+                  const isActive = index === currentIndex;
 
-              <h1 className="mt-4 max-w-xl text-5xl font-semibold leading-[1.05] tracking-tight text-zinc-900 lg:text-6xl">
-                Treine com <br /> confiança e estilo.
-              </h1>
+                  return (
+                    <div
+                      key={src}
+                      aria-hidden={!isActive}
+                      className={[
+                        "absolute inset-0 transition-opacity duration-700 ease-out",
+                        isActive ? "opacity-100" : "pointer-events-none opacity-0",
+                      ].join(" ")}
+                    >
+                      <Image
+                        src={src}
+                        alt={`Banner Instinct Marima ${index + 1}`}
+                        fill
+                        priority={index === 0}
+                        className="object-cover object-center transition-transform duration-700 group-hover:scale-[1.01]"
+                        sizes="(min-width: 1280px) 1300px, (min-width: 1024px) calc(100vw - 64px), (min-width: 640px) calc(100vw - 48px), calc(100vw - 32px)"
+                      />
+                    </div>
+                  );
+                })}
 
-              <p className="mt-4 max-w-lg text-sm text-zinc-600 sm:text-base">
-                Leggings, tops, conjuntos, Macacões, shorts e regatas com tecido tecnológico,
-                compressão na medida certa e durabilidade para sua rotina.
-              </p>
-
-              <div className="mt-8 flex flex-wrap items-center gap-3">
-                <Button as={Link} href="/produtos" variant="outline" className="bg-white">
-                  {SITE_COPY.ctas.buyNow}
-                </Button>
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-transparent" />
               </div>
-            </div>
 
-            <div className="relative lg:col-span-7">
-              <div className="absolute inset-0 bg-zinc-200/60" />
-              <div className="relative h-[320px] w-full lg:h-full">
-                <Image
-                  src={HERO_BANNER}
-                  alt="Banner principal da Marima"
-                  fill
-                  priority
-                  className="object-cover object-center"
-                  sizes="(min-width: 1024px) 40vw, 100vw"
-                />
-              </div>
+              {total > 1 ? (
+                <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/80 px-3 py-2 backdrop-blur">
+                  {HERO_SLIDES.map((_, index) => {
+                    const selected = index === currentIndex;
+
+                    return (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setActive(index);
+                        }}
+                        aria-label={`Ir para slide ${index + 1}`}
+                        aria-pressed={selected}
+                        className={[
+                          "h-2.5 rounded-full transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20",
+                          selected ? "w-6 bg-zinc-900" : "w-2.5 bg-zinc-400 hover:bg-zinc-600",
+                        ].join(" ")}
+                      />
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
-          </div>
+          </Link>
         </div>
       </Container>
     </section>
   );
 }
-
-

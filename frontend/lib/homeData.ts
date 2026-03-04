@@ -14,7 +14,7 @@ export const CLOUD_BANNER =
   "https://res.cloudinary.com/dhcaw7ipf/image/upload/v1771257211/Dealofday_ssilaf.png";
 
   export const HERO_BANNER =
-  "https://res.cloudinary.com/dhcaw7ipf/image/upload/v1771267903/hero_x71ibq.png";
+  "https://res.cloudinary.com/dyuhostmv/image/upload/v1772653134/Banner_Marima_instinct_p6bacv.png";
 
 export type Product = { id : string;
   title: string;
