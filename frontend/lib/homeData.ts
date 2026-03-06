@@ -11,7 +11,7 @@ export const CLOUD_BANNER =
   "https://res.cloudinary.com/dhcaw7ipf/image/upload/v1771251812/Lookbook2_aoyxxa.png";
 
     export const DEAL_BANNER2 =
-  "https://res.cloudinary.com/dhcaw7ipf/image/upload/v1771257211/Dealofday_ssilaf.png";
+  "https://res.cloudinary.com/dhcaw7ipf/image/upload/v1772811918/IMG_3270_odhwle.jpg";
 
   export const HERO_BANNER =
   "https://res.cloudinary.com/dyuhostmv/image/upload/v1772653134/Banner_Marima_instinct_p6bacv.png";

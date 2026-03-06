@@ -1,13 +1,14 @@
 import Container from "@/components/ui/Container";
-import ProductCard from "@/components/ui/ProductCard";
-import MobileProductCarousel from "@/components/home/MobileProductCarousel";
+import ExpandableProductsGrid from "@/components/ui/ExpandableProductsGrid";
 import { fetchStoreProducts } from "@/lib/productsData";
 
 export default async function TrendingProducts() {
   const response = await fetchStoreProducts({ limit: 24, includeVariants: true });
   const pool = response.data || [];
-  const highlighted = pool.filter((product) => product.badge === "Destaque" || product.tags?.includes("best-seller"));
-  const products = (highlighted.length ? highlighted : pool).slice(0, 4);
+  const highlighted = pool.filter(
+    (product) => product.badge === "Destaque" || product.tags?.includes("best-seller")
+  );
+  const products = (highlighted.length ? highlighted : pool).slice(0, 8);
 
   if (products.length === 0) return null;
 
@@ -23,13 +24,13 @@ export default async function TrendingProducts() {
           </div>
         </div>
 
-        <MobileProductCarousel carouselClassName="gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {products.map((product) => (
-            <ProductCard key={product.id} product={product} href={`/produtos/${product.slug}`} />
-          ))}
-        </MobileProductCarousel>
+        <ExpandableProductsGrid
+          products={products}
+          initialCount={4}
+          increment={4}
+          className="gap-4"
+        />
       </Container>
     </section>
   );
 }
-

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import CollectionBanner from "@/components/products/CollectionBanner";
 import ProductListShell from "@/components/products/ProductListShell";
 import {
   buildCategoryFacets,
@@ -88,7 +87,7 @@ export default async function ProdutosPage({ searchParams }: { searchParams: Sea
 
   return (
     <main className="min-h-[60vh]">
-      <CollectionBanner />
+      
       <ProductListShell
         products={filteredProducts}
         total={totalProducts}
